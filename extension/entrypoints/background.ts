@@ -27,9 +27,16 @@ async function startRun(req: Extract<PanelRequest, { type: 'run.start' }>, post:
   const waitForConfirm = (id: string) => new Promise<boolean>((resolve) => confirms.set(id, resolve));
 
   try {
+    // Client-side gate: surfaces a confirm card in the panel and waits for the answer.
+    const confirm = (message: string) => {
+      const id = `g-${crypto.randomUUID()}`;
+      send({ kind: 'confirm', id, message });
+      return waitForConfirm(id);
+    };
+    const tools = new BrowserTools({ vaultFolder: settings.vaultFolder, permissions: settings.permissions, confirm });
     const stream =
       settings.mode === 'live'
-        ? liveRun(settings, req, { signal: abort.signal, waitForConfirm, executeTool: (call) => new BrowserTools(settings.vaultFolder).execute(call) })
+        ? liveRun(settings, req, { signal: abort.signal, waitForConfirm, executeTool: (call) => tools.execute(call) })
         : mockRun(req.skillId, req.text, { signal: abort.signal, waitForConfirm });
     for await (const ev of stream) {
       send(ev);

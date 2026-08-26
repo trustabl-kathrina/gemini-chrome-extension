@@ -1,5 +1,6 @@
 import { browser } from 'wxt/browser';
-import { TOOL_CHANNEL, type ToolCall } from '../protocol';
+import { TOOL_CHANNEL, type Permissions, type ToolCall } from '../protocol';
+import { checkNavigable, safeVaultPath } from './guard';
 
 type ToolResult = Record<string, unknown>;
 type DownloadDelta = Parameters<Parameters<typeof browser.downloads.onChanged.addListener>[0]>[0];
@@ -32,14 +33,28 @@ async function contentTool(tabId: number, req: Record<string, unknown>): Promise
   return typeof res.data === 'object' && res.data !== null ? (res.data as ToolResult) : { result: res.data };
 }
 
+export interface ToolGuards {
+  vaultFolder: string;
+  permissions: Permissions;
+  /** Asks the user; resolves false when denied. Used for gates the brain cannot be trusted to apply. */
+  confirm: (message: string) => Promise<boolean>;
+}
+
 /**
  * Executes browser tool calls for one run. Keeps a "job tab" so the brain can work in a
- * pinned background tab without stealing the user's focus.
+ * pinned background tab without stealing the user's focus. Enforces the user's permissions
+ * client-side: URL scheme + navigation allow-list, vault-confined download paths, ask-before gates.
  */
 export class BrowserTools {
   private jobTabId: number | null = null;
 
-  constructor(private vaultFolder: string) {}
+  constructor(private guards: ToolGuards) {}
+
+  private navigable(raw: string): string {
+    const r = checkNavigable(raw, this.guards.permissions.navigationAllowlist);
+    if (!r.ok) throw new Error(`blocked: ${r.reason}`);
+    return r.url.href;
+  }
 
   private async tab(): Promise<number> {
     if (this.jobTabId !== null) {
@@ -70,7 +85,7 @@ export class BrowserTools {
     const num = (k: string, d: number) => (typeof a[k] === 'number' ? (a[k] as number) : d);
     switch (call.name) {
       case 'open_tab': {
-        const t = await browser.tabs.create({ url: str('url'), pinned: a.pinned === true, active: a.active === true });
+        const t = await browser.tabs.create({ url: this.navigable(str('url')), pinned: a.pinned === true, active: a.active === true });
         if (!t.id) throw new Error('tab has no id');
         this.jobTabId = t.id;
         await waitForLoad(t.id);
@@ -79,7 +94,7 @@ export class BrowserTools {
       }
       case 'navigate': {
         const id = await this.tab();
-        await browser.tabs.update(id, { url: str('url') });
+        await browser.tabs.update(id, { url: this.navigable(str('url')) });
         await waitForLoad(id);
         const t = await browser.tabs.get(id);
         return { tabId: id, title: t.title, url: t.url };
@@ -123,8 +138,12 @@ export class BrowserTools {
         }
       }
       case 'download': {
-        const filename = `${this.vaultFolder}/${str('path').replace(/^\/+/, '')}`;
-        const id = await browser.downloads.download({ url: str('url'), filename, conflictAction: 'overwrite', saveAs: false });
+        const url = this.navigable(str('url'));
+        const filename = safeVaultPath(this.guards.vaultFolder, str('path'));
+        if (this.guards.permissions.askBefore.download && !(await this.guards.confirm(`Download ${url} → ${filename}?`))) {
+          throw new Error('download denied by user');
+        }
+        const id = await browser.downloads.download({ url, filename, conflictAction: 'overwrite', saveAs: false });
         await new Promise<void>((resolve, reject) => {
           const l = (d: DownloadDelta) => {
             if (d.id !== id) return;

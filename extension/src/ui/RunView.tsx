@@ -59,8 +59,20 @@ function ToolRow({ step }: { step: Extract<Step, { kind: 'tool' }> }) {
   );
 }
 
+/** Only http(s) links are rendered as anchors; anything else (javascript:, file:, …) shows as plain text. */
+function safeHref(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  try {
+    const u = new URL(raw);
+    return u.protocol === 'https:' || u.protocol === 'http:' ? u.href : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function ArtifactRow({ step }: { step: Extract<Step, { kind: 'artifact' }> }) {
   const Icon = ARTIFACT_ICON[step.type];
+  const href = safeHref(step.href);
   const inner = (
     <>
       <Icon size={13} className="shrink-0 text-accent" />
@@ -68,8 +80,8 @@ function ArtifactRow({ step }: { step: Extract<Step, { kind: 'artifact' }> }) {
     </>
   );
   const cls = 'fade-in hairline mx-2 my-0.5 flex items-center gap-2 rounded-md bg-accent-soft px-2.5 py-1.5 text-fg';
-  return step.href ? (
-    <a href={step.href} target="_blank" rel="noreferrer" className={`${cls} hover:brightness-110`}>
+  return href ? (
+    <a href={href} target="_blank" rel="noreferrer noopener" className={`${cls} hover:brightness-110`}>
       {inner}
     </a>
   ) : (
