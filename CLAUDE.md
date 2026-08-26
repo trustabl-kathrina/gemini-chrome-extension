@@ -9,15 +9,19 @@ Primary user is the author; the product must stay usable after the hackathon (lo
 - Hands: Chrome MV3 extension (TypeScript), thin client — tools = read_page / click / type / navigate / screenshot / download.
 - Notifications: Telegram bot + chrome.notifications.
 
-## Hero jobs (priority order; tail degrades to thin, never absent)
-1. WSP attendance + scores → cGPA prediction vs target; auto-click attendance when it appears.
-2. Course files → detect new/updated on WSP/Teams → download → Gemini parse → Firestore vector RAG → summary notify + Q&A.
-3. Teams digest: announcements/assignments, delay/cancel/reschedule detection, "where to be now".
-4. Opportunity scanner: selected Telegram channels / uni Outlook → hackathons, internships, events.
+## Demo scenes (the scope — video shows all six, in this order)
+1. **Vault sync** — agent opens WSP in a Chrome tab, walks course file directories, downloads new/changed files into a local vault `Downloads/DayflowVault/<course>/<week|lab>/`, indexes them (Firestore + vector). Runs on a schedule (chrome.alarms) and on demand.
+2. **Courseware** — from the syllabus: cheatsheet + quiz generated as HTML, served from Cloud Run, auto-opened in a new tab.
+3. **Vault scaffold** — per course / per week / per lab folders initialized in the vault from the syllabus schedule.
+4. **Project bootstrap** — for coding courses: GitHub repo (or .ipynb) created via GitHub MCP with a working foundation + TODO.md.
+5. **Team ops** — agent opens Telegram Web, finds the diploma-project chat, posts an update; creates Linear issues (Linear MCP); opens a GitHub issue + PR (GitHub MCP).
+6. **Pitch deck** — builds a pitch deck about the diploma repo; generated server-side (.pptx), opened in PowerPoint Online / Google Slides via the browser; Canva-driving is a stretch via Gemini computer-use.
+
+Backlog (post-hackathon): WSP attendance/GPA, Teams digest + schedule changes, Telegram opportunity scanner.
 
 ## Done-means
 - `make verify` exits 0: `ruff check` + `pyright` + `pytest` (backend), `pnpm typecheck` + `pnpm test` (extension).
-- Backend deployed on Cloud Run (`*.run.app`), Firestore + Pub/Sub used for real; extension loads unpacked and runs job 1 end-to-end.
+- Backend deployed on Cloud Run (`*.run.app`), Firestore + Pub/Sub used for real; extension loads unpacked and runs scene 1 end-to-end.
 - README spin-up from zero, architecture diagram, ≤4-min video with Cloud console visible.
 
 ## Rules
