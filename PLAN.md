@@ -1,90 +1,108 @@
-# PLAN — make Dayflow actually work, provably
+# PLAN v2 — Dayflow: "Claude Code for the browser, on Gemini"
 
 Read `CLAUDE.md` first. This plan is the contract for every builder; the harness is the judge.
-Deadline: 2026-08-31 17:00 PDT. Today: 2026-08-26.
+Deadline: 2026-08-31 17:00 PDT. Today: 2026-08-26. Priority order below is binding: **1 and 2 flawless beats 6 mediocre**.
 
-## Done-means (all must hold)
-1. `make verify` green (ruff + pyright + pytest; tsc + vitest).
-2. `make e2e` green: every scene below passes its harness spec against the **fake WSP** with the brain running
-   locally (Vertex via ADC) — no human in the loop.
-3. Scene 1 also passes against the real `wsp.kbtu.kz` using the signed-in demo profile (`extension/scripts/demo-browser.mjs`).
-4. Deployed `dayflow-brain` (Cloud Run) serves the same code; README setup works from zero.
+## Vision (from the user, 2026-08-26)
+- Identity: a universal browser agent — generic loop + user-owned config (skills, site profiles, permissions,
+  connections). The KBTU student pack is the default pack that proves it; README/UI/video lead with the generic agent.
+- Perception is chosen **per site** by the site profile: `mode: dom` (element list with refs + coords; screenshot after
+  every action to verify) or `mode: vision` (screenshot-first; act by coordinates; DOM only to read text).
+- The panel is **chat-first** like a Claude Code transcript: user prompt → one-sentence reasoning before every action →
+  tool rows (with screenshot thumbnails) → artifacts. Skills are invoked by typing `/` (palette). No mock mode.
+- The vault is **Google Drive** (the user's own account), folder `Dayflow/<course>/<week|lab|materials>/`. No local Downloads vault.
+- Settings = one screen (Google account, backend URL/token, vision, show-work) + **Config**: an editable YAML of
+  skills / sites / permissions / schedules, validated and synced to the brain (`PUT /config`).
 
-## The loop (Claude-in-Chrome style, on Gemini)
-Every browser action returns **what the agent now sees**: a compact DOM snapshot with refs **and** a viewport
-screenshot (JPEG ≤1280px, q≈55). The brain attaches the screenshot to the tool result as
-`FunctionResponse.parts=[FunctionResponsePart(inline_data=FunctionResponseBlob(mime_type="image/jpeg", data=...))]`
-(google-genai 2.20; ADK 2.7 decodes it). The orchestrator must, before EVERY tool call, write one sentence:
-what it sees + what it will do (this is what the panel shows as reasoning). Hard cap 40 actions per run.
+## Scenes, in priority order (harness expectation in the last column)
+| # | scene | what Gemini does | expect |
+|---|---|---|---|
+| 1 | **vault-sync** | WSP → Student files → school → instructor → course → download every file → upload to Drive `Dayflow/<course>/…` → parse each (summary, deadlines) → index | status done; fake-Drive has the 3 CV files under `Dayflow/CSCI3240*/`; vault index has 3 entries; ≤40 actions |
+| 2 | **lab** | read the course's Lab 1 PDF from the vault, create a private GitHub repo, **solve the lab**: a sub-agent with Gemini code execution writes and runs the code per task, assembles a runnable notebook with outputs, writes a report (Markdown; rendered HTML page), pushes README/TODO/notebook/report; uploads the report to Drive | fake-connector log has `create_repository` + `push_files` incl. a valid `.ipynb` whose code cells have outputs and a `REPORT.md`; report page returns 200; ≤40 browser actions |
+| 3 | **team-ops** | summarise the week from the repo, open Telegram Web (harness: fake `/chat`), find the diploma chat by name, `request_confirmation`, type + send; then Linear `create_issue` ×N and GitHub `issue_write` + `create_pull_request` | confirm answered (harness auto-allows); message present on the chat page; fake log has create_issue ≥1, create_pull_request 1 |
+| 4 | courseware | cheatsheet + quiz page from the syllabus; opened in a tab; saved to Drive | artifact href 200 with "Quiz"; Drive has the HTML |
+| 5 | scaffold | folder tree in Drive from the syllabus schedule | ≥15 folders under `Dayflow/<course>/` in fake-Drive |
+| 6 | pitch-deck | pptx + HTML preview from the repo; saved to Drive | pptx in fake-Drive is a valid zip with ≥6 slides; preview 200 |
 
-Browser tools (extension executes; brain declares them as long-running tools with the same names/args):
-| tool | args | notes |
-|---|---|---|
-| `open_tab` | url, active? | allow-list + http(s) only |
-| `navigate` | url | same |
-| `read_page` | max_nodes? | refs for **every visible element with own text or interactivity** (rows, cells, spans), each line `[eN] role "label" @x,y` with the element's viewport-center coordinates |
-| `screenshot` | — | explicit; every other browser tool also returns `screenshot_b64` when `settings.vision` (default true) |
-| `click` | ref | scrollIntoView + highlight + click; then wait for load/idle |
-| `click_at` | x, y | `document.elementFromPoint` → click (coordinates from the last screenshot/snapshot) |
-| `type` | ref, text, submit? | React-safe |
-| `press_key` | key | Enter/Escape/Tab/ArrowDown… dispatched to activeElement |
-| `scroll` | dy? / ref? | |
-| `set_viewport` | width, height | `chrome.windows.update` on the job window |
-| `run_js` | expression | evaluated in the page via `chrome.scripting.executeScript({world:'MAIN'})`; returns JSON-serialisable result; allowed only on allow-listed hosts; logged in the timeline |
-| `download` | url?, ref?, path | by URL (cookie fetch → `chrome.downloads`) or by clicking a ref that triggers a download (capture `chrome.downloads.onCreated`); saved under `Downloads/<vault>/<path>` |
-| `make_folders` | paths[] | creates `<vault>/<path>/.keep` via `chrome.downloads` (data: URL) |
-| `list_tabs`, `wait` | | |
+## The loop
+Browser tools (extension executes; brain declares them as long-running tools returning `None`):
+`open_tab(url)`, `navigate(url)`, `read_page(max_nodes?)` → `[eN] role "label" @x,y` for every visible element with own text or
+interactivity, `screenshot()`, `click(ref)`, `click_at(x,y)`, `type(ref,text,submit?)`, `press_key(key)`, `scroll(dy?|ref?)`,
+`set_viewport(w,h)`, `run_js(expression)` (MAIN world; allow-listed hosts only; logged), `download(ref?|url?)` → returns the file to
+the brain (bytes streamed to `POST /vault/upload`, see below) , `list_tabs()`, `wait(ms)`.
+Every browser tool result carries `screenshot_b64` (JPEG ≤1280px, q≈55) when `settings.vision` is on; the brain forwards it as
+`FunctionResponse.parts=[FunctionResponsePart(inline_data=FunctionResponseBlob(mime_type='image/jpeg', data=…))]`.
+The orchestrator writes one sentence (what it sees → what it does) before EVERY tool call; hard cap 40 browser actions per run
+(enforced in `before_tool_callback`); Vaadin hint: click row, then Enter.
 
-Panel: the timeline shows the reasoning sentence, then the tool row, then (collapsed) the screenshot thumbnail.
+Drive & vault:
+- Extension obtains a Google OAuth token with `chrome.identity.getAuthToken` (manifest `oauth2` block: client_id from env
+  `VITE_GOOGLE_CLIENT_ID`, scopes `drive.file`). A stable extension id is required → manifest `key` (generate once, commit the public key;
+  the private key stays out of the repo).
+- Extension-side Drive client (`src/agent/drive.ts`): `ensureFolder(path)`, `upload(path, blob)`, `list(path)`; base URL from
+  `settings.driveApiBase` (default `https://www.googleapis.com`) so the harness can point it at the **fake Drive**.
+- `download(ref|url)` flow: extension captures bytes (cookie fetch for URLs; for click-triggered downloads read the completed
+  `chrome.downloads` item then `fetch('file://…')` is NOT allowed → instead prefer capturing the URL from the download item and refetching
+  with cookies), uploads to Drive at the path the brain asked for, and ALSO posts the bytes to the brain `POST /vault/upload`
+  (multipart: user's path + file) so the brain can parse/index (Firestore `users/{uid}/vault/{id}`: path, drive_file_id, summary, deadlines, sha256).
+- If no OAuth client is configured (judges, CI): `settings.vault.mode = 'brain'` — files are only stored by the brain (GCS bucket
+  `DAYFLOW_BUCKET` when set, else in-memory) and listed at `GET /vault`. The harness uses fake Drive so both paths are exercised.
 
-## Harness (`harness/`)
-- `harness/fake-wsp/` — static site + small JS, served by `node harness/serve.mjs` on **http://127.0.0.1:8099**, imitating
-  the real portal's *behaviour* (Vaadin-like: no hrefs; navigation by clicking; table rows select on click; Back/Enter buttons):
-  - `/` Desktop with the module list: Student files, Student's schedule, Attendance mark, Student's Journal, Transcript, News (English).
-  - `/StudentFiles` folder browser: Schools → Instructors → course folders → files. Must include
-    `School of Information Technology and Engineering` → `Koishiyeva Dinara` → `CSCI3240 Introduction to Computer Vision` →
-    `syllabus.pdf`, `Lecture_01_Introduction.pdf`, `Lab_01_Image_Basics.pdf` (real small PDFs generated in the repo), plus 2 other
-    instructors with 1–2 folders each. Files download on click.
-  - `/StudentSchedule` weekly grid with Year/Term `<select>`s; Spring 2025-2026 shows `CSCI3240 Introduction to Computer Vision Koishiyeva D.`.
-  - `/News` list.
-- `harness/run.mjs <scene>` — Playwright: launch persistent Chromium (fresh profile under `harness/.profile`) with
-  `extension/.output/chrome-mv3`; seed `chrome.storage.local.settings` (mode live, backendUrl, token, `vision`, allow-list incl.
-  `127.0.0.1`, a site profile for `127.0.0.1` copied from the WSP notes, `showWork` true); open the panel as a tab
-  (`chrome-extension://<id>/sidepanel.html`); type the scene prompt; poll the timeline until the run ends (timeout 6 min);
-  write `harness/out/<scene>.json` (steps, status, summary, screenshots dir) and evaluate the scene's `expect` (below).
-  Exit 0/1. `DAYFLOW_URL` (default http://127.0.0.1:8080) and `DAYFLOW_TOKEN` env.
-- `make e2e [SCENE=…]` starts fake-wsp + local brain (`DAYFLOW_TOKEN=dev`, `DAYFLOW_FAKE_CONNECTORS=1`), runs the scene(s), stops them.
-- Connectors under `DAYFLOW_FAKE_CONNECTORS=1`: GitHub/Linear tools are in-process stubs that record calls to
-  `/tmp/dayflow-fake-connectors.jsonl` and return plausible results (repo url, issue ids); the harness reads that file.
+Lab solver:
+- `agents/lab_solver.py`: an ADK `LlmAgent` with `BuiltInCodeExecutor` (Gemini code execution) used as an `AgentTool`
+  `solve_lab_task(task_text, context)` → `{code, stdout, notes}`; the orchestrator calls it per task, then `build_notebook(cells)` (nbformat,
+  with outputs from stdout), `build_report(course, lab, results)` → Markdown + PageStore HTML.
+- Verify: the assembled notebook executes with `nbclient` in a subprocess with timeout in the harness step (numpy/matplotlib available in the
+  harness venv) — expectation: all cells execute without error.
 
-## Scenes and their harness expectations
-| scene | prompt (from the pack) | expect |
-|---|---|---|
-| vault-sync | sync the Computer Vision course files | status done; 3 files exist under the Playwright downloads dir `DayflowVault/CSCI3240*/…`; ≤40 actions |
-| courseware | cheatsheet + quiz from the CV syllabus | status done; a `courseware` artifact with an `http(s)` href that returns 200 HTML containing "Quiz" |
-| scaffold | folder tree for the CV course from its syllabus | ≥5 `.keep` files under `DayflowVault/CSCI3240*/Week NN/` |
-| bootstrap | GitHub repo for CV Lab 1 | fake-connector log has `create_repository` + `push_files` with README.md, TODO.md, a `.ipynb` (valid nbformat) |
-| team-ops | weekly update + Linear issues + PR | a `confirm` step answered allow (harness auto-allows); fake log has ≥1 `create_issue`, `create_pull_request`; a `type` on the fake chat page (`/chat` page in fake-wsp acting as "Telegram") |
-| pitch-deck | deck from the repo | `.pptx` saved under `DayflowVault/…` (valid zip with `ppt/presentation.xml`, ≥6 slides) and a `deck` artifact href to a served HTML preview (200) |
+## Harness (`harness/`) — no human in the loop
+- `harness/fake-wsp/` — static site + JS on `FAKE_WSP_PORT` (default 8099), Vaadin-like (no hrefs, click navigation, table rows select on
+  click, Back/Enter): `/` Desktop with module links (Student files, Student's schedule, Attendance mark, Student's Journal, Transcript, News);
+  `/StudentFiles` Schools → Instructors → course folders → files (incl. `School of Information Technology and Engineering` → `Koishiyeva Dinara`
+  → `CSCI3240 Introduction to Computer Vision` → `syllabus.pdf`, `Lecture_01_Introduction.pdf`, `Lab_01_Image_Basics.pdf` — real generated
+  PDFs: syllabus = 15-week topic list; lab = 5 concrete numpy image tasks with sample data described in-text); `/StudentSchedule` with
+  Year/Term selects (Spring 2025-2026 shows the CV row); `/News`; `/chat` fake messenger (chat rows incl. "Diploma · Team", textarea, Send).
+- `harness/fake-drive.mjs` — minimal Drive v3: `GET /drive/v3/files?q=…` (name/parent lookup), `POST /drive/v3/files` (folders),
+  `POST /upload/drive/v3/files?uploadType=multipart`, `GET /drive/v3/files/{id}?alt=media`; stores under `harness/out/drive/<scene>/` as a
+  real folder tree so expectations can `ls`. Port `FAKE_DRIVE_PORT` (default base+2). Accepts any bearer token.
+- `harness/run.mjs <scene> [--real]` — Playwright: persistent Chromium + `extension/.output/chrome-mv3`; seed `chrome.storage.local.settings`
+  (backendUrl, token, vision, showWork, driveApiBase → fake Drive, a fake OAuth token, allow-list with `127.0.0.1`, site profile for
+  `127.0.0.1` copied from the WSP notes with `mode: dom`); open `chrome-extension://<id>/sidepanel.html`; type the prompt; auto-allow
+  confirmation cards; poll until the run ends (timeout 8 min); write `harness/out/<scene>.json` {status, summary, steps[], actions};
+  evaluate `harness/specs/<scene>.mjs`. `--real` uses `~/.gstack/chromium-profile` (signed in to wsp.kbtu.kz; never log in, never type
+  credentials) and the real portal prompt.
+- `make e2e [SCENE=…]` with `E2E_PORT_BASE` (fake-wsp BASE, brain BASE+1, fake-drive BASE+2), brain env `DAYFLOW_TOKEN=dev
+  DAYFLOW_FAKE_CONNECTORS=1 DAYFLOW_FAKE_LOG=harness/out/<scene>-connectors.jsonl`; profile `harness/.profile-<scene>`; logs in `harness/out/`.
+- Fake connectors: `DAYFLOW_FAKE_CONNECTORS=1` → in-process stubs named like the MCP tools (create_repository, push_files, issue_write,
+  create_pull_request, get_file_contents, list_teams, list_projects, create_issue) logging JSON lines and returning plausible results.
 
-## Backend work per scene (server tools, `backend/dayflow/tools/server.py` + pack skill instructions)
-- `parse_document(file_name, pdf_base64)` exists → keep; add `vault_index_put/get` (Firestore or in-memory when no Firestore).
-- `generate_courseware(course, weeks, syllabus_text) → {id, url}`: Gemini structured output → HTML from a template, stored
-  (Firestore doc or in-memory), served at `GET /courseware/{id}` (no auth, unguessable id).
-- `plan_vault_folders(syllabus_text) → {paths[]}` then the browser tool `make_folders`.
-- `build_notebook(spec) → {ipynb_json}` via nbformat; GitHub via `McpToolset` or the fake connector.
-- `build_deck(outline) → {id, pptx_base64, preview_url}` via python-pptx (add dependency) + HTML preview at `GET /deck/{id}`.
-- Skill instructions in `packs/kbtu-student.yaml` rewritten to the tools above and to the loop rules.
+## Extension changes (chat-first)
+- Delete: mock transport (`src/agent/mock.ts`, in-page transport), Home skills board, six-tab settings. Keep scheduler code (config-driven).
+- Views: **Chat** (transcript; composer; `/` opens the skills palette; ⌘K too), **Settings** (account via Google sign-in button →
+  `chrome.identity`, backend URL + token, vision, show work, Drive status), **Config** (YAML editor of the brain's UserConfig with validation
+  errors inline; Save → `PUT /config`; a "reset to pack" button).
+- Timeline: reasoning sentence (text step) → tool row (name, args, timing, ✓/✗) → collapsed screenshot thumbnail → artifacts (Drive links,
+  repo, PR, pages).
 
-## Phases (this is the workflow)
-1. Harness + fake WSP + specs (one builder). Red for every scene is fine; infra must run.
-2. Loop upgrade — two builders in parallel with disjoint scopes: (a) extension tools/panel, (b) backend tools/prompt/multimodal.
-   Then an integrator runs `make e2e SCENE=vault-sync` and fixes until green (≤6 rounds, must change something each round).
-3. Scenes 2–6 — one builder each in parallel (disjoint files: their tool module + skill YAML block + harness spec), each runs its own `make e2e SCENE=…` to green.
-4. Adversarial review (3 lenses) → fixes → full `make e2e` → deploy → README refresh.
+## Backend changes
+- `UserConfig.sites[].mode: 'dom' | 'vision'` (default dom); prompt composition mentions the mode for the domains in scope.
+- `POST /vault/upload` (auth) multipart → store (GCS when `DAYFLOW_BUCKET` else memory) + index doc; `GET /vault` list; `parse_document`
+  runs on upload (Gemini flash-lite) and fills summary/deadlines; `GET /pages/{kind}/{id}` PageStore (courseware, report, deck previews).
+- Tools: browser tools (above), `solve_lab_task` (AgentTool over lab_solver), `build_notebook`, `build_report`, `generate_courseware`,
+  `plan_vault_folders`, `build_deck`; GitHub/Linear via McpToolset or fake connectors.
+- Pack: skills rewritten as concrete step lists using these tools; site profiles: `wsp.kbtu.kz` (mode dom, tree notes), `web.telegram.org`
+  (mode dom; chat list on the left, search box, composer at the bottom), `github.com`, `drive.google.com` (mode vision).
+
+## Phases (the workflow)
+1. **Harness** (one builder): fake-wsp, fake-drive, runner, specs for scenes 1–3 (4–6 later), Makefile e2e, fake connectors.
+2. **Loop** (parallel, disjoint): (a) extension — chat-first UI, tools, Drive client, config editor, no mock; (b) backend — tools, vault upload
+   + index, multimodal tool results, prompt, site modes, PageStore.
+3. **Integrate scene 1** to green (fake), then `--real` on the portal (report honestly).
+4. **Scene 2 (lab)** then **scene 3 (team-ops)** — sequential builders, each to green.
+5. **Review** (3 lenses) → fixer → full e2e for scenes 1–3. Scenes 4–6 only after 1–3 are green.
 
 ## Rules for builders
-- Don't touch files outside your scope; don't commit (the coordinator commits between phases); no new top-level docs.
+- Stay in scope; don't commit (coordinator commits between phases); no new top-level docs; keep `make verify` green.
 - Shell hook blocks commands containing `rm -rf` or the word "truncate"; never read `.env`.
-- Real credentials never enter the repo. Fake-wsp content is synthetic.
-- Every claim of "works" needs harness output (`harness/out/*.json`) or a test.
+- No real credentials or personal data in the repo; fake-wsp/fake-drive content is synthetic.
+- "Works" = harness JSON or a test. If something can't be done, say so with evidence.
