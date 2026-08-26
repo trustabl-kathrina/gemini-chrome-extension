@@ -36,6 +36,8 @@ async function contentTool(tabId: number, req: Record<string, unknown>): Promise
 export interface ToolGuards {
   vaultFolder: string;
   permissions: Permissions;
+  /** Keep the working tab visible so the user can follow along. */
+  showWork: boolean;
   /** Asks the user; resolves false when denied. Used for gates the brain cannot be trusted to apply. */
   confirm: (message: string) => Promise<boolean>;
 }
@@ -49,6 +51,13 @@ export class BrowserTools {
   private jobTabId: number | null = null;
 
   constructor(private guards: ToolGuards) {}
+
+  /** In show-work mode the job tab is brought to the front before every action. */
+  private async reveal(tabId: number) {
+    if (!this.guards.showWork) return;
+    const t = await browser.tabs.get(tabId);
+    if (!t.active) await browser.tabs.update(tabId, { active: true });
+  }
 
   private navigable(raw: string): string {
     const r = checkNavigable(raw, this.guards.permissions.navigationAllowlist);
@@ -85,7 +94,8 @@ export class BrowserTools {
     const num = (k: string, d: number) => (typeof a[k] === 'number' ? (a[k] as number) : d);
     switch (call.name) {
       case 'open_tab': {
-        const t = await browser.tabs.create({ url: this.navigable(str('url')), pinned: a.pinned === true, active: a.active === true });
+        const show = this.guards.showWork;
+        const t = await browser.tabs.create({ url: this.navigable(str('url')), pinned: !show && a.pinned === true, active: show || a.active === true });
         if (!t.id) throw new Error('tab has no id');
         this.jobTabId = t.id;
         await waitForLoad(t.id);
@@ -94,6 +104,7 @@ export class BrowserTools {
       }
       case 'navigate': {
         const id = await this.tab();
+        await this.reveal(id);
         await browser.tabs.update(id, { url: this.navigable(str('url')) });
         await waitForLoad(id);
         const t = await browser.tabs.get(id);
@@ -101,10 +112,12 @@ export class BrowserTools {
       }
       case 'read_page': {
         const id = await this.tab();
+        await this.reveal(id);
         return contentTool(id, { name: 'snapshot', maxNodes: num('max_nodes', 400) });
       }
       case 'click': {
         const id = await this.tab();
+        await this.reveal(id);
         const r = await contentTool(id, { name: 'click', ref: str('ref') });
         await sleep(400);
         await waitForLoad(id, 5000);
@@ -112,10 +125,12 @@ export class BrowserTools {
       }
       case 'type': {
         const id = await this.tab();
+        await this.reveal(id);
         return contentTool(id, { name: 'type', ref: str('ref'), text: str('text'), submit: a.submit === true });
       }
       case 'scroll': {
         const id = await this.tab();
+        await this.reveal(id);
         return contentTool(id, { name: 'scroll', ref: a.ref, dy: num('dy', 600) });
       }
       case 'wait': {

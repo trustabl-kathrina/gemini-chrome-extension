@@ -33,7 +33,7 @@ async function startRun(req: Extract<PanelRequest, { type: 'run.start' }>, post:
       send({ kind: 'confirm', id, message });
       return waitForConfirm(id);
     };
-    const tools = new BrowserTools({ vaultFolder: settings.vaultFolder, permissions: settings.permissions, confirm });
+    const tools = new BrowserTools({ vaultFolder: settings.vaultFolder, permissions: settings.permissions, showWork: settings.showWork, confirm });
     const stream =
       settings.mode === 'live'
         ? liveRun(settings, req, { signal: abort.signal, waitForConfirm, executeTool: (call) => tools.execute(call) })

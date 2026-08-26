@@ -253,6 +253,12 @@ function AdvancedTab({ settings, update }: { settings: Settings; update: Update 
       <Field label="Access token">
         <input type="password" className={`${inputCls} font-mono text-[12px]`} value={settings.token} onChange={(e) => set('token', e.target.value)} />
       </Field>
+      <Field label="Show work" hint="Keep the agent's tab in front and flash the elements it clicks. Turn off to let it work in a pinned background tab.">
+        <div className="hairline flex items-center gap-2 rounded-md bg-bg-1 px-3 py-2">
+          <span className="flex-1">Watch the agent navigate</span>
+          <Toggle checked={settings.showWork} onChange={(v) => set('showWork', v)} label="Show work" />
+        </div>
+      </Field>
       <Field label="Vault folder" hint="Inside your Downloads folder.">
         <input className={`${inputCls} font-mono text-[12px]`} value={settings.vaultFolder} onChange={(e) => set('vaultFolder', e.target.value)} />
       </Field>

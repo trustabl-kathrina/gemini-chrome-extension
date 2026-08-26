@@ -49,6 +49,8 @@ export interface Settings {
   backendUrl: string;
   token: string;
   vaultFolder: string;
+  /** Keep the agent's tab in the foreground and flash the elements it acts on (demo-friendly). */
+  showWork: boolean;
   account: { email: string; name: string } | null;
   skills: Skill[];
   sites: SiteProfile[];
@@ -169,6 +171,7 @@ export const DEFAULT_SETTINGS: Settings = {
   backendUrl: 'https://dayflow-brain-lrqhed2z5a-ez.a.run.app',
   token: '',
   vaultFolder: 'DayflowVault',
+  showWork: true,
   account: null,
   skills: [...DEFAULT_SKILLS],
   sites: [...DEFAULT_SITES],

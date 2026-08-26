@@ -70,6 +70,20 @@ function snapshot(maxNodes = 400): string {
   return lines.join('\n');
 }
 
+/** Flash an outline on the element the agent is acting on, so a human can follow along. */
+function highlight(el: Element) {
+  const h = el as HTMLElement;
+  const prev = { outline: h.style.outline, offset: h.style.outlineOffset, transition: h.style.transition };
+  h.style.transition = 'outline-color 120ms ease-out';
+  h.style.outline = '2px solid oklch(0.7 0.19 292)';
+  h.style.outlineOffset = '2px';
+  setTimeout(() => {
+    h.style.outline = prev.outline;
+    h.style.outlineOffset = prev.offset;
+    h.style.transition = prev.transition;
+  }, 900);
+}
+
 function resolve(ref: string): Element {
   const el = byRef.get(ref);
   if (!el || !el.isConnected) throw new Error(`ref ${ref} is gone — take a new snapshot`);
@@ -79,6 +93,7 @@ function resolve(ref: string): Element {
 function click(ref: string) {
   const el = resolve(ref) as HTMLElement;
   el.scrollIntoView({ block: 'center', inline: 'center' });
+  highlight(el);
   el.focus?.();
   el.click();
   return { clicked: ref };
@@ -87,6 +102,7 @@ function click(ref: string) {
 function type(ref: string, text: string, submit = false) {
   const el = resolve(ref) as HTMLElement;
   el.scrollIntoView({ block: 'center' });
+  highlight(el);
   el.focus();
   if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
     // Native setter bypasses React's value tracker so frameworks see the change.
