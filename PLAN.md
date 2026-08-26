@@ -58,7 +58,7 @@ Lab solver:
 ## Harness (`harness/`) — no human in the loop
 - `harness/fake-wsp/` — static site + JS on `FAKE_WSP_PORT` (default 8099), Vaadin-like (no hrefs, click navigation, table rows select on
   click, Back/Enter): `/` Desktop with module links (Student files, Student's schedule, Attendance mark, Student's Journal, Transcript, News);
-  `/StudentFiles` Schools → Instructors → course folders → files (incl. `School of Information Technology and Engineering` → `Koishiyeva Dinara`
+  `/StudentFiles` Schools → Instructors → course folders → files (incl. `School of Information Technology and Engineering` → `Abenova Saule` (all names are invented)
   → `CSCI3240 Introduction to Computer Vision` → `syllabus.pdf`, `Lecture_01_Introduction.pdf`, `Lab_01_Image_Basics.pdf` — real generated
   PDFs: syllabus = 15-week topic list; lab = 5 concrete numpy image tasks with sample data described in-text); `/StudentSchedule` with
   Year/Term selects (Spring 2025-2026 shows the CV row); `/News`; `/chat` fake messenger (chat rows incl. "Diploma · Team", textarea, Send).

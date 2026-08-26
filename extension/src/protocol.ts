@@ -48,7 +48,8 @@ export interface Connection {
 
 export interface Permissions {
   navigationAllowlist: string[];
-  askBefore: { sendMessage: boolean; createPr: boolean; download: boolean };
+  /** Gates that need an Allow card: sending messages (`type`), issues/PRs, downloads, `run_js` (arbitrary page JS). */
+  askBefore: { sendMessage: boolean; createPr: boolean; download: boolean; runJs: boolean };
 }
 
 export type VaultMode = 'drive' | 'brain';
@@ -83,103 +84,11 @@ export interface Settings {
   permissions: Permissions;
 }
 
-const PACK = 'kbtu-student';
-const VAULT = 'Google Drive folder Dayflow/<course>/<week|lab|materials>/';
-
-export const DEFAULT_SKILLS: readonly Skill[] = [
-  {
-    id: 'vault-sync',
-    title: 'Sync WSP files to vault',
-    blurb: 'Walk the course file directories on WSP, download every file into Drive, parse and index it.',
-    prompt: 'Sync my course files from WSP into my vault and tell me what changed.',
-    instructions:
-      `Goal: mirror the course file directories from WSP into the vault (${VAULT}), then index every file.\n` +
-      'Steps: open_tab the portal; read_page; open Student files; walk School → Instructor → course folder (click the row, then Enter; take a fresh read_page after every click); ' +
-      'for every file row call download(ref, path="<course>/<week|lab|materials>/<file name>") — the extension uploads the bytes to Drive and to the brain, which parses the summary and deadlines. ' +
-      'Never download the same file twice. Finish with a short changelog: files added, deadlines discovered.',
-    tools: ['open_tab', 'navigate', 'read_page', 'click', 'type_text', 'press_key', 'scroll', 'wait', 'download', 'screenshot'],
-    sites: ['wsp.kbtu.kz'],
-    schedule: '0 8 * * 1-5',
-    pack: PACK,
-    enabled: true,
-    key: '1',
-  },
-  {
-    id: 'lab',
-    title: 'Solve a lab from the vault',
-    blurb: 'Read the lab PDF, create a private repo, solve each task with code execution, push notebook + report.',
-    prompt: 'Solve Lab 1 of my Computer Vision course and push the solution to a new GitHub repo.',
-    instructions:
-      'Steps: find the lab in the vault (vault_search / vault_read); create_repository (private); for each task call solve_lab_task(task_text, context) and keep code + stdout; ' +
-      'build_notebook(cells) with outputs; build_report(course, lab, results) → Markdown + HTML page; push_files README.md, TODO.md, the .ipynb and REPORT.md in ONE call; ' +
-      'upload the report to Drive with download(url=<report page>, path="<course>/<lab>/REPORT.html"). Reply with repo, report and notebook links.',
-    tools: ['vault_search', 'vault_read', 'create_repository', 'push_files', 'solve_lab_task', 'build_notebook', 'build_report', 'download', 'open_tab'],
-    sites: ['github.com'],
-    schedule: null,
-    pack: PACK,
-    enabled: true,
-    key: '2',
-  },
-  {
-    id: 'team-ops',
-    title: 'Team ops: Telegram → Linear → GitHub',
-    blurb: 'Post the weekly update to the diploma chat, file Linear issues, open a GitHub issue + PR.',
-    prompt: 'Post this week’s update to the diploma project chat, create Linear issues for the next milestone, and open the PR.',
-    instructions:
-      'Steps: summarise the week from the repo (get_file_contents / recent activity); open_tab Telegram Web; read_page; find the diploma chat by name (search box at the top of the left column); ' +
-      'click it; request_confirmation with the exact message; type_text into the composer at the bottom and press_key Enter; verify with read_page. ' +
-      'Then create_issue in Linear for each next-milestone task, issue_write and create_pull_request on GitHub. Summarise IDs and links.',
-    tools: ['open_tab', 'read_page', 'click', 'type_text', 'press_key', 'wait', 'get_file_contents', 'list_teams', 'list_projects', 'create_issue', 'issue_write', 'create_pull_request'],
-    sites: ['web.telegram.org', 'github.com', 'linear.app'],
-    schedule: null,
-    pack: PACK,
-    enabled: true,
-    key: '3',
-  },
-  {
-    id: 'courseware',
-    title: 'Build courseware from syllabus',
-    blurb: 'Cheatsheet + quiz per topic, generated from the syllabus, opened as a page and saved to Drive.',
-    prompt: 'Build a cheatsheet and a quiz from the syllabus of the current course.',
-    instructions:
-      'Steps: read the syllabus from the vault (vault_read); generate_courseware(course, weeks) → HTML page URL; open_tab it; download(url=<page>, path="<course>/materials/courseware.html") to save it to Drive.',
-    tools: ['vault_search', 'vault_read', 'generate_courseware', 'open_tab', 'download'],
-    sites: [],
-    schedule: null,
-    pack: PACK,
-    enabled: true,
-    key: '4',
-  },
-  {
-    id: 'scaffold',
-    title: 'Scaffold vault folders',
-    blurb: 'Per course, per week, per lab — folder tree in Drive initialized from the syllabus schedule.',
-    prompt: 'Create the vault folder structure for this semester from my syllabi.',
-    instructions:
-      'Steps: read each syllabus from the vault; plan_vault_folders(course, schedule) → list of folder paths; the extension creates them on Drive (ensure_folder via download of a .keep file is NOT needed — call plan_vault_folders and report the tree).',
-    tools: ['vault_search', 'vault_read', 'plan_vault_folders'],
-    sites: [],
-    schedule: null,
-    pack: PACK,
-    enabled: true,
-    key: '5',
-  },
-  {
-    id: 'pitch-deck',
-    title: 'Pitch deck from repo',
-    blurb: 'A deck about the diploma project, generated from the repo, previewed in a tab and saved to Drive.',
-    prompt: 'Build a pitch deck about my diploma project repo and open it.',
-    instructions:
-      'Steps: get_file_contents README and TODO; build_deck(title, slides) → pptx URL + HTML preview; open_tab the preview; download(url=<pptx>, path="Diploma/pitch-deck.pptx") to save it to Drive.',
-    tools: ['get_file_contents', 'build_deck', 'open_tab', 'download'],
-    sites: ['github.com', 'drive.google.com'],
-    schedule: null,
-    pack: PACK,
-    enabled: true,
-    key: '6',
-  },
-];
-
+/**
+ * Skills are NOT shipped with the extension: the brain's default pack (backend/dayflow/core/packs/*.yaml) is the
+ * single source of skill text, and the panel caches what `GET /config` returns (App.tsx pulls it on open). A
+ * stale local copy would overlay the pack skill-by-skill on the next `PUT /config`.
+ */
 export const DEFAULT_SITES: readonly SiteProfile[] = [
   {
     domain: 'wsp.kbtu.kz',
@@ -208,7 +117,9 @@ export const DEFAULT_CONNECTIONS: readonly Connection[] = [
 ];
 
 export const DEFAULT_SETTINGS: Settings = {
-  backendUrl: 'https://dayflow-brain-lrqhed2z5a-ez.a.run.app',
+  // Empty on purpose: the user pastes their own brain URL (Settings → Brain). A baked-in URL would silently point
+  // at someone else's deployment (and at whatever revision happens to be live there).
+  backendUrl: '',
   token: '',
   vision: true,
   showWork: true,
@@ -216,12 +127,12 @@ export const DEFAULT_SETTINGS: Settings = {
   vaultMode: 'drive',
   vaultFolder: 'Dayflow',
   account: null,
-  skills: [...DEFAULT_SKILLS],
+  skills: [],
   sites: [...DEFAULT_SITES],
   connections: [...DEFAULT_CONNECTIONS],
   permissions: {
     navigationAllowlist: DEFAULT_SITES.map((s) => s.domain),
-    askBefore: { sendMessage: true, createPr: true, download: false },
+    askBefore: { sendMessage: true, createPr: true, download: false, runJs: true },
   },
 };
 

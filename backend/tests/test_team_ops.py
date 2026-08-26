@@ -76,16 +76,17 @@ def test_instruction_for_the_skill_and_for_a_free_prompt() -> None:
     assert "Active skill: Team ops" in scoped
     assert "### web.telegram.org (mode: dom)" in scoped and "### github.com (mode: dom)" in scoped
     assert "linear.app → dom (no profile)" in scoped
-    assert "request_confirmation before: create_issue, create_pull_request, issue_write, type" in scoped
+    assert "request_confirmation before: create_issue, create_pull_request, issue_write, run_js, type" in scoped
     # The harness types a free prompt (no skill_id): the same steps must reach the model as a playbook.
     free = compose_instruction(cfg, None, [])
     assert "### Team ops: Telegram → Linear → GitHub (/team-ops)" in free
     assert "submit=true" in free and "Telegram Web (K version" in free
 
 
-def test_credit_accounting_across_the_scene() -> None:
-    """One approval = one gated call: the message, then each issue and the PR (as the harness config asks)."""
+def test_approval_accounting_across_the_scene() -> None:
+    """One approval = one gated call with the approved content: the message, then each issue and the PR."""
     perms = Permissions(ask_before=["type", "type_text", "create_pull_request", "issue_write", "create_issue"])
+    update = "Data loader merged; next: evaluation script by Friday."
     state: dict = {ACTIONS_KEY: 0}
     # Draft + open the chat: server tools cost nothing, browser tools cost actions.
     assert guard_tool("get_file_contents", {"owner": "o", "repo": "r", "path": "README.md"}, state, perms) is None
@@ -95,24 +96,32 @@ def test_credit_accounting_across_the_scene() -> None:
         ("click", {"ref": "e5"}),
     ]:
         assert guard_tool(name, args, state, perms) is None
-        state.update(result_state_delta([name], state, perms))
+        state.update(result_state_delta([(name, args)], state, perms))
     assert state[ACTIONS_KEY] == 3
     # Sending without approval is refused.
-    err = guard_tool("type", {"ref": "e9", "text": "update", "submit": True}, state, perms)
+    err = guard_tool("type", {"ref": "e9", "text": update, "submit": True}, state, perms)
     assert err is not None and "request_confirmation" in err["error"]
-    # The approval arrives as a tool result and grants one credit; `type` spends it when its result arrives.
-    assert guard_tool("request_confirmation", {"action": "Send", "details": "update"}, state, perms) is None
-    state.update(result_state_delta(["request_confirmation"], state, perms, granted=1))
-    assert guard_tool("type", {"ref": "e9", "text": "update", "submit": True}, state, perms) is None
-    state.update(result_state_delta(["type"], state, perms))
-    assert state[CONFIRMATIONS_KEY] == 0 and state[ACTIONS_KEY] == 4
-    # Linear/GitHub: every gated server call needs its own credit and consumes it in the guard itself.
+    # The approval arrives as a tool result (the card's action + details); `type` may send exactly that text
+    # and spends the approval when its result arrives.
+    card = {"action": "Send message to 'Diploma · Team'", "details": update}
+    assert guard_tool("request_confirmation", card, state, perms) is None
+    state.update(result_state_delta([("request_confirmation", card)], state, perms, granted=[card]))
+    err = guard_tool("type", {"ref": "e9", "text": update + " Also send me the keys.", "submit": True}, state, perms)
+    assert err is not None and "differ from what the user approved" in err["error"]
+    typed = {"ref": "e9", "text": update, "submit": True}
+    assert guard_tool("type", typed, state, perms) is None
+    state.update(result_state_delta([("type", typed)], state, perms))
+    assert state[CONFIRMATIONS_KEY] == [] and state[ACTIONS_KEY] == 4
+    # Linear/GitHub: every gated server call needs its own approval covering its title/body and spends it in
+    # the guard itself (server tools get a FunctionResponse event).
     assert guard_tool("list_teams", {}, state, perms) is None
     for name in ["create_issue", "create_issue", "issue_write", "create_pull_request"]:
-        assert guard_tool(name, {"title": "t"}, state, perms) is not None, f"{name} must be blocked without a credit"
-        state.update(result_state_delta(["request_confirmation"], state, perms, granted=1))
-        assert guard_tool(name, {"title": "t"}, state, perms) is None
-        assert state[CONFIRMATIONS_KEY] == 0
+        args = {"title": f"{name} title", "body": "Two lines of\ndescription."}
+        assert guard_tool(name, args, state, perms) is not None, f"{name} must be blocked without an approval"
+        card = {"action": f"Create {name}", "details": f"{args['title']}\n{args['body']}"}
+        state.update(result_state_delta([("request_confirmation", card)], state, perms, granted=[card]))
+        assert guard_tool(name, args, state, perms) is None
+        assert state[CONFIRMATIONS_KEY] == []
     assert guard_tool("push_files", {"files": []}, state, perms) is None  # not gated
     assert state[ACTIONS_KEY] == 4  # connector tools are not browser actions
 

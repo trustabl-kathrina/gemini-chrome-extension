@@ -12,11 +12,53 @@ WSP_PORT=$BASE
 BRAIN_PORT=$((BASE + 1))
 DRIVE_PORT=$((BASE + 2))
 export FAKE_WSP_URL="http://127.0.0.1:$WSP_PORT"
-export DAYFLOW_URL="http://127.0.0.1:$BRAIN_PORT"
+# The brain is addressed as `localhost`, the fakes as `127.0.0.1`: different host names, so the runner can leave
+# the brain OFF the seeded allow-list and the implicit brain-host rule (download/open_tab of report pages) is
+# exercised for real instead of being masked by a shared 127.0.0.1 entry.
+export DAYFLOW_URL="http://localhost:$BRAIN_PORT"
 export FAKE_DRIVE_URL="http://127.0.0.1:$DRIVE_PORT"
 export DAYFLOW_TOKEN=${DAYFLOW_TOKEN:-dev}
 REAL_FLAG=""
 [ "${E2E_REAL:-0}" = "1" ] && REAL_FLAG="--real"
+# Headed Chromium needs a display; default to the new headless mode when there is none (CI, ssh).
+if [ -z "${HARNESS_HEADLESS:-}" ] && [ -z "${DISPLAY:-}" ] && [ -z "${WAYLAND_DISPLAY:-}" ]; then
+  export HARNESS_HEADLESS=1
+fi
+
+# Machine dependencies that fail late and confusingly otherwise: Vertex ADC + project, Node ≥ 22.18 (TypeScript
+# stripping in run.mjs), Playwright's Chromium, uv (brain + nbcheck venvs), the extension build.
+preflight() {
+  local ok=1
+  if ! command -v uv >/dev/null 2>&1; then echo "preflight: uv not found (https://docs.astral.sh/uv/)" >&2; ok=0; fi
+  local nodev; nodev=$(node -p "process.versions.node" 2>/dev/null || echo 0)
+  if ! node -e "const [a,b]=process.versions.node.split('.').map(Number); process.exit(a>22||(a===22&&b>=18)?0:1)" 2>/dev/null; then
+    echo "preflight: Node >= 22.18 required (found $nodev): harness/run.mjs imports the extension's .ts files natively" >&2; ok=0
+  fi
+  if [ ! -f "$ROOT/extension/.output/chrome-mv3/manifest.json" ]; then
+    echo "preflight: extension build missing — run: make extension-build (or cd extension && pnpm build)" >&2; ok=0
+  fi
+  if ! (cd "$ROOT/extension" && node -e "require('playwright')" 2>/dev/null); then
+    echo "preflight: playwright is not installed under extension/node_modules — run: make e2e-setup" >&2; ok=0
+  elif ! (cd "$ROOT/extension" && node -e "const {chromium}=require('playwright'); const p=chromium.executablePath(); if(!require('fs').existsSync(p)) process.exit(1)" 2>/dev/null); then
+    echo "preflight: Playwright's Chromium is not installed — run: make e2e-setup (pnpm exec playwright install chromium)" >&2; ok=0
+  fi
+  if [ "${GOOGLE_GENAI_USE_ENTERPRISE:-1}" = "1" ] && [ -z "${GOOGLE_API_KEY:-}" ]; then
+    if [ -z "${GOOGLE_CLOUD_PROJECT:-}" ]; then
+      GOOGLE_CLOUD_PROJECT=$(gcloud config get-value project 2>/dev/null || true)
+      if [ -n "$GOOGLE_CLOUD_PROJECT" ]; then
+        echo "preflight: GOOGLE_CLOUD_PROJECT is unset — using the active gcloud project '$GOOGLE_CLOUD_PROJECT' for Vertex AI (export GOOGLE_CLOUD_PROJECT to override)"
+        export GOOGLE_CLOUD_PROJECT
+      else
+        echo "preflight: set GOOGLE_CLOUD_PROJECT (a project with Vertex AI enabled) or GOOGLE_API_KEY" >&2; ok=0
+      fi
+    fi
+    if ! gcloud auth application-default print-access-token >/dev/null 2>&1; then
+      echo "preflight: no Application Default Credentials — run: gcloud auth application-default login" >&2; ok=0
+    fi
+  fi
+  [ "$ok" = 1 ] || { echo "preflight failed; see README 'Harness (make e2e)'" >&2; return 1; }
+  echo "preflight ok: node $nodev, project ${GOOGLE_CLOUD_PROJECT:-<api key>}, headless=${HARNESS_HEADLESS:-0}"
+}
 
 wait_for() { # url label logname
   for _ in $(seq 1 90); do
@@ -71,7 +113,7 @@ up_brain() { # scene
   (cd "$ROOT/backend" && unset DAYFLOW_BUCKET DAYFLOW_FIRESTORE && \
     PORT=$BRAIN_PORT DAYFLOW_TOKEN="$DAYFLOW_TOKEN" DAYFLOW_FAKE_CONNECTORS=1 DAYFLOW_FAKE_LOG="$OUT/$scene-connectors.jsonl" \
     DAYFLOW_PUBLIC_URL="$DAYFLOW_URL" \
-    GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-dayflow-agentic} GOOGLE_GENAI_USE_ENTERPRISE=${GOOGLE_GENAI_USE_ENTERPRISE:-1} \
+    GOOGLE_CLOUD_PROJECT="${GOOGLE_CLOUD_PROJECT:-}" GOOGLE_GENAI_USE_ENTERPRISE=${GOOGLE_GENAI_USE_ENTERPRISE:-1} \
     GOOGLE_CLOUD_LOCATION=${GOOGLE_CLOUD_LOCATION:-global} PYTHONPATH= \
     start_bg brain "$OUT/brain-$scene.log" uv run python -m dayflow.api)
   wait_for "$DAYFLOW_URL/health" brain "brain-$scene"
@@ -100,11 +142,12 @@ run() {
 }
 
 case "${1:-}" in
-  up) up "${2:-dev}" ;;
+  up) preflight && up "${2:-dev}" ;;
   down) down ;;
-  run) shift; run "$@" ;;
+  run) shift; preflight && run "$@" ;;
   e2e)
     shift
+    preflight || exit 1
     trap down EXIT
     up_fakes "${1:-dev}" || exit 1
     rc=0

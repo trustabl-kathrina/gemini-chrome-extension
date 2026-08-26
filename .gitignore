@@ -30,3 +30,15 @@ data/private/
 downloads/
 *.log
 .gstack/
+
+# harness: Chromium profiles, per-scene evidence dirs (screenshots, downloads, panel dumps), fake-Drive trees,
+# pid files and every `--real` result (real portal content). The fake scene results harness/out/<scene>.json
+# and *-connectors.jsonl are kept — they are the evidence README points at.
+harness/.profile-*/
+harness/out/*/
+harness/out/*.pid
+harness/out/*.real*.json
+harness/out/*.r[0-9].json
+harness/out/*.fake-*.json
+harness/out/*.ipynb
+harness/fake-wsp/__pycache__/

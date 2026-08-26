@@ -17,7 +17,14 @@ from dayflow.core.pages import PageStore, set_default_pages
 from dayflow.core.vault import MemoryBlobStore
 from dayflow.models.registry import registry
 from dayflow.tools import lab
-from dayflow.tools.lab import build_notebook, build_report, markdown_to_html, run_python
+from dayflow.tools.lab import (
+    LOCAL_EXEC_DISABLED,
+    build_notebook,
+    build_report,
+    local_exec_enabled,
+    markdown_to_html,
+    run_python,
+)
 
 SETUP = "import numpy as np\nH, W = 64, 64\nimg = np.zeros((H, W, 3), dtype=np.uint8)\n"
 CELLS = [
@@ -46,6 +53,24 @@ def test_run_python_captures_stdout_errors_and_timeouts() -> None:
     assert not bad["ok"] and "ValueError: boom" in bad["stderr"]
     slow = run_python("import time; time.sleep(5)", timeout=1)
     assert not slow["ok"] and slow["timed_out"]
+
+
+async def test_model_code_never_runs_in_the_brain_on_cloud_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A lab PDF is untrusted input; on Cloud Run (K_SERVICE set) the local sandbox and the nbclient
+    re-execution are refused unless DAYFLOW_LOCAL_EXEC=1 opts in explicitly."""
+    monkeypatch.setenv("K_SERVICE", "dayflow-brain")
+    monkeypatch.delenv("DAYFLOW_LOCAL_EXEC", raising=False)
+    assert not local_exec_enabled()
+    run = run_python("import urllib.request; print(urllib.request.urlopen('http://metadata.google.internal').read())")
+    assert run == {"ok": False, "stdout": "", "stderr": LOCAL_EXEC_DISABLED, "returncode": -1, "timed_out": False}
+    out = await build_notebook("Lab 01", CELLS)
+    assert out["status"] == "success" and out["executed"] is None and "disabled on Cloud Run" in out["exec_error"]
+    assert json.loads(out["ipynb_json"])["cells"][2]["outputs"][0]["text"] == "shape: (64, 64, 3)\n"
+    monkeypatch.setenv("DAYFLOW_LOCAL_EXEC", "1")
+    assert local_exec_enabled() and run_python("print(1)")["ok"]
+    monkeypatch.delenv("K_SERVICE")
+    monkeypatch.setenv("DAYFLOW_LOCAL_EXEC", "0")
+    assert not local_exec_enabled()
 
 
 # ---------- notebook ----------

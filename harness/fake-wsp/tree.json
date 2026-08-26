@@ -4,7 +4,7 @@
       "name": "School of Information Technology and Engineering",
       "instructors": [
         {
-          "name": "Koishiyeva Dinara",
+          "name": "Abenova Saule",
           "courses": [
             {
               "name": "CSCI3240 Introduction to Computer Vision",
@@ -17,7 +17,7 @@
           ]
         },
         {
-          "name": "Mukasheva Assel",
+          "name": "Yerzhanova Dana",
           "courses": [
             {
               "name": "CSCI3210 Cyber Security",
@@ -33,7 +33,7 @@
           ]
         },
         {
-          "name": "Aituov Askar",
+          "name": "Kairatov Arman",
           "courses": [
             {
               "name": "CSCI4100 Field Projects",
@@ -47,7 +47,7 @@
       "name": "Business School",
       "instructors": [
         {
-          "name": "Serikova Aigerim",
+          "name": "Bekzatova Aigerim",
           "courses": [
             {
               "name": "MGT2100 Principles of Management",
@@ -64,19 +64,19 @@
     "default": { "year": "2026-2027", "term": "Fall" },
     "classes": {
       "2025-2026/Spring": [
-        { "day": "Mon", "start": "10:00", "end": "10:50", "text": "CSCI3240 Introduction to Computer Vision Koishiyeva D. 501 (10:00-10:50)" },
-        { "day": "Wed", "start": "10:00", "end": "10:50", "text": "CSCI3240 Introduction to Computer Vision Koishiyeva D. 501 (10:00-10:50)" },
-        { "day": "Fri", "start": "13:00", "end": "14:50", "text": "CSCI3240 Introduction to Computer Vision Koishiyeva D. 412 lab (13:00-14:50)" },
-        { "day": "Tue", "start": "09:00", "end": "09:50", "text": "CSCI3210 Cyber Security Mukasheva A. 303 (09:00-09:50)" },
-        { "day": "Thu", "start": "09:00", "end": "10:50", "text": "CSCI3211 Cyber Security Lab Mukasheva A. 305 lab (09:00-10:50)" },
-        { "day": "Thu", "start": "14:00", "end": "14:50", "text": "MGT2100 Principles of Management Serikova A. 201 (14:00-14:50)" }
+        { "day": "Mon", "start": "10:00", "end": "10:50", "text": "CSCI3240 Introduction to Computer Vision Abenova S. 501 (10:00-10:50)" },
+        { "day": "Wed", "start": "10:00", "end": "10:50", "text": "CSCI3240 Introduction to Computer Vision Abenova S. 501 (10:00-10:50)" },
+        { "day": "Fri", "start": "13:00", "end": "14:50", "text": "CSCI3240 Introduction to Computer Vision Abenova S. 412 lab (13:00-14:50)" },
+        { "day": "Tue", "start": "09:00", "end": "09:50", "text": "CSCI3210 Cyber Security Yerzhanova D. 303 (09:00-09:50)" },
+        { "day": "Thu", "start": "09:00", "end": "10:50", "text": "CSCI3211 Cyber Security Lab Yerzhanova D. 305 lab (09:00-10:50)" },
+        { "day": "Thu", "start": "14:00", "end": "14:50", "text": "MGT2100 Principles of Management Bekzatova A. 201 (14:00-14:50)" }
       ],
       "2026-2027/Fall": [
-        { "day": "Mon", "start": "11:00", "end": "11:50", "text": "CSCI4100 Field Projects Aituov A. 405 (11:00-11:50)" },
-        { "day": "Wed", "start": "11:00", "end": "12:50", "text": "CSCI4100 Field Projects Aituov A. 405 (11:00-12:50)" }
+        { "day": "Mon", "start": "11:00", "end": "11:50", "text": "CSCI4100 Field Projects Kairatov A. 405 (11:00-11:50)" },
+        { "day": "Wed", "start": "11:00", "end": "12:50", "text": "CSCI4100 Field Projects Kairatov A. 405 (11:00-12:50)" }
       ],
       "2025-2026/Fall": [
-        { "day": "Tue", "start": "10:00", "end": "10:50", "text": "MGT2100 Principles of Management Serikova A. 201 (10:00-10:50)" }
+        { "day": "Tue", "start": "10:00", "end": "10:50", "text": "MGT2100 Principles of Management Bekzatova A. 201 (10:00-10:50)" }
       ]
     }
   },

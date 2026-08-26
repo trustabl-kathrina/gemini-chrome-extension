@@ -1,13 +1,14 @@
+import { ConfirmBox } from '@/src/agent/confirm';
 import { liveRun } from '@/src/agent/live';
 import { BrowserTools, watchDownloads } from '@/src/agent/tools';
 import { notify, skillIdFromAlarm, syncAlarms } from '@/src/agent/scheduler';
 import { pushConfig, syncFingerprint } from '@/src/agent/sync';
 import { normalizeSettings, PANEL_PORT, type AgentEvent, type PanelMessage, type PanelRequest, type Settings } from '@/src/protocol';
 
-/** One in-flight run: cancellation + pending confirmations. */
+/** One in-flight run: cancellation + confirmation answers (kept until the loop asks for them). */
 interface Active {
   abort: AbortController;
-  confirms: Map<string, (allow: boolean) => void>;
+  confirms: ConfirmBox;
 }
 
 const active = new Map<string, Active>();
@@ -20,11 +21,11 @@ async function loadSettings(): Promise<Settings> {
 
 async function startRun(req: Extract<PanelRequest, { type: 'run.start' }>, post: (m: PanelMessage) => void, background = false) {
   const abort = new AbortController();
-  const confirms = new Map<string, (allow: boolean) => void>();
+  const confirms = new ConfirmBox();
   active.set(req.runId, { abort, confirms });
   const settings = await loadSettings();
   const send = (event: AgentEvent) => post({ type: 'event', runId: req.runId, event });
-  const waitForConfirm = (id: string) => new Promise<boolean>((resolve) => confirms.set(id, resolve));
+  const waitForConfirm = (id: string) => confirms.wait(id);
 
   try {
     // Client-side gate: surfaces a confirm card in the panel and waits for the answer.
@@ -33,7 +34,7 @@ async function startRun(req: Extract<PanelRequest, { type: 'run.start' }>, post:
       send({ kind: 'confirm', id, message });
       return waitForConfirm(id);
     };
-    const tools = new BrowserTools({ settings, confirm, log: (line) => console.log('[dayflow]', line) });
+    const tools = new BrowserTools({ settings, confirm, emit: send, log: (line) => console.log('[dayflow]', line) });
     const stream = liveRun(settings, req, { signal: abort.signal, waitForConfirm, executeTool: (call) => tools.execute(call) });
     for await (const ev of stream) {
       send(ev);
@@ -70,12 +71,9 @@ export default defineBackground(() => {
         case 'run.cancel':
           active.get(msg.runId)?.abort.abort();
           break;
-        case 'confirm.answer': {
-          const a = active.get(msg.runId);
-          a?.confirms.get(msg.confirmId)?.(msg.allow);
-          a?.confirms.delete(msg.confirmId);
+        case 'confirm.answer':
+          active.get(msg.runId)?.confirms.answer(msg.confirmId, msg.allow);
           break;
-        }
       }
     });
   });

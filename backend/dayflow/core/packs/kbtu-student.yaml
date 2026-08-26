@@ -87,7 +87,7 @@ skills:
          improvements), lab01.ipynb (ipynb_json verbatim), REPORT.md (markdown verbatim),
          requirements.txt ("numpy" and "jupyter"), .gitignore]).
       7. download(url=page_url, path="<course code> <course name>/Lab NN/REPORT.html") saves the report to the
-         vault; then open_tab(page_url) so the user sees it (skip if the brain host is not allow-listed).
+         vault; then open_tab(page_url) so the user sees it (the brain's own pages are always navigable).
       Finish with: repo URL, report page URL, notebook path, tasks solved / failed.
   - id: team-ops
     key: "5"
@@ -185,6 +185,10 @@ sites:
       Google Drive web UI is canvas-heavy: work from screenshots and click_at coordinates. Files the agent saved
       live under the "Dayflow" folder; double-click opens a file in Docs/Slides.
 permissions:
-  allowed_hosts: [wsp.kbtu.kz, teams.microsoft.com, web.telegram.org, github.com, linear.app, drive.google.com, docs.google.com, dayflow-brain.run.app]
-  ask_before: [type, create_pull_request, issue_write, create_issue]
+  # The brain's own host (DAYFLOW_PUBLIC_URL) is always navigable for its report/courseware pages; this entry only
+  # matters when the pack is used against a brain whose public URL is not configured.
+  allowed_hosts: [wsp.kbtu.kz, teams.microsoft.com, web.telegram.org, github.com, linear.app, drive.google.com, docs.google.com, dayflow-brain-lrqhed2z5a-ez.a.run.app]
+  # run_js evaluates arbitrary JavaScript on an allow-listed page with the user's session: the full expression is
+  # shown on the confirmation card before it runs.
+  ask_before: [type, create_pull_request, issue_write, create_issue, run_js]
   mode: ask

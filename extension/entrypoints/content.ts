@@ -1,3 +1,4 @@
+import { isSecretInput, valueLabel } from '@/src/agent/guard';
 import { TOOL_CHANNEL } from '@/src/protocol';
 
 /**
@@ -108,7 +109,8 @@ function snapshot(maxNodes = 400): { text: string; nodes: number; truncated: boo
     const label = labelOf(el, own).slice(0, 80);
     const x = Math.round(rect.left + rect.width / 2);
     const y = Math.round(rect.top + rect.height / 2);
-    const value = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement ? ` value=${JSON.stringify(el.value.slice(0, 40))}` : '';
+    // Values reach the brain, Gemini and the session store: never a password / card / one-time code.
+    const value = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement ? valueLabel(el.value, el instanceof HTMLInputElement && isSecretInput(el)) : '';
     const href = el instanceof HTMLAnchorElement && el.href ? ` href=${el.href.slice(0, 80)}` : '';
     const state = el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio') ? (el.checked ? ' checked' : '') : el.classList.contains('v-selected') || el.getAttribute('aria-selected') === 'true' ? ' selected' : '';
     const ref = refFor(el);

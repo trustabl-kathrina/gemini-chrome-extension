@@ -12,6 +12,18 @@ export interface LiveControls {
   waitForConfirm: (id: string) => Promise<boolean>;
 }
 
+/** `source` when it is one of the brain's own pages (`<backendUrl>/pages/<kind>/<id>`), else undefined. */
+export function brainPageUrl(base: string, source: unknown): string | undefined {
+  if (typeof source !== 'string' || !base) return undefined;
+  try {
+    const u = new URL(source);
+    const b = new URL(base);
+    return u.origin === b.origin && u.pathname.startsWith('/pages/') ? u.href : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** One line for the tool row: the tool's own summary, else its message/title, else ok/failed. */
 export function resultSummary(result: Record<string, unknown>): string {
   const ok = result.status !== 'error';
@@ -39,8 +51,8 @@ export async function* liveRun(
   }
 
   yield { kind: 'run.start', title: req.text.slice(0, 80), skillId: req.skillId };
-  if (!settings.token) {
-    yield { kind: 'run.end', status: 'error', summary: 'No access token — set the backend URL and token in Settings.' };
+  if (!settings.token || !base) {
+    yield { kind: 'run.end', status: 'error', summary: 'No brain configured — set the backend URL and token in Settings.' };
     return;
   }
 
@@ -74,6 +86,9 @@ export async function* liveRun(
           yield { kind: 'tool.result', callId: call.id, ok, summary: resultSummary(result), ms: Date.now() - t0, screenshot: out.screenshot };
           if (ok && call.name === 'download' && typeof result.path === 'string') {
             yield { kind: 'artifact', type: 'file', label: result.path, href: typeof result.drive_link === 'string' ? result.drive_link : undefined };
+            // A page the brain generated (report, courseware) and the vault now holds: link the live page too.
+            const source = brainPageUrl(base, result.source);
+            if (source) yield { kind: 'artifact', type: 'url', label: `${result.path.split('/').pop() ?? 'page'} (page)`, href: source };
           }
         }
         results.push({ call_id: call.id, name: call.name, result });

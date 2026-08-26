@@ -8,7 +8,7 @@
 //   GET    /drive/v3/files/{id}[?alt=media]         metadata | bytes
 //   POST   /drive/v3/files                          JSON metadata → folder (or empty file)
 //   POST   /upload/drive/v3/files?uploadType=multipart|media   multipart/related [metadata, bytes] | raw bytes (+?name=&parents=)
-//   PATCH  /upload/drive/v3/files/{id}?uploadType=media        replace bytes
+//   PATCH  /upload/drive/v3/files/{id}?uploadType=multipart|media   replace bytes (multipart: [metadata, bytes] like POST)
 //   PATCH  /drive/v3/files/{id}                     rename / move (name, addParents)
 //   DELETE /drive/v3/files/{id}
 //   GET    /drive/v3/about?fields=user              the fake account
@@ -301,8 +301,26 @@ const server = createServer(async (req, res) => {
         const body = await readBody(req);
         if (p.startsWith('/upload/')) {
           if (fs.statSync(abs(rel)).isDirectory()) return gerr(res, 403, 'cannot upload bytes to a folder'), log(403);
-          fs.writeFileSync(abs(rel), body);
-          return json(res, 200, meta(rel)), log(200, `${body.length}B`);
+          // Real Drive semantics: `multipart` carries [metadata JSON, file bytes]; only `media` is the raw body.
+          // Writing a multipart body verbatim would corrupt the file on every re-upload of the same path.
+          const type = url.searchParams.get('uploadType') || 'media';
+          let bytes = body;
+          let md = {};
+          if (type === 'multipart') {
+            const parts = multipart(body, req.headers['content-type']);
+            if (parts.length < 1) return gerr(res, 400, 'multipart body has no parts', 'parseError'), log(400);
+            try {
+              md = JSON.parse(parts[0].body.toString('utf8') || '{}');
+            } catch {
+              return gerr(res, 400, 'first multipart part is not JSON metadata', 'parseError'), log(400);
+            }
+            bytes = parts[1]?.body ?? Buffer.alloc(0);
+          } else if (type !== 'media') return gerr(res, 400, `uploadType ${type} not supported by the fake (use multipart or media)`), log(400);
+          let newRel = rel;
+          if (md.name && safeName(md.name) !== path.basename(rel)) newRel = path.join(path.dirname(rel) === '.' ? '' : path.dirname(rel), safeName(md.name));
+          fs.writeFileSync(abs(rel), bytes);
+          if (newRel !== rel) fs.renameSync(abs(rel), abs(newRel));
+          return json(res, 200, meta(newRel)), log(200, `${bytes.length}B ${type}`);
         }
         let md = {};
         try {

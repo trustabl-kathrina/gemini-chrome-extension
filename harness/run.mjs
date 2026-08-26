@@ -12,6 +12,7 @@
 // --real: persistent profile ~/.gstack/chromium-profile (already signed in to wsp.kbtu.kz — the runner never logs in and never
 // types credentials) and the real portal prompt; fake Drive + fake connectors stay in place, only the portal is real.
 import { createRequire } from 'node:module';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -82,7 +83,11 @@ function fail(reason, extra = {}) {
 if (!scene || !SCENES.includes(scene)) fail(`usage: node harness/run.mjs <${SCENES.join('|')}> [--real]`);
 if (!fs.existsSync(path.join(EXT, 'manifest.json'))) fail(`extension build missing at ${EXT} — run: cd extension && pnpm build`);
 
-const spec = (await import(pathToFileURL(path.join(here, 'specs', `${scene}.mjs`)).href)).default;
+const specFile = path.join(here, 'specs', `${scene}.mjs`);
+const spec = (await import(pathToFileURL(specFile).href)).default;
+// Stamped into the result so a stale harness/out/<scene>.json (older spec or runner) is detectable.
+const sha = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex').slice(0, 12);
+const specVersion = { spec: path.relative(ROOT, specFile), specSha256: sha(specFile), runnerSha256: sha(fileURLToPath(import.meta.url)) };
 // Node strips TypeScript types natively (>=22.18/24): reuse the extension's own defaults and config mapper.
 const { DEFAULT_SETTINGS } = await import(pathToFileURL(path.join(ROOT, 'extension/src/protocol.ts')).href);
 const { toUserConfig } = await import(pathToFileURL(path.join(ROOT, 'extension/src/agent/sync.ts')).href);
@@ -152,15 +157,22 @@ const settings = {
   driveApiBase: DRIVE_URL,
   account: { email: 'harness@dayflow.local', name: 'Harness', token: FAKE_OAUTH_TOKEN, expiresAt: Date.now() + 6 * 3600 * 1000 },
   google: { token: FAKE_OAUTH_TOKEN, email: 'harness@dayflow.local', name: 'Harness' },
-  skills: DEFAULT_SETTINGS.skills.map((s) => ({ ...s, sites: [...new Set([...s.sites, wspHost])] })),
+  // No skill text from the harness: the brain's pack is the single source (the panel pulls it from GET /config).
+  skills: [],
   sites,
   connections: (DEFAULT_SETTINGS.connections ?? []).map((c) => ({ ...c, connected: true, account: c.id === 'drive' ? 'harness@dayflow.local' : 'harness' })),
   permissions: {
     ...DEFAULT_SETTINGS.permissions,
-    navigationAllowlist: [...new Set([...(DEFAULT_SETTINGS.permissions?.navigationAllowlist ?? []), wspHost, brainHost, driveHost, '127.0.0.1', 'localhost'])],
-    askBefore: { sendMessage: true, createPr: true, download: false },
+    // Only the portal and the Drive stand-in are allow-listed. The brain (a different host, see e2e.sh) is NOT:
+    // download(url=page_url) / open_tab(page_url) must pass through the implicit brain-host rule on both sides,
+    // exactly as in production.
+    navigationAllowlist: [...new Set([...(DEFAULT_SETTINGS.permissions?.navigationAllowlist ?? []), wspHost, driveHost])],
+    askBefore: { sendMessage: true, createPr: true, download: false, runJs: true },
   },
 };
+if (settings.permissions.navigationAllowlist.some((h) => h === brainHost || brainHost.endsWith(`.${h}`))) {
+  log(`note: the brain host ${brainHost} is also on the seeded allow-list (portal/Drive share it); the implicit brain-host rule is not exercised in this run`);
+}
 const brainConfig = {
   ...toUserConfig(settings),
   sites: sites.map((s) => ({ domain: s.domain, notes: s.notes, allow: s.allow, mode: s.mode ?? 'dom' })),
@@ -176,6 +188,7 @@ const started = Date.now();
 const result = {
   scene,
   real: REAL,
+  ...specVersion,
   prompt,
   status: 'running',
   summary: '',

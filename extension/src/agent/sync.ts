@@ -30,6 +30,7 @@ const ASK_BEFORE: Record<keyof Settings['permissions']['askBefore'], string[]> =
   sendMessage: ['type', 'type_text'],
   createPr: ['create_pull_request', 'issue_write', 'create_issue'],
   download: ['download'],
+  runJs: ['run_js'],
 };
 
 export function toUserConfig(s: Settings): UserConfig {
@@ -55,7 +56,7 @@ export function fromUserConfig(cfg: UserConfig, s: Settings): Settings {
     sites: cfg.sites.map((x) => ({ domain: x.domain, notes: x.notes, allow: x.allow, mode: x.mode ?? 'dom' })),
     permissions: {
       navigationAllowlist: cfg.permissions.allowed_hosts,
-      askBefore: { sendMessage: ask(ASK_BEFORE.sendMessage), createPr: ask(ASK_BEFORE.createPr), download: ask(ASK_BEFORE.download) },
+      askBefore: { sendMessage: ask(ASK_BEFORE.sendMessage), createPr: ask(ASK_BEFORE.createPr), download: ask(ASK_BEFORE.download), runJs: ask(ASK_BEFORE.runJs) },
     },
     connections: s.connections.map((c) => (c.id === 'github' ? { ...c, connected: cfg.connections.github } : c.id === 'linear' ? { ...c, connected: cfg.connections.linear } : c)),
     vaultFolder: cfg.vault_folder || s.vaultFolder,
@@ -78,6 +79,7 @@ export function brainUrl(s: Settings, path: string): string {
 /**
  * PUT the panel's slices to the brain so Gemini reads what the user edited. Fields the panel does not own
  * (`memory`, anything newer than this client) are preserved by merging over the brain's current config.
+ * A panel that has not pulled skills yet (empty list) must not wipe the brain's: the pack stays in charge.
  */
 export async function pushConfig(s: Settings, fetchImpl: typeof fetch = fetch): Promise<'skipped' | 'ok' | `error:${string}`> {
   if (!s.token || !s.backendUrl) return 'skipped';
@@ -88,9 +90,11 @@ export async function pushConfig(s: Settings, fetchImpl: typeof fetch = fetch): 
   } catch {
     /* brain unreachable: PUT below reports it */
   }
+  const local = toUserConfig(s);
+  const merged = { ...remote, ...local, skills: local.skills.length ? local.skills : (remote.skills ?? []) };
   let res: Response;
   try {
-    res = await fetchImpl(brainUrl(s, '/config'), { method: 'PUT', headers: authHeaders(s), body: JSON.stringify({ ...remote, ...toUserConfig(s) }) });
+    res = await fetchImpl(brainUrl(s, '/config'), { method: 'PUT', headers: authHeaders(s), body: JSON.stringify(merged) });
   } catch (e) {
     return `error:${e instanceof Error ? e.message : String(e)}`;
   }

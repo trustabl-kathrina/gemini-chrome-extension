@@ -4,8 +4,9 @@ const COURSE_FILES = ['syllabus.pdf', 'Lecture_01_Introduction.pdf', 'Lab_01_Ima
 
 export default {
   prompt: ({ wspUrl }) => `Sync the CSCI3240 Introduction to Computer Vision course files from WSP (${wspUrl}) into my vault and tell me what changed.`,
+  // The real portal's course/instructor names are personal data: pass them via HARNESS_PROMPT (never committed).
   realPrompt: () =>
-    'Sync the Computer Vision course files (Spring 2025-2026, Koishiyeva D.) from WSP into my vault; if her folder is missing, say so and sync Cyber Security Fundamentals (Mukasheva Assel) instead.',
+    'Sync the files of my Computer Vision course (Spring 2025-2026; find the instructor in the schedule) from WSP into my vault; if that folder is missing, say so and sync another course of that term instead.',
   expect(r, ctx) {
     const f = [];
     if (r.status !== 'done') f.push(`status is "${r.status}", expected "done" (${r.summary || 'no summary'})`);

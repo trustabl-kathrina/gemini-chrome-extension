@@ -9,7 +9,7 @@ import json
 import logging
 import os
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, NamedTuple
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,6 +32,7 @@ from dayflow.core.models import Skill, UserConfig
 from dayflow.core.pages import PageStore, default_pages, set_default_pages
 from dayflow.core.vault import VaultStore, default_vault, set_default_vault
 from dayflow.scheduler import run_once
+from dayflow.tools.lab import local_exec_enabled
 
 log = logging.getLogger("dayflow.api")
 APP_NAME = "dayflow"
@@ -146,18 +147,39 @@ def sse(
     return gen()
 
 
-async def pending_calls(runner: Runner, user_id: str, session_id: str) -> tuple[Session, dict[str, tuple[str, str]]]:
-    """The session and call_id -> (tool name, event id) for FunctionCalls that have no FunctionResponse yet."""
+class PendingCall(NamedTuple):
+    name: str
+    event_id: str
+    args: dict[str, Any]
+
+
+async def pending_calls(runner: Runner, user_id: str, session_id: str) -> tuple[Session, dict[str, PendingCall]]:
+    """The session and call_id -> (tool name, event id, args) for FunctionCalls that have no FunctionResponse yet."""
     session = await runner.session_service.get_session(app_name=APP_NAME, user_id=user_id, session_id=session_id)
     if session is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"unknown session '{session_id}'")
     answered = {fr.id for ev in session.events for fr in ev.get_function_responses()}
     return session, {
-        fc.id: (fc.name or "", ev.id)
+        fc.id: PendingCall(fc.name or "", ev.id, dict(fc.args or {}))
         for ev in session.events
         for fc in ev.get_function_calls()
         if fc.id and fc.id not in answered
     }
+
+
+def gemini_backend() -> dict[str, Any]:
+    """Which Gemini endpoint the brain will call — shown in /health so a judge can see the configuration."""
+    vertex = os.getenv("GOOGLE_GENAI_USE_ENTERPRISE") == "1" or os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "").lower() in {
+        "1",
+        "true",
+    }
+    if vertex:
+        return {
+            "backend": "vertex",
+            "project": os.getenv("GOOGLE_CLOUD_PROJECT") or None,
+            "location": os.getenv("GOOGLE_CLOUD_LOCATION") or None,
+        }
+    return {"backend": "gemini-api" if os.getenv("GOOGLE_API_KEY") else "unconfigured"}
 
 
 def create_app(
@@ -200,7 +222,14 @@ def create_app(
 
     @app.get("/health")
     async def healthz() -> dict[str, Any]:
-        return {"ok": True, "firestore": firestore_enabled(), "service": os.getenv("K_SERVICE", "local")}
+        return {
+            "ok": True,
+            "firestore": firestore_enabled(),
+            "service": os.getenv("K_SERVICE", "local"),
+            "bucket": os.getenv("DAYFLOW_BUCKET") or "memory",
+            "gemini": gemini_backend(),
+            "local_exec": local_exec_enabled(),
+        }
 
     @app.get("/skills", response_model=list[Skill])
     async def skills(request: Request, user_id: str = Depends(current_user)) -> list[Skill]:
@@ -243,7 +272,7 @@ def create_app(
         runner: Runner = request.app.state.runner
         session, pending = await pending_calls(runner, user_id, body.session_id)
         seen: set[str] = set()
-        credits = 0
+        granted: list[dict[str, Any]] = []  # the request_confirmation calls the user allowed (action + details)
         for r in body.results:
             if r.call_id in seen:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, f"duplicate call_id '{r.call_id}'")
@@ -251,19 +280,17 @@ def create_app(
             match = pending.get(r.call_id)
             if match is None:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, f"call_id '{r.call_id}' is not a pending tool call")
-            name, _ = match
-            if name != r.name:
+            if match.name != r.name:
                 raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST, f"call_id '{r.call_id}' belongs to '{name}', not '{r.name}'"
+                    status.HTTP_400_BAD_REQUEST, f"call_id '{r.call_id}' belongs to '{match.name}', not '{r.name}'"
                 )
-            if name == "request_confirmation" and r.result.get("confirmed") is True:
-                credits += 1
-        if len({pending[r.call_id][1] for r in body.results}) > 1:
+            if match.name == "request_confirmation" and r.result.get("confirmed") is True:
+                granted.append(match.args)
+        if len({pending[r.call_id].event_id for r in body.results}) > 1:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "results must answer calls from the same model turn")
         cfg: UserConfig = await request.app.state.store.get(user_id)
-        state_delta = (
-            result_state_delta([r.name for r in body.results], session.state, cfg.permissions, credits) or None
-        )
+        calls = [(r.name, pending[r.call_id].args) for r in body.results]
+        state_delta = result_state_delta(calls, session.state, cfg.permissions, granted) or None
         content = types.Content(role="user", parts=[function_response_part(r) for r in body.results])
         return StreamingResponse(
             sse(runner, user_id, body.session_id, content, state_delta),

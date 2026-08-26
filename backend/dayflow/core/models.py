@@ -41,7 +41,7 @@ class SiteProfile(BaseModel):
 class Permissions(BaseModel):
     allowed_hosts: list[str] = Field(default_factory=list, description="Empty = any host.")
     ask_before: list[str] = Field(
-        default_factory=lambda: ["type", "create_pull_request", "issue_write", "create_issue"],
+        default_factory=lambda: ["type", "create_pull_request", "issue_write", "create_issue", "run_js"],
         description="Tool names that require user confirmation before running.",
     )
     mode: Literal["ask", "auto"] = "ask"

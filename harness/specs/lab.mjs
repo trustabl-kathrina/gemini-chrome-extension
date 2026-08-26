@@ -1,6 +1,7 @@
 // Scene 2 — Lab (PLAN v2): fake-connector log has create_repository + push_files incl. a valid .ipynb whose code cells
 // have outputs, and a REPORT.md; the notebook executes cleanly (nbclient via `uv run --script harness/lib/nbcheck.py`,
-// 120 s); the report page returns 200; ≤40 browser actions.
+// 120 s); the brain's report page (GET /pages/report/<id>) returns 200 and the REPORT.html saved to Drive is that
+// rendered report (not the Drive stub's own HTML); ≤40 browser actions.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -69,26 +70,44 @@ export default {
       }
     }
 
-    // Report page: an artifact href (any http(s) link whose page mentions the report / lab) must serve 200.
-    const links = r.artifacts.filter((a) => /^https?:\/\//.test(a.href || ''));
-    if (!links.length) f.push(`no artifact with an http(s) href for the report page (artifacts: ${JSON.stringify(r.artifacts)})`);
+    // Report page: the brain's own PageStore page (build_report → download(url=page_url) yields a "(page)" artifact
+    // on the brain host). Drive "view" links are stubs and must not count.
+    const onBrain = (href) => {
+      try {
+        const u = new URL(href);
+        return u.origin === new URL(ctx.brainUrl).origin && u.pathname.startsWith('/pages/');
+      } catch {
+        return false;
+      }
+    };
+    const pages = r.artifacts.filter((a) => onBrain(a.href || ''));
+    if (!pages.length) f.push(`no artifact links a brain page (${ctx.brainUrl}/pages/…); the report must be saved with download(url=page_url) (artifacts: ${JSON.stringify(r.artifacts.map((a) => a.href))})`);
     else {
-      let ok = false;
       const seen = [];
-      for (const a of links) {
+      let ok = false;
+      for (const a of pages) {
         try {
           const res = await ctx.fetch(a.href);
           const body = await res.text();
-          seen.push(`${a.href} → ${res.status}`);
-          if (res.status === 200 && /report|lab/i.test(a.label + body)) ok = true;
+          const title = /<title>([^<]*)<\/title>/i.exec(body)?.[1] ?? '';
+          seen.push(`${a.href} → ${res.status} title=${JSON.stringify(title)}`);
+          if (res.status === 200 && /report/i.test(title) && /CSCI3240/i.test(body) && /<h2>\s*Tasks\s*<\/h2>/i.test(body)) ok = true;
         } catch (e) {
           seen.push(`${a.href} → ${e.message}`);
         }
       }
-      if (!ok) f.push(`no report page returned 200: ${seen.join('; ')}`);
+      if (!ok) f.push(`the brain's report page did not return 200 with a rendered report (<title>…report</title>, course name, "Tasks" section): ${seen.join('; ')}`);
     }
-    const driveReport = ctx.driveFiles.filter((p) => /^Dayflow\/.+\.(md|html)$/i.test(p));
-    if (!driveReport.length) f.push(`no report (.md/.html) under Dayflow/ in fake-Drive (entries: [${ctx.drive.join(', ') || 'empty'}])`);
+    // The vault copy: REPORT.html under Dayflow/… must be the rendered report's bytes, not a Drive stub or an error page.
+    const driveReport = ctx.driveFiles.filter((p) => /^Dayflow\/.+\/REPORT\.html$/i.test(p));
+    if (!driveReport.length) f.push(`no Dayflow/<course>/<lab>/REPORT.html in fake-Drive (entries: [${ctx.drive.join(', ') || 'empty'}])`);
+    for (const p of driveReport) {
+      const html = ctx.readDrive(p).toString('utf8');
+      const title = /<title>([^<]*)<\/title>/i.exec(html)?.[1] ?? '';
+      if (!/report/i.test(title) || !/<h1>[^<]*CSCI3240[^<]*<\/h1>/i.test(html) || !/<h2>\s*Tasks\s*<\/h2>/i.test(html) || !/<h3>\s*1\./.test(html)) {
+        f.push(`${p} is not the rendered report (title=${JSON.stringify(title)}, ${html.length} bytes, starts ${JSON.stringify(html.slice(0, 80))})`);
+      }
+    }
     return f;
   },
 };

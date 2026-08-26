@@ -97,12 +97,16 @@ async def test_chat_rejects_unknown_skill_and_empty_text(client: httpx.AsyncClie
 
 
 async def seed(
-    fake: FakeRunner, calls: list[tuple[str, str]], answered: tuple[str, ...] = (), event_id: str = "ev1"
+    fake: FakeRunner,
+    calls: list[tuple[str, str]],
+    answered: tuple[str, ...] = (),
+    event_id: str = "ev1",
+    args: dict[str, dict[str, Any]] | None = None,
 ) -> None:
     """Create session s1 with one model event holding `calls` and optional user FunctionResponses."""
     svc = fake.session_service
     session = await svc.create_session(app_name="dayflow", user_id="local", session_id="s1")
-    parts = [types.Part(function_call=types.FunctionCall(id=i, name=n, args={})) for i, n in calls]
+    parts = [types.Part(function_call=types.FunctionCall(id=i, name=n, args=(args or {}).get(i, {}))) for i, n in calls]
     await svc.append_event(
         session,
         Event(
@@ -123,8 +127,9 @@ async def seed(
         )
 
 
-async def test_tool_result_resumes_and_adds_confirmation_credit(client: httpx.AsyncClient, fake: FakeRunner) -> None:
-    await seed(fake, [("c1", "read_page"), ("k1", "request_confirmation")])
+async def test_tool_result_resumes_and_stores_the_approval(client: httpx.AsyncClient, fake: FakeRunner) -> None:
+    card = {"action": "Send", "details": "hi team"}
+    await seed(fake, [("c1", "read_page"), ("k1", "request_confirmation")], args={"k1": card})
     body = {
         "session_id": "s1",
         "results": [
@@ -137,7 +142,8 @@ async def test_tool_result_resumes_and_adds_confirmation_credit(client: httpx.As
     sent = fake.calls[0]
     frs = [p.function_response for p in sent["new_message"].parts]
     assert [(f.id, f.name) for f in frs] == [("c1", "read_page"), ("k1", "request_confirmation")]
-    assert sent["state_delta"] == {"confirmations": 1, "actions": 1}  # read_page spent one action
+    # read_page spent one action; the approval is what the user saw on the card, bound to that content.
+    assert sent["state_delta"] == {"approvals": [{"action": "Send", "details": "hi team"}], "actions": 1}
     assert (
         await client.post("/tool_result", headers=AUTH, json={"session_id": "s1", "results": []})
     ).status_code == 422
@@ -193,23 +199,25 @@ async def test_tool_result_drops_screenshots_over_the_cap(client: httpx.AsyncCli
 
 
 async def test_tool_result_charges_gated_browser_tools_on_answer(client: httpx.AsyncClient, fake: FakeRunner) -> None:
-    # ADK drops state the guard writes for long-running tools, so the credit `type` consumed is booked here.
-    await seed(fake, [("t1", "type")])
+    # ADK drops state the guard writes for long-running tools, so the approval `type` spent is booked here.
+    await seed(fake, [("t1", "type")], args={"t1": {"ref": "e1", "text": "hi team"}})
     session = await fake.session_service.get_session(app_name="dayflow", user_id="local", session_id="s1")
     assert session is not None
+    banked = [{"action": "Create issue", "details": "T"}, {"action": "Send", "details": "hi team"}]
     await fake.session_service.append_event(
         session,
         Event(
             id="ev-state",
             author="user",
             invocation_id="inv",
-            actions=EventActions(state_delta={"confirmations": 2, "actions": 7}),
+            actions=EventActions(state_delta={"approvals": banked, "actions": 7}),
         ),
     )
     r = await client.post(
         "/tool_result", headers=AUTH, json={"session_id": "s1", "results": [{"call_id": "t1", "name": "type"}]}
     )
-    assert r.status_code == 200 and fake.calls[0]["state_delta"] == {"actions": 8, "confirmations": 1}
+    assert r.status_code == 200
+    assert fake.calls[0]["state_delta"] == {"actions": 8, "approvals": [{"action": "Create issue", "details": "T"}]}
 
 
 async def test_chat_resets_the_action_budget(client: httpx.AsyncClient, fake: FakeRunner) -> None:

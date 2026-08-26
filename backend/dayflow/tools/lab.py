@@ -29,6 +29,22 @@ log = logging.getLogger("dayflow.lab")
 EXEC_TIMEOUT_S = 90  # per cell (nbclient) / per script (local sandbox)
 MAX_OUTPUT_CHARS = 20_000
 LOCAL_EXEC_ENV_KEYS = ("PATH", "LANG", "LC_ALL", "SYSTEMROOT", "TMPDIR")
+LOCAL_EXEC_DISABLED = (
+    "local code execution is disabled on Cloud Run (model-written code never runs in the brain's container; "
+    "set DAYFLOW_LOCAL_EXEC=1 only on a sandboxed deployment)"
+)
+
+
+def local_exec_enabled() -> bool:
+    """Model-written code may run in this process's container only on a developer machine (no K_SERVICE)
+    or when DAYFLOW_LOCAL_EXEC=1 is set explicitly. On Cloud Run the child would inherit the service
+    account's metadata server and network — a crafted lab PDF must not become RCE on the brain."""
+    flag = os.getenv("DAYFLOW_LOCAL_EXEC", "")
+    if flag == "1":
+        return True
+    if flag == "0":
+        return False
+    return not os.getenv("K_SERVICE")
 
 
 class NotebookCell(BaseModel):
@@ -50,9 +66,11 @@ class TaskResult(BaseModel):
 def run_python(code: str, timeout: int = EXEC_TIMEOUT_S) -> dict[str, Any]:
     """Runs a Python script in a fresh interpreter (`-I`: isolated, no user site) inside an empty temp
     directory with a minimal environment and a wall-clock timeout. Not a security boundary against
-    hostile code — the code comes from the model solving a lab — but it keeps the brain's own process,
-    env and cwd out of reach and bounds runtime. Returns {ok, stdout, stderr, returncode, timed_out}.
+    hostile code (the child keeps network and filesystem), which is why it is refused unless
+    `local_exec_enabled()` — dev machines only. Returns {ok, stdout, stderr, returncode, timed_out}.
     """
+    if not local_exec_enabled():
+        return {"ok": False, "stdout": "", "stderr": LOCAL_EXEC_DISABLED, "returncode": -1, "timed_out": False}
     env = {k: v for k, v in os.environ.items() if k in LOCAL_EXEC_ENV_KEYS}
     with tempfile.TemporaryDirectory(prefix="dayflow-lab-") as cwd:
         env["HOME"] = cwd
@@ -120,7 +138,10 @@ def _execute_sync(nb: nbformat.NotebookNode, timeout: int) -> None:
 
 async def execute_notebook(nb: nbformat.NotebookNode, cell_timeout: int = EXEC_TIMEOUT_S) -> dict[str, Any]:
     """Executes the notebook in a fresh ipykernel (worker thread; nbclient's sync API) and replaces the
-    outputs in place. {executed: True|False|None, error} — None when no kernel is available."""
+    outputs in place. {executed: True|False|None, error} — None when no kernel is available or when local
+    execution is disabled (Cloud Run): the solver's sandbox outputs are kept as they are."""
+    if not local_exec_enabled():
+        return {"executed": None, "error": LOCAL_EXEC_DISABLED}
     try:
         await asyncio.to_thread(_execute_sync, nb, cell_timeout)
     except ImportError as e:

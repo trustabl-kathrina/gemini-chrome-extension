@@ -1,7 +1,7 @@
 import { browser } from 'wxt/browser';
-import { TOOL_CHANNEL, type Settings, type ToolCall } from '../protocol';
+import { TOOL_CHANNEL, type AgentEvent, type Settings, type ToolCall } from '../protocol';
 import { DriveClient, fileNameFromHeaders, mimeFor, splitDrivePath } from './drive';
-import { checkNavigable, hostAllowed, safeVaultPath } from './guard';
+import { checkNavigable, effectiveAllowlist, isRiskyExpression, safeVaultPath } from './guard';
 import { getGoogleToken } from './identity';
 import { shrinkJpeg, toDataUrl, type Jpeg } from './image';
 
@@ -103,12 +103,16 @@ export interface ToolGuards {
   confirm: (message: string) => Promise<boolean>;
   /** Audit line (run_js, downloads) — the background prints it and the panel could show it. */
   log?: (line: string) => void;
+  /** Transcript step the user sees (the full run_js expression, never a clipped args row). */
+  emit?: (event: AgentEvent) => void;
 }
 
 /**
  * Executes browser tool calls for one run (PLAN v2 §The loop). Keeps a "job tab" so the brain can work in
  * a pinned background tab without stealing the user's focus. Enforces the user's permissions client-side:
- * URL scheme + navigation allow-list, vault-confined paths, ask-before gates, run_js only on allow-listed hosts.
+ * URL scheme + navigation allow-list on every URL the model passes AND on the tab every action targets
+ * (active-tab fallback, redirects, clicked links), vault-confined paths, ask-before gates, run_js only on
+ * allow-listed hosts and only after an Allow card when the expression can move data.
  * Every result carries `screenshot_b64` (JPEG ≤1280px) when settings.vision is on.
  */
 export class BrowserTools {
@@ -128,24 +132,49 @@ export class BrowserTools {
     if (!t.active) await browser.tabs.update(tabId, { active: true });
   }
 
+  /** Navigation allow-list plus the brain's own host (its report/courseware pages). */
+  private get allowlist(): string[] {
+    return effectiveAllowlist(this.settings);
+  }
+
   private navigable(raw: string): string {
-    const r = checkNavigable(raw, this.settings.permissions.navigationAllowlist);
+    const r = checkNavigable(raw, this.allowlist);
     if (!r.ok) throw new Error(`blocked: ${r.reason}`);
     return r.url.href;
   }
 
+  /**
+   * Every tab-targeting tool passes through here: the tab the action would touch must be on the allow-list.
+   * Catches the active-tab fallback (the user's mail/banking tab during a scheduled run), a click that left an
+   * allowed site, and server/meta/JS redirects after open_tab/navigate. On refusal the job tab is forgotten so
+   * the next action cannot silently reuse it.
+   */
+  private async guardTab(tabId: number): Promise<void> {
+    const t = await browser.tabs.get(tabId);
+    const r = checkNavigable(t.url ?? '', this.allowlist);
+    if (!r.ok) {
+      if (this.jobTabId === tabId) this.jobTabId = null;
+      throw new Error(`working tab ${t.url || '(no url)'} is off your allow-list (${r.reason}); call open_tab with an allowed URL first`);
+    }
+  }
+
   private async tab(): Promise<number> {
+    let id: number | undefined;
     if (this.jobTabId !== null) {
       try {
         await browser.tabs.get(this.jobTabId);
-        return this.jobTabId;
+        id = this.jobTabId;
       } catch {
         this.jobTabId = null;
       }
     }
-    const [active] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
-    if (!active?.id) throw new Error('no active tab');
-    return active.id;
+    if (id === undefined) {
+      const [active] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
+      if (!active?.id) throw new Error('no active tab');
+      id = active.id;
+    }
+    await this.guardTab(id);
+    return id;
   }
 
   private async tabInfo(tabId: number): Promise<Json> {
@@ -214,6 +243,7 @@ export class BrowserTools {
         if (!t.id) throw new Error('tab has no id');
         this.jobTabId = t.id;
         await waitForLoad(t.id);
+        await this.guardTab(t.id); // the page may have redirected off the allow-list
         return this.withShot(t.id, await this.tabInfo(t.id));
       }
       case 'navigate': {
@@ -221,6 +251,7 @@ export class BrowserTools {
         await this.reveal(id);
         await browser.tabs.update(id, { url: this.navigable(str('url')) });
         await waitForLoad(id);
+        await this.guardTab(id);
         return this.withShot(id, await this.tabInfo(id));
       }
       case 'read_page': {
@@ -242,6 +273,7 @@ export class BrowserTools {
         const r = await contentTool(id, { name: 'click', ref: str('ref') });
         await sleep(400);
         await waitForLoad(id, 5000);
+        await this.guardTab(id); // a link may have left the allowed site
         return this.withShot(id, { ...r, ...(await this.tabInfo(id)) });
       }
       case 'click_at': {
@@ -250,6 +282,7 @@ export class BrowserTools {
         const r = await contentTool(id, { name: 'click_at', x: num('x', 0), y: num('y', 0) });
         await sleep(400);
         await waitForLoad(id, 5000);
+        await this.guardTab(id);
         return this.withShot(id, { ...r, ...(await this.tabInfo(id)) });
       }
       case 'type':
@@ -260,6 +293,7 @@ export class BrowserTools {
         if (a.submit === true) {
           await sleep(400);
           await waitForLoad(id, 5000);
+          await this.guardTab(id);
         }
         return this.withShot(id, r);
       }
@@ -269,6 +303,7 @@ export class BrowserTools {
         const r = await contentTool(id, { name: 'press_key', key: str('key', 'Enter') });
         await sleep(400);
         await waitForLoad(id, 5000);
+        await this.guardTab(id);
         return this.withShot(id, { ...r, ...(await this.tabInfo(id)) });
       }
       case 'scroll': {
@@ -294,13 +329,18 @@ export class BrowserTools {
         return this.withShot(id, { viewport: [after.width, after.height], requested: [width, height] });
       }
       case 'run_js': {
-        const id = await this.tab();
+        const id = await this.tab(); // guardTab: allow-listed host only
         const t = await browser.tabs.get(id);
         const host = t.url ? new URL(t.url).hostname : '';
-        if (!host || !hostAllowed(host, this.settings.permissions.navigationAllowlist)) throw new Error(`run_js is only allowed on allow-listed hosts (${host || 'unknown host'} is not)`);
         const expression = str('expression') || str('code');
         if (!expression) throw new Error('run_js needs an expression');
+        // The allow-list says where code may run, not what it may do: the full expression goes into the transcript,
+        // and anything that can move data (fetch, beacons, navigation, storage) needs an explicit Allow.
+        this.guards.emit?.({ kind: 'text', text: `run_js on ${host}:\n${expression}` });
         this.guards.log?.(`run_js on ${host}: ${expression.slice(0, 200)}`);
+        if (isRiskyExpression(expression) && !(await this.guards.confirm(`Run this JavaScript on ${host}? It can send data or navigate:\n\n${expression}`))) {
+          throw new Error('run_js denied by user');
+        }
         const [frame] = await browser.scripting.executeScript({
           target: { tabId: id },
           world: 'MAIN',
@@ -343,6 +383,9 @@ export class BrowserTools {
 
   private async fetchBytes(url: string): Promise<{ blob: Blob; name: string }> {
     const res = await fetch(url, { credentials: 'include', redirect: 'follow' });
+    // The requested URL was checked; the landing URL must pass too (open redirectors, cross-host bounces).
+    const landed = res.url || url;
+    if (landed !== url && !checkNavigable(landed, this.allowlist).ok) throw new Error(`download redirected to ${landed}, which is not on your allow-list`);
     if (!res.ok) throw new Error(`GET ${url} → HTTP ${res.status}`);
     const blob = await res.blob();
     if (blob.size === 0) throw new Error(`GET ${url} returned no bytes`);
@@ -359,7 +402,7 @@ export class BrowserTools {
     await this.reveal(id);
     if (ref) {
       const { href } = await contentTool<{ href?: string }>(id, { name: 'href', ref });
-      if (href && checkNavigable(href, this.settings.permissions.navigationAllowlist).ok && !/\.(html?|php|aspx?)$/i.test(new URL(href).pathname)) {
+      if (href && checkNavigable(href, this.allowlist).ok && !/\.(html?|php|aspx?)$/i.test(new URL(href).pathname)) {
         const got = await this.fetchBytes(href).catch(() => null);
         if (got && !got.blob.type.startsWith('text/html')) return { ...got, source: href };
       }
@@ -386,7 +429,7 @@ export class BrowserTools {
       item = await pending;
     }
     const src = item.finalUrl || item.url;
-    if (!checkNavigable(src, this.settings.permissions.navigationAllowlist).ok) {
+    if (!checkNavigable(src, this.allowlist).ok) {
       await discardDownload(item.id);
       throw new Error(`the page started a download from ${src}, which is not on your allow-list`);
     }
