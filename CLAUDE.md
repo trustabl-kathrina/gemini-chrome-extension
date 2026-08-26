@@ -21,6 +21,7 @@ Backlog (post-hackathon): WSP attendance/GPA, Teams digest + schedule changes, T
 
 ## Done-means
 - `make verify` exits 0: `ruff check` + `pyright` + `pytest` (backend), `pnpm typecheck` + `pnpm test` (extension).
+- `make e2e` exits 0: harness (Playwright + fake WSP + local brain) passes every scene — see PLAN.md.
 - Backend deployed on Cloud Run (`*.run.app`), Firestore + Pub/Sub used for real; extension loads unpacked and runs scene 1 end-to-end.
 - README spin-up from zero, architecture diagram, ≤4-min video with Cloud console visible.
 
