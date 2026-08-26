@@ -166,7 +166,7 @@ export const DEFAULT_CONNECTIONS: readonly Connection[] = [
 
 export const DEFAULT_SETTINGS: Settings = {
   mode: 'mock',
-  backendUrl: 'https://dayflow-brain.run.app',
+  backendUrl: 'https://dayflow-brain-lrqhed2z5a-ez.a.run.app',
   token: '',
   vaultFolder: 'DayflowVault',
   account: null,
