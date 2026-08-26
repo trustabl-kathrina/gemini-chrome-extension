@@ -1,0 +1,31 @@
+# secrets / env
+.env
+.env.*
+!.env.example
+*.pem
+*.json.key
+service-account*.json
+
+# claude / tooling
+.claude/
+.ultima/
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# node
+node_modules/
+dist/
+.output/
+.wxt/
+*.tsbuildinfo
+
+# data / fixtures with real content
+data/private/
+downloads/
+*.log
