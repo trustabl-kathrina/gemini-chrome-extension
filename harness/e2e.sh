@@ -77,12 +77,17 @@ start_bg() { # name logfile -- command...
   echo $! >"$OUT/$name.pid"
 }
 
+# Stopping is delegated to harness/lib/safe-kill.sh: it refuses anything that is not one of our own
+# server/browser processes by command line — never a parent pid, never `systemd --user` (see the file).
+# shellcheck source=lib/safe-kill.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib/safe-kill.sh"
+
 stop() { # name...
   for name in "$@"; do
     local pidfile="$OUT/$name.pid"
     [ -f "$pidfile" ] || continue
     local pid; pid=$(cat "$pidfile")
-    kill -- "-$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
+    safe_kill_group "$pid" || safe_kill "$pid" || true
     rm -f "$pidfile"
   done
 }

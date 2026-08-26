@@ -29,3 +29,4 @@ Backlog (post-hackathon): WSP attendance/GPA, Teams digest + schedule changes, T
 - No real credentials or scraped personal data in the repo; site fixtures are anonymized HTML under `backend/tests/fixtures/`.
 - Site-specific logic (WSP, Teams) lives behind one `SiteSkill` interface; jobs behind one `Job` interface.
 - Never read `.env`. Secrets via env / Secret Manager only.
+- **Process hygiene:** stop processes ONLY via `source harness/lib/safe-kill.sh; safe_kill <pid>` / `safe_kill_port <port>`. Never `kill` a parent PID, a process group you did not create, or anything found by a broad `pkill -f`/`ps | grep`. (2026-08-26: `kill $PID $PPID` hit `systemd --user` and destroyed the desktop session.)

@@ -102,6 +102,7 @@ Lab solver:
 5. **Review** (3 lenses) → fixer → full e2e for scenes 1–3. Scenes 4–6 only after 1–3 are green.
 
 ## Rules for builders
+- **Never kill a process except through `harness/lib/safe-kill.sh`** (`safe_kill <pid>`, `safe_kill_port <port>`). No `kill $PPID`, no `pkill -f`, no `kill -- -<pgid>` of your own; the parent of a setsid'd server is `systemd --user` and killing it ends the user's desktop session (happened 2026-08-26).
 - Stay in scope; don't commit (coordinator commits between phases); no new top-level docs; keep `make verify` green.
 - Shell hook blocks commands containing `rm -rf` or the word "truncate"; never read `.env`.
 - No real credentials or personal data in the repo; fake-wsp/fake-drive content is synthetic.
