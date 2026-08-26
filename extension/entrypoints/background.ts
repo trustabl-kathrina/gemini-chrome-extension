@@ -2,6 +2,7 @@ import { liveRun } from '@/src/agent/live';
 import { mockRun } from '@/src/agent/mock';
 import { BrowserTools } from '@/src/agent/tools';
 import { notify, skillIdFromAlarm, syncAlarms } from '@/src/agent/scheduler';
+import { pushConfig } from '@/src/agent/sync';
 import { DEFAULT_SETTINGS, PANEL_PORT, type AgentEvent, type PanelMessage, type PanelRequest, type Settings } from '@/src/protocol';
 
 /** One in-flight run: cancellation + pending confirmations. */
@@ -86,8 +87,22 @@ export default defineBackground(() => {
   const rearm = () => void loadSettings().then(syncAlarms);
   browser.runtime.onInstalled.addListener(rearm);
   browser.runtime.onStartup.addListener(rearm);
+  // Settings → brain: debounce edits, then PUT /config so Gemini reads what the user changed.
+  let syncTimer: ReturnType<typeof setTimeout> | undefined;
+  const syncConfig = () => {
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => {
+      void loadSettings()
+        .then(pushConfig)
+        .then((r) => r !== 'skipped' && console.log('[dayflow] config sync', r))
+        .catch((e: unknown) => console.warn('[dayflow] config sync failed', e));
+    }, 800);
+  };
   browser.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes.settings) rearm();
+    if (area === 'local' && changes.settings) {
+      rearm();
+      syncConfig();
+    }
   });
   browser.alarms.onAlarm.addListener(async (alarm) => {
     const skillId = skillIdFromAlarm(alarm.name);
