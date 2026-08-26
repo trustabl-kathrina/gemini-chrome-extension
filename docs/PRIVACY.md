@@ -1,27 +1,4 @@
-"""GET /pages/{kind}/{id}: HTML artifacts from the PageStore. No auth — ids are unguessable.
-
-Also serves the privacy policy at GET /pages/privacy: the Chrome Web Store listing must link to a policy on a
-live URL, and the brain is the only thing Dayflow deploys. `docs/PRIVACY.md` is the source of truth; PRIVACY_MD
-below is the copy that ships with the backend, because `gcloud run deploy --source backend` uploads `backend/`
-only and cannot see `docs/`. When the repo is checked out next to the package (local `uv run`), the file wins.
-"""
-
-from __future__ import annotations
-
-from pathlib import Path
-
-from fastapi import APIRouter, HTTPException, Request, status
-from fastapi.responses import HTMLResponse
-
-from dayflow.core.pages import PageStore
-from dayflow.tools.lab import markdown_to_html
-
-router = APIRouter(prefix="/pages", tags=["pages"])
-
-# Repo checkout: backend/dayflow/api/pages.py -> <repo>/docs/PRIVACY.md
-PRIVACY_FILE = Path(__file__).resolve().parents[3] / "docs" / "PRIVACY.md"
-
-PRIVACY_MD = """# Dayflow — Privacy
+# Dayflow — Privacy
 
 Last updated: 2026-08-26. Applies to the Chrome extension "Dayflow Agent" and the Dayflow brain (the backend you run).
 
@@ -105,23 +82,3 @@ run transcript on your machine.
 
 Questions or a deletion request: open an issue at https://github.com/OWNER/dayflow/issues (replace `OWNER` with the
 repository owner once the repo is public) — the same address is the support site of the Chrome Web Store item.
-"""
-
-
-@router.get("/privacy", response_class=HTMLResponse)
-async def privacy() -> HTMLResponse:
-    """The privacy policy the Chrome Web Store listing links to (docs/PRIVACY.md, rendered)."""
-    try:
-        md = PRIVACY_FILE.read_text(encoding="utf-8")
-    except OSError:
-        md = PRIVACY_MD
-    return HTMLResponse(markdown_to_html(md, "Dayflow — Privacy"), headers={"Cache-Control": "public, max-age=3600"})
-
-
-@router.get("/{kind}/{page_id}", response_class=HTMLResponse)
-async def get_page(kind: str, page_id: str, request: Request) -> HTMLResponse:
-    pages: PageStore = request.app.state.pages
-    html = await pages.get(kind, page_id)
-    if html is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such page")
-    return HTMLResponse(html, headers={"Cache-Control": "private, max-age=300"})

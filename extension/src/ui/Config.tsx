@@ -1,7 +1,7 @@
 import { AlertCircle, Check, RotateCcw, Save } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { parseConfigYaml, toConfigYaml } from '../agent/config';
-import { brainUrl, fromUserConfig, pullConfig, toUserConfig, type UserConfig } from '../agent/sync';
+import { brainAuthHeader, brainUrl, fromUserConfig, pullConfig, toUserConfig, type UserConfig } from '../agent/sync';
 import { DEFAULT_SETTINGS, type Settings } from '../protocol';
 import { Button } from './primitives';
 
@@ -18,7 +18,7 @@ export function ConfigView({ settings, update }: { settings: Settings; update: U
   const [busy, setBusy] = useState(false);
   const parsed = useMemo(() => parseConfigYaml(text), [text]);
   const dirty = text !== saved;
-  const authed = { authorization: `Bearer ${settings.token}`, 'content-type': 'application/json' };
+  const authed = { ...brainAuthHeader(settings), 'content-type': 'application/json' };
 
   const load = useCallback(async () => {
     setBusy(true);

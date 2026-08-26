@@ -1,9 +1,9 @@
 import { Check, LogOut, RefreshCw, X } from 'lucide-react';
 import { useState } from 'react';
 import { DriveClient } from '../agent/drive';
-import { getGoogleToken, signIn, signOut } from '../agent/identity';
-import { brainUrl } from '../agent/sync';
-import type { Settings, VaultMode } from '../protocol';
+import { driveConfigured, getGoogleToken, refreshGoogleToken, signIn, signOut } from '../agent/identity';
+import { brainAuthHeader, brainUrl } from '../agent/sync';
+import { effectiveVaultMode, type Settings, type VaultMode } from '../protocol';
 import { Button, Field, Toggle, inputCls } from './primitives';
 
 type Update = (fn: (s: Settings) => Settings) => void;
@@ -27,6 +27,9 @@ export function SettingsView({ settings, update }: { settings: Settings; update:
   const [brain, setBrain] = useState<Probe>({ state: 'idle' });
   const [drive, setDrive] = useState<Probe>({ state: 'idle' });
   const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
+  // No VITE_GOOGLE_CLIENT_ID in this build → chrome.identity cannot sign in at all, and the vault runs on the brain.
+  const googleReady = driveConfigured();
+  const mode = effectiveVaultMode(settings, googleReady);
 
   const doSignIn = async () => {
     setAuth({ state: 'busy' });
@@ -51,10 +54,10 @@ export function SettingsView({ settings, update }: { settings: Settings; update:
   const checkBrain = async () => {
     setBrain({ state: 'busy' });
     try {
-      const r = await fetch(brainUrl(settings, '/health'), { headers: { authorization: `Bearer ${settings.token}` } });
+      const r = await fetch(brainUrl(settings, '/health'), { headers: brainAuthHeader(settings) });
       const j = (await r.json()) as { ok?: boolean; service?: string; firestore?: boolean };
       if (!r.ok || !j.ok) throw new Error(`HTTP ${r.status}`);
-      const cfg = await fetch(brainUrl(settings, '/config'), { headers: { authorization: `Bearer ${settings.token}` } });
+      const cfg = await fetch(brainUrl(settings, '/config'), { headers: brainAuthHeader(settings) });
       setBrain(cfg.ok ? { state: 'ok', text: `${j.service ?? 'brain'} · firestore ${j.firestore ? 'on' : 'off'} · token accepted` } : { state: 'err', text: `reachable, but the token was rejected (HTTP ${cfg.status})` });
     } catch (e) {
       setBrain({ state: 'err', text: msg(e) });
@@ -63,8 +66,8 @@ export function SettingsView({ settings, update }: { settings: Settings; update:
   const checkDrive = async () => {
     setDrive({ state: 'busy' });
     try {
-      const token = await getGoogleToken(settings);
-      const client = new DriveClient({ base: settings.driveApiBase, token });
+      const token = await getGoogleToken(settings, true);
+      const client = new DriveClient({ base: settings.driveApiBase, token, onUnauthorized: (stale) => refreshGoogleToken(settings, stale) });
       const me = await client.about().catch(() => ({}) as { emailAddress?: string });
       const items = await client.list(settings.vaultFolder);
       setDrive({ state: 'ok', text: `${me.emailAddress ?? 'connected'} · ${settings.vaultFolder}/ has ${items.length} item${items.length === 1 ? '' : 's'}` });
@@ -88,11 +91,18 @@ export function SettingsView({ settings, update }: { settings: Settings; update:
             </Button>
           </div>
         ) : (
-          <div className="flex items-center gap-2">
-            <Button variant="primary" onClick={() => void doSignIn()} disabled={auth.state === 'busy'}>
-              Sign in with Google
-            </Button>
-            {settings.driveToken && <span className="text-[11px] text-fg-3">using a provided token</span>}
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <Button variant="primary" onClick={() => void doSignIn()} disabled={auth.state === 'busy' || !googleReady}>
+                Sign in with Google
+              </Button>
+              {settings.driveToken && <span className="text-[11px] text-fg-3">using a provided token</span>}
+            </div>
+            {!googleReady && (
+              <span className="text-[11px] text-warn">
+                Drive not configured — this build has no OAuth client. Put VITE_GOOGLE_CLIENT_ID in extension/.env, rebuild, and reload the extension. Until then the vault stays on the brain.
+              </span>
+            )}
           </div>
         )}
         <ProbeLine p={auth} />
@@ -134,20 +144,28 @@ export function SettingsView({ settings, update }: { settings: Settings; update:
         <div className="flex flex-col gap-1.5">
           <div className="hairline inline-flex w-fit rounded-md bg-bg-1 p-0.5">
             {(['drive', 'brain'] as VaultMode[]).map((m) => (
-              <button key={m} onClick={() => set('vaultMode', m)} className={`h-6 rounded-sm px-3 text-[12px] ${settings.vaultMode === m ? 'bg-bg-2 text-fg' : 'text-fg-3'}`}>
+              <button key={m} onClick={() => set('vaultMode', m)} className={`h-6 rounded-sm px-3 text-[12px] ${mode === m ? 'bg-bg-2 text-fg' : 'text-fg-3'}`} title={m === 'drive' && !googleReady && !settings.driveToken ? 'Drive not configured in this build' : undefined}>
                 {m === 'drive' ? 'Google Drive' : 'Brain only'}
               </button>
             ))}
           </div>
           <div className="flex items-center gap-1.5">
             <input className={`${inputCls} font-mono text-[12px]`} value={settings.vaultFolder} onChange={(e) => set('vaultFolder', e.target.value)} aria-label="Drive folder" placeholder="Dayflow" />
-            <Button onClick={() => void checkDrive()} disabled={drive.state === 'busy' || settings.vaultMode !== 'drive'} aria-label="Check Drive">
+            <Button onClick={() => void checkDrive()} disabled={drive.state === 'busy' || mode !== 'drive'} aria-label="Check Drive">
               <RefreshCw size={12} /> Drive
             </Button>
           </div>
           <div className="flex items-center gap-2 text-[11px] text-fg-3">
-            <span className={`h-1.5 w-1.5 rounded-full ${settings.vaultMode === 'drive' ? (settings.account || settings.driveToken ? 'bg-ok' : 'bg-warn') : 'bg-fg-3'}`} />
-            {settings.vaultMode === 'drive' ? (settings.account?.email ? `Drive as ${settings.account.email}` : settings.driveToken ? 'Drive with a provided token' : 'Drive: sign in above first') : 'Drive off — files stay in the brain'}
+            <span className={`h-1.5 w-1.5 rounded-full ${mode === 'drive' ? (settings.account || settings.driveToken ? 'bg-ok' : 'bg-warn') : 'bg-fg-3'}`} />
+            {mode === 'drive'
+              ? settings.account?.email
+                ? `Drive as ${settings.account.email}`
+                : settings.driveToken
+                  ? 'Drive with a provided token'
+                  : 'Drive: sign in above first'
+              : settings.vaultMode === 'drive'
+                ? 'Drive not configured — falling back to the brain vault'
+                : 'Drive off — files stay in the brain'}
           </div>
           <ProbeLine p={drive} />
           <details className="text-[11px] text-fg-3">

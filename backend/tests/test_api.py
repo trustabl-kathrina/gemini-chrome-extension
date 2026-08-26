@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 import pytest
+from fastapi import HTTPException
 from google.adk.events import Event, EventActions
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
@@ -394,3 +395,84 @@ def test_public_url_not_learned_from_untrusted_host():
     assert not trusted_public_host("evil.example")
     assert not trusted_public_host("run.app.evil.example")
     assert not trusted_public_host(None)
+
+
+# ---------- optional Google ID-token auth (backend/dayflow/api/auth.py) ----------
+
+
+def google_signin(monkeypatch: pytest.MonkeyPatch, claims: dict[str, Any] | None) -> list[str]:
+    """Turn on ID-token auth with a patched verifier; returns the audiences it was called with."""
+    audiences: list[str] = []
+
+    def fake_verify(token: str, request: Any, audience: str) -> dict[str, Any]:
+        audiences.append(audience)
+        if claims is None or token != "header.payload.signature":
+            raise ValueError("bad token")
+        return {"aud": audience, "iss": "https://accounts.google.com", **claims}
+
+    monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_ID", "cid.apps.googleusercontent.com")
+    monkeypatch.setattr("google.oauth2.id_token.verify_oauth2_token", fake_verify)
+    return audiences
+
+
+async def test_google_id_token_is_accepted_and_scoped_to_its_sub(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    audiences = google_signin(monkeypatch, {"sub": "108154", "email": "s@kbtu.kz", "email_verified": True})
+    jwt = {"Authorization": "Bearer header.payload.signature"}
+    assert (await client.put("/config", headers=jwt, json={"vault_folder": "FromGoogle"})).status_code == 200
+    assert audiences == ["cid.apps.googleusercontent.com"]  # verified against our client id, once per request
+    # Its own user: the shared token's "local" config is untouched.
+    assert (await client.get("/config", headers=jwt)).json()["vault_folder"] == "FromGoogle"
+    assert (await client.get("/config", headers=AUTH)).json()["vault_folder"] == "Dayflow"
+
+
+async def test_a_jwt_that_fails_verification_is_401(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    google_signin(monkeypatch, None)
+    bad = {"Authorization": "Bearer header.payload.signature"}
+    assert (await client.get("/config", headers=bad)).status_code == 401
+    # A JWT-shaped string that is not ours either.
+    assert (await client.get("/config", headers={"Authorization": "Bearer a.b.c"})).status_code == 401
+    # The shared token still works while ID-token auth is on.
+    assert (await client.get("/config", headers=AUTH)).status_code == 200
+
+
+async def test_jwts_are_refused_when_id_token_auth_is_not_configured(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    called: list[str] = []
+    monkeypatch.delenv("GOOGLE_OAUTH_CLIENT_ID", raising=False)
+    monkeypatch.setattr(
+        "google.oauth2.id_token.verify_oauth2_token",
+        lambda token, request, audience: called.append(token) or {"sub": "108154"},
+    )
+    r = await client.get("/config", headers={"Authorization": "Bearer header.payload.signature"})
+    assert r.status_code == 401 and called == []  # no client id → never even verified
+
+
+def test_only_three_part_tokens_are_treated_as_jwts() -> None:
+    from dayflow.api.auth import _looks_like_jwt
+
+    assert _looks_like_jwt("header.payload.signature")
+    assert not _looks_like_jwt("dev")
+    assert not _looks_like_jwt("a.b")
+    assert not _looks_like_jwt("a..c")
+    assert not _looks_like_jwt("a.b.c.d")
+
+
+async def test_503_when_no_credential_source_is_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    from dayflow.api.auth import current_user
+
+    monkeypatch.delenv("DAYFLOW_TOKEN", raising=False)
+    monkeypatch.delenv("DAYFLOW_USERS", raising=False)
+    monkeypatch.delenv("GOOGLE_OAUTH_CLIENT_ID", raising=False)
+    with pytest.raises(HTTPException) as e:
+        await current_user("Bearer whatever")
+    assert e.value.status_code == 503
+    # ID-token auth alone is a valid configuration.
+    monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_ID", "cid.apps.googleusercontent.com")
+    with pytest.raises(HTTPException) as e2:
+        await current_user("Bearer whatever")
+    assert e2.value.status_code == 401

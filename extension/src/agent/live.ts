@@ -1,5 +1,6 @@
 import type { AgentEvent, Settings, ToolCall } from '../protocol';
 import { AdkAdapter, parseSse, type AdkEvent, type PendingCall } from './adk';
+import { brainAuthHeader, brainAuthToken } from './sync';
 import type { ToolOutcome } from './tools';
 
 export function uniqueById<T extends { id: string }>(items: T[]): T[] {
@@ -41,7 +42,7 @@ export async function* liveRun(
   ctl: LiveControls,
 ): AsyncGenerator<AgentEvent> {
   const base = settings.backendUrl.replace(/\/+$/, '');
-  const headers = { 'content-type': 'application/json', authorization: `Bearer ${settings.token}` };
+  const headers = { 'content-type': 'application/json', ...brainAuthHeader(settings) };
   const adapter = new AdkAdapter();
 
   async function* exchange(path: string, body: unknown): AsyncGenerator<AdkEvent> {
@@ -51,7 +52,7 @@ export async function* liveRun(
   }
 
   yield { kind: 'run.start', title: req.text.slice(0, 80), skillId: req.skillId };
-  if (!settings.token || !base) {
+  if (!brainAuthToken(settings) || !base) {
     yield { kind: 'run.end', status: 'error', summary: 'No brain configured — set the backend URL and token in Settings.' };
     return;
   }

@@ -1,9 +1,10 @@
 import { browser } from 'wxt/browser';
-import { TOOL_CHANNEL, type AgentEvent, type Settings, type ToolCall } from '../protocol';
+import { effectiveVaultMode, TOOL_CHANNEL, type AgentEvent, type Settings, type ToolCall } from '../protocol';
 import { DriveClient, fileNameFromHeaders, mimeFor, splitDrivePath } from './drive';
 import { checkNavigable, effectiveAllowlist, isRiskyExpression, safeVaultPath } from './guard';
-import { getGoogleToken } from './identity';
+import { driveConfigured, getGoogleToken, refreshGoogleToken } from './identity';
 import { shrinkJpeg, toDataUrl, type Jpeg } from './image';
+import { brainAuthHeader, brainAuthToken } from './sync';
 
 type Json = Record<string, unknown>;
 type DownloadItem = { id: number; url: string; finalUrl?: string; filename?: string; state?: string; mime?: string };
@@ -387,6 +388,26 @@ export class BrowserTools {
   // ---------- make_folders → Drive (PLAN v2 scene 5: the vault's folder tree) ----------
 
   /**
+   * Drive client for this run. `onUnauthorized` covers the token expiring mid-run (chrome.identity keeps
+   * handing out the cached token until it does): drop it, ask for a fresh one, retry the request once.
+   */
+  private async driveClient(): Promise<DriveClient> {
+    const s = this.settings;
+    const token = await getGoogleToken(s);
+    return new DriveClient({
+      base: s.driveApiBase,
+      token,
+      onUnauthorized: async (stale) => {
+        const fresh = await refreshGoogleToken(s, stale);
+        // The client keeps the fresh token for the rest of the run; chrome.identity's cache keeps it for the
+        // next one. The stored settings copy is left alone — it is the panel's, not this run's, to write.
+        if (fresh) this.guards.log?.('Google token expired — refreshed and retried');
+        return fresh;
+      },
+    });
+  }
+
+  /**
    * Creates real Drive folders for a list of vault-relative paths (`plan_vault_folders` output).
    * Idempotent: `ensureFolder` reuses a folder that is already there, so re-scaffolding never duplicates a
    * tree. Paths are confined to the vault the same way `download(path=…)` is, and a leading copy of the
@@ -405,10 +426,10 @@ export class BrowserTools {
     const paths = [...new Set(wanted.map((p) => safeVaultPath(s.vaultFolder, p)))];
     if (!paths.length) throw new Error('make_folders needs `paths`: a non-empty list of vault-relative folder paths');
     if (paths.length > MAX_FOLDERS) throw new Error(`make_folders got ${paths.length} paths; at most ${MAX_FOLDERS} per call`);
-    if (s.vaultMode !== 'drive') throw new Error(`the vault is in "${s.vaultMode}" mode — connect Google Drive in Settings to create folders`);
+    const mode = effectiveVaultMode(s, driveConfigured());
+    if (mode !== 'drive') throw new Error(`the vault is in "${mode}" mode — connect Google Drive in Settings to create folders`);
 
-    const token = await getGoogleToken(s);
-    this.drive ??= new DriveClient({ base: s.driveApiBase, token });
+    this.drive ??= await this.driveClient();
     const drive = this.drive;
     const created: string[] = [];
     const existing: string[] = [];
@@ -520,11 +541,11 @@ export class BrowserTools {
     const fileName = brainPath.split('/').pop() ?? name;
     const mime = blob.type && blob.type !== 'application/octet-stream' ? blob.type : mimeFor(fileName);
 
+    const mode = effectiveVaultMode(s, driveConfigured());
     let drive: { id?: string; link?: string; error?: string } = {};
-    if (s.vaultMode === 'drive') {
+    if (mode === 'drive') {
       try {
-        const token = await getGoogleToken(s);
-        this.drive ??= new DriveClient({ base: s.driveApiBase, token });
+        this.drive ??= await this.driveClient();
         const f = await this.drive.upload(drivePath, blob, mime);
         drive = { id: f.id, link: f.webViewLink };
       } catch (e) {
@@ -533,13 +554,13 @@ export class BrowserTools {
     }
 
     let vault: { id?: string; error?: string; summary?: string } = {};
-    if (s.token && s.backendUrl) {
+    if (brainAuthToken(s) && s.backendUrl) {
       try {
         const fd = new FormData();
         fd.set('path', brainPath);
         fd.set('file', new File([blob], fileName, { type: mime }));
         if (drive.id) fd.set('drive_file_id', drive.id);
-        const res = await fetch(`${s.backendUrl.replace(/\/+$/, '')}/vault/upload`, { method: 'POST', headers: { authorization: `Bearer ${s.token}` }, body: fd });
+        const res = await fetch(`${s.backendUrl.replace(/\/+$/, '')}/vault/upload`, { method: 'POST', headers: brainAuthHeader(s), body: fd });
         if (!res.ok) throw new Error(`POST /vault/upload → HTTP ${res.status} ${(await res.text()).slice(0, 160)}`);
         const entry = (await res.json()) as { id?: string; summary?: string };
         vault = { id: entry.id, summary: entry.summary };
@@ -550,8 +571,8 @@ export class BrowserTools {
 
     const base: Json = { path: brainPath, drive_path: drivePath, bytes: blob.size, name: fileName, source, drive_file_id: drive.id ?? null, drive_link: drive.link ?? null, vault_id: vault.id ?? null };
     if (vault.summary) base.summary = vault.summary;
-    if (s.vaultMode === 'drive' && drive.error) throw new ToolError(`Drive upload failed: ${drive.error}${vault.id ? ' (the brain kept a copy)' : ''}`, base);
-    if (vault.error && s.vaultMode === 'brain') throw new ToolError(`vault upload failed: ${vault.error}`, base);
+    if (mode === 'drive' && drive.error) throw new ToolError(`Drive upload failed: ${drive.error}${vault.id ? ' (the brain kept a copy)' : ''}`, base);
+    if (vault.error && mode === 'brain') throw new ToolError(`vault upload failed: ${vault.error}`, base);
     if (vault.error) base.vault_error = vault.error;
     const id = await this.tab().catch(() => null);
     return this.withShot(id, { ...base, summary: `${fileName} · ${(blob.size / 1024).toFixed(0)} KB${drive.id ? ' → Drive' : ''}${vault.id ? ' → indexed' : ''}` });

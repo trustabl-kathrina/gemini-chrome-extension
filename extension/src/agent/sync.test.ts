@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { DEFAULT_SETTINGS, normalizeSettings } from '../protocol';
-import { fromUserConfig, pushConfig, syncFingerprint, toUserConfig } from './sync';
+import { DEFAULT_SETTINGS, effectiveVaultMode, normalizeSettings } from '../protocol';
+import { brainAuthToken, fromUserConfig, pushConfig, syncFingerprint, toUserConfig } from './sync';
 
 describe('toUserConfig', () => {
   it('maps permissions toggles to brain tool names and keeps skills/sites with modes', () => {
@@ -87,5 +87,30 @@ describe('pushConfig', () => {
     const body = JSON.parse(put?.[1]?.body as string) as { memory: string; skills: unknown[] };
     expect(body.memory).toBe('remember me');
     expect(body.skills.length).toBe(DEFAULT_SETTINGS.skills.length);
+  });
+});
+
+describe('effectiveVaultMode', () => {
+  const drive = { ...DEFAULT_SETTINGS, vaultMode: 'drive' as const };
+  it('keeps Drive when the build has an OAuth client or a token is at hand', () => {
+    expect(effectiveVaultMode(drive, true)).toBe('drive');
+    expect(effectiveVaultMode({ ...drive, driveToken: 'tok' }, false)).toBe('drive');
+    expect(effectiveVaultMode({ ...drive, account: { email: 'a@b', name: 'A', token: 'tok' } }, false)).toBe('drive');
+  });
+  it('falls back to the brain vault when Drive cannot possibly work', () => {
+    expect(effectiveVaultMode(drive, false)).toBe('brain');
+    expect(effectiveVaultMode({ ...drive, account: { email: 'a@b', name: 'A' } }, false)).toBe('brain');
+  });
+  it('never promotes an explicit "brain" choice', () => {
+    expect(effectiveVaultMode({ ...DEFAULT_SETTINGS, vaultMode: 'brain' }, true)).toBe('brain');
+  });
+});
+
+describe('brainAuthToken', () => {
+  it('prefers a Google ID token and falls back to the shared token', () => {
+    const s = { ...DEFAULT_SETTINGS, token: 'shared' };
+    expect(brainAuthToken(s)).toBe('shared');
+    expect(brainAuthToken({ ...s, account: { email: 'a@b', name: 'A', token: 'access-only' } })).toBe('shared');
+    expect(brainAuthToken({ ...s, account: { email: 'a@b', name: 'A', idToken: 'a.b.c' } })).toBe('a.b.c');
   });
 });

@@ -108,4 +108,41 @@ describe('DriveClient', () => {
     const c = new DriveClient({ base: 'https://drive.test', token: 'bad', fetch: d.fetchImpl });
     await expect(c.ensureFolder('Dayflow')).rejects.toThrow(/HTTP 401/);
   });
+
+  it('refreshes an expired token on 401 and retries the request once', async () => {
+    const d = fakeDrive();
+    const stale: string[] = [];
+    const c = new DriveClient({
+      base: 'https://drive.test',
+      token: 'expired',
+      fetch: d.fetchImpl,
+      onUnauthorized: async (t) => {
+        stale.push(t);
+        return 'tok';
+      },
+    });
+    const f = await c.upload('Dayflow/A/x.txt', new Blob(['x']));
+    expect(f.name).toBe('x.txt');
+    expect(stale).toEqual(['expired']); // only the first call needed it; the fresh token is kept
+    expect(c.accessToken).toBe('tok');
+  });
+
+  it('gives up after one retry: a still-bad or unrefreshable token surfaces the 401', async () => {
+    const d = fakeDrive();
+    const calls: string[] = [];
+    const again = new DriveClient({
+      base: 'https://drive.test',
+      token: 'expired',
+      fetch: d.fetchImpl,
+      onUnauthorized: async (t) => {
+        calls.push(t);
+        return 'still-bad';
+      },
+    });
+    await expect(again.list('Dayflow')).rejects.toThrow(/HTTP 401/);
+    expect(calls).toEqual(['expired']); // one refresh, one retry, then the error
+
+    const none = new DriveClient({ base: 'https://drive.test', token: 'expired', fetch: d.fetchImpl, onUnauthorized: async () => null });
+    await expect(none.list('Dayflow')).rejects.toThrow(/HTTP 401/);
+  });
 });

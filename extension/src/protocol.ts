@@ -59,6 +59,13 @@ export interface Account {
   name: string;
   /** OAuth access token (harness seeds one; real sign-in keeps it in chrome.identity's cache). */
   token?: string;
+  /**
+   * Google ID token (JWT) for the brain, when a sign-in path can produce one. `chrome.identity.getAuthToken`
+   * returns an ACCESS token only — it never yields an ID token — so with the current sign-in this stays
+   * undefined and the brain is called with the shared DAYFLOW_TOKEN (see `brainAuthToken`). The brain accepts
+   * either (backend/dayflow/api/auth.py); filling this in needs a web OAuth client + `launchWebAuthFlow`.
+   */
+  idToken?: string;
   expiresAt?: number;
 }
 
@@ -135,6 +142,16 @@ export const DEFAULT_SETTINGS: Settings = {
     askBefore: { sendMessage: true, createPr: true, download: false, runJs: true },
   },
 };
+
+/**
+ * The vault mode actually in force. `drive` needs a credential: an explicit `driveToken`, a token from a
+ * previous sign-in, or a build with an OAuth client id (`VITE_GOOGLE_CLIENT_ID`, passed as `driveConfigured`).
+ * Without one, Drive cannot work at all, so the vault falls back to the brain instead of failing mid-run.
+ */
+export function effectiveVaultMode(s: Pick<Settings, 'vaultMode' | 'driveToken' | 'account'>, driveConfigured: boolean): VaultMode {
+  if (s.vaultMode !== 'drive') return s.vaultMode;
+  return driveConfigured || s.driveToken || s.account?.token ? 'drive' : 'brain';
+}
 
 /** Legacy / harness-seeded shapes that older builds or the runner may store. */
 interface StoredSettings extends Partial<Settings> {

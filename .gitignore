@@ -31,14 +31,22 @@ downloads/
 *.log
 .gstack/
 
-# harness: Chromium profiles, per-scene evidence dirs (screenshots, downloads, panel dumps), fake-Drive trees,
-# pid files and every `--real` result (real portal content). The fake scene results harness/out/<scene>.json
-# and *-connectors.jsonl are kept — they are the evidence README points at.
+# Chromium profiles created by tooling (harness scenes, store-screenshot capture): browsing history,
+# cookies and caches of whatever was open. Matches at any depth — `harness/.profile-lab/`,
+# `docs/store/.profile-shots/`, … None of it may ever be committed.
+.profile-*/
+
+# harness: everything under harness/out/ is machine-local — Chromium profiles, per-scene evidence dirs
+# (screenshots, downloads, panel dumps), fake-Drive trees, brain logs, pid files, executed notebooks, and every
+# `--real` result (which carries real portal content and local paths). The ONLY exceptions are the six fake-scene
+# verdicts below: synthetic data start to finish, and the evidence README + docs/JUDGES.md point at. Keep this an
+# allow-list — a new `harness/out/*` file must be named here on purpose before it can ship.
 harness/.profile-*/
-harness/out/*/
-harness/out/*.pid
-harness/out/*.real*.json
-harness/out/*.r[0-9].json
-harness/out/*.fake-*.json
-harness/out/*.ipynb
+harness/out/*
+!harness/out/vault-sync.json
+!harness/out/lab.json
+!harness/out/team-ops.json
+!harness/out/courseware.json
+!harness/out/scaffold.json
+!harness/out/pitch-deck.json
 harness/fake-wsp/__pycache__/

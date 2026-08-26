@@ -68,8 +68,21 @@ export function syncFingerprint(s: Settings): string {
   return JSON.stringify(toUserConfig(s));
 }
 
+/**
+ * Bearer credential for the brain. The brain accepts either the shared DAYFLOW_TOKEN or a Google ID token
+ * (backend/dayflow/api/auth.py), so the ID token wins when a sign-in produced one — today `chrome.identity`
+ * only yields an access token, so this is the shared token in practice (see `Account.idToken`).
+ */
+export function brainAuthToken(s: Pick<Settings, 'token' | 'account'>): string {
+  return s.account?.idToken || s.token;
+}
+
+export function brainAuthHeader(s: Pick<Settings, 'token' | 'account'>): Record<string, string> {
+  return { authorization: `Bearer ${brainAuthToken(s)}` };
+}
+
 function authHeaders(s: Settings): Record<string, string> {
-  return { 'content-type': 'application/json', authorization: `Bearer ${s.token}` };
+  return { 'content-type': 'application/json', ...brainAuthHeader(s) };
 }
 
 export function brainUrl(s: Settings, path: string): string {
@@ -82,7 +95,7 @@ export function brainUrl(s: Settings, path: string): string {
  * A panel that has not pulled skills yet (empty list) must not wipe the brain's: the pack stays in charge.
  */
 export async function pushConfig(s: Settings, fetchImpl: typeof fetch = fetch): Promise<'skipped' | 'ok' | `error:${string}`> {
-  if (!s.token || !s.backendUrl) return 'skipped';
+  if (!brainAuthToken(s) || !s.backendUrl) return 'skipped';
   let remote: Partial<UserConfig> = {};
   try {
     const cur = await fetchImpl(brainUrl(s, '/config'), { headers: authHeaders(s) });
@@ -102,7 +115,7 @@ export async function pushConfig(s: Settings, fetchImpl: typeof fetch = fetch): 
 }
 
 export async function pullConfig(s: Settings, fetchImpl: typeof fetch = fetch): Promise<UserConfig | null> {
-  if (!s.token || !s.backendUrl) return null;
+  if (!brainAuthToken(s) || !s.backendUrl) return null;
   const res = await fetchImpl(brainUrl(s, '/config'), { headers: authHeaders(s) });
   if (!res.ok) throw new Error(`GET /config → HTTP ${res.status}`);
   return (await res.json()) as UserConfig;

@@ -1,0 +1,639 @@
+{
+  "scene": "lab",
+  "real": false,
+  "spec": "harness/specs/lab.mjs",
+  "specSha256": "5f451df03395",
+  "runnerSha256": "4a071fb15b83",
+  "prompt": "Solve Lab 1 of CSCI3240 Introduction to Computer Vision (Lab_01_Image_Basics.pdf, on WSP at http://127.0.0.1:8240 and in my vault): create a private GitHub repo, solve every task with code you actually run, push README.md, TODO.md, the notebook with outputs and REPORT.md, and save the report to my vault.",
+  "status": "done",
+  "summary": "### CSCI3240 Introduction to Computer Vision — Lab 01 (Image basics)\n\nAll 5 tasks were solved, executed, and verified using NumPy:\n\n- **Task 1 (RGB Gradient Image)**: Built $64 \\times 64$ RGB gradient",
+  "title": "Solve Lab 1 of CSCI3240 Introduction to Computer Vision (Lab_01_Image_Basics.pdf, on WSP at http://127.0.0.1:8240 and in my vault): create a private GitHub repo, solve every task with code you actually run, push README.md, TODO.md, the notebook with outputs and REPORT.md, and save the report to my vault.",
+  "startedAt": "2026-08-26T16:49:19.523Z",
+  "endedAt": "2026-08-26T16:54:40.425Z",
+  "durationMs": 320902,
+  "steps": [
+    {
+      "kind": "text",
+      "text": "Checking the vault to see if Lab 1 for CSCI3240 is already downloaded."
+    },
+    {
+      "kind": "tool",
+      "name": "vault_list",
+      "args": "",
+      "summary": "{\"status\":\"success\",\"count\":0,\"files\":[]}",
+      "target": "server",
+      "status": "ok",
+      "ms": 155
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "text": "The vault is empty, so I will navigate to the student files portal on WSP to find and download Lab 1."
+    },
+    {
+      "kind": "tool",
+      "name": "open_tab",
+      "args": "url=http://127.0.0.1:8240/StudentFiles",
+      "summary": "WSP",
+      "target": "browser",
+      "status": "ok",
+      "ms": 134
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "text": "The student files page is open, so I will read the page to get the element refs for the schools table."
+    },
+    {
+      "kind": "tool",
+      "name": "read_page",
+      "args": "",
+      "summary": "30 elements",
+      "target": "browser",
+      "status": "ok",
+      "ms": 48
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "text": "I see the school list and will select \"School of Information Technology and Engineering\"."
+    },
+    {
+      "kind": "tool",
+      "name": "click",
+      "args": "ref=e14",
+      "summary": "WSP",
+      "target": "browser",
+      "status": "ok",
+      "ms": 465
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "text": "The row is selected, so I will click the Enter button to open the folder."
+    },
+    {
+      "kind": "tool",
+      "name": "click",
+      "args": "ref=e6",
+      "summary": "WSP",
+      "target": "browser",
+      "status": "ok",
+      "ms": 445
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "text": "I see the instructor list, so I will read the page to get the instructor element refs."
+    },
+    {
+      "kind": "tool",
+      "name": "read_page",
+      "args": "",
+      "summary": "38 elements",
+      "target": "browser",
+      "status": "ok",
+      "ms": 54
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "text": "I will select instructor Abenova Saule to check for the Computer Vision course."
+    },
+    {
+      "kind": "tool",
+      "name": "click",
+      "args": "ref=e37",
+      "summary": "WSP",
+      "target": "browser",
+      "status": "ok",
+      "ms": 457
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "text": "I will click the Enter button to enter Abenova Saule's folder."
+    },
+    {
+      "kind": "tool",
+      "name": "click",
+      "args": "ref=e6",
+      "summary": "WSP",
+      "target": "browser",
+      "status": "ok",
+      "ms": 459
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "text": "I see CSCI3240 Introduction to Computer Vision, so I will read the page to get the course row ref."
+    },
+    {
+      "kind": "tool",
+      "name": "read_page",
+      "args": "",
+      "summary": "22 elements",
+      "target": "browser",
+      "status": "ok",
+      "ms": 62
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "text": "I will select the course folder row."
+    },
+    {
+      "kind": "tool",
+      "name": "click",
+      "args": "ref=e67",
+      "summary": "WSP",
+      "target": "browser",
+      "status": "ok",
+      "ms": 443
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "text": "I will click Enter to open the course folder."
+    },
+    {
+      "kind": "tool",
+      "name": "click",
+      "args": "ref=e6",
+      "summary": "WSP",
+      "target": "browser",
+      "status": "ok",
+      "ms": 455
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "text": "I see the course files, so I will read the page to get the download button ref for Lab_01_Image_Basics.pdf."
+    },
+    {
+      "kind": "tool",
+      "name": "read_page",
+      "args": "",
+      "summary": "50 elements",
+      "target": "browser",
+      "status": "ok",
+      "ms": 57
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "text": "I see the download button for Lab_01_Image_Basics.pdf and will download it to the vault."
+    },
+    {
+      "kind": "tool",
+      "name": "download",
+      "args": "ref=e114 path=CSCI3240 Introduction to Computer Vision/Lab 01/Lab_01_Im…",
+      "summary": "Lab_01_Image_Basics.pdf · 3 KB → Drive → indexed",
+      "target": "browser",
+      "status": "ok",
+      "ms": 3152
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "artifact",
+      "type": "file",
+      "label": "CSCI3240 Introduction to Computer Vision/Lab 01/Lab_01_Image_Basics.pdf",
+      "href": "http://127.0.0.1:8242/view/f_446179666c6f772f435343493332343020496e74726f64756374696f6e20746f20436f6d707574657220566973696f6e2f4c61622030312f4c61625f30315f496d6167655f4261736963732e706466"
+    },
+    {
+      "kind": "text",
+      "text": "I will read the extracted text of the downloaded Lab 1 PDF from the vault."
+    },
+    {
+      "kind": "tool",
+      "name": "vault_read",
+      "args": "path_or_id=Lab_01_Image_Basics.pdf",
+      "summary": "This document outlines the first laboratory assignment for an Introduction to Computer Vision course. Students will learn to treat images as numpy arrays by performing basic operations such as generating gradients, converting to grayscale, cropping, computing histograms, and thresholding. The deliverable is a Jupyter notebook named lab01.ipynb containing code for each task, due by Friday at 23:59 in week 2.",
+      "target": "server",
+      "status": "ok",
+      "ms": 1
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "text": "I will solve Task 1 using the solve_lab_task tool."
+    },
+    {
+      "kind": "tool",
+      "name": "solve_lab_task",
+      "args": "task_text=Task 1. Build the 64x64 RGB gradient image above with num… context=Course: CSCI3240 Introduction to Computer Vision\nLab: Lab…",
+      "summary": "{\"status\":\"success\",\"code\":\"import numpy as np\\n\\n# Setup\\nH, W = 64, 64\\nimg = np.zeros((H, W, 3), dtype=np.uint8)\\n…",
+      "target": "server",
+      "status": "ok",
+      "ms": 13292
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "text": "I will solve Task 2 using the solve_lab_task tool."
+    },
+    {
+      "kind": "tool",
+      "name": "solve_lab_task",
+      "args": "context=Course: CSCI3240 Introduction to Computer Vision\nLab: Lab… task_text=Task 2. Convert it to grayscale with gray = 0.299 R + 0.5…",
+      "summary": "{\"status\":\"success\",\"code\":\"import numpy as np\\n\\n# Setup\\nH, W = 64, 64\\nimg = np.zeros((H, W, 3), dtype=np.uint8)\\n…",
+      "target": "server",
+      "status": "ok",
+      "ms": 9094
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "text": "I will solve Task 3 using the solve_lab_task tool."
+    },
+    {
+      "kind": "tool",
+      "name": "solve_lab_task",
+      "args": "task_text=Task 3. Crop the central 32x32 region and flip it horizon… context=Course: CSCI3240 Introduction to Computer Vision\nLab: Lab…",
+      "summary": "{\"status\":\"success\",\"code\":\"import numpy as np\\n\\n# Setup\\nH, W = 64, 64\\nimg = np.zeros((H, W, 3), dtype=np.uint8)\\n…",
+      "target": "server",
+      "status": "ok",
+      "ms": 12053
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "text": "I will solve Task 4 using the solve_lab_task tool."
+    },
+    {
+      "kind": "tool",
+      "name": "solve_lab_task",
+      "args": "context=Course: CSCI3240 Introduction to Computer Vision\nLab: Lab… task_text=Task 4. Compute the 256-bin intensity histogram of the gr…",
+      "summary": "{\"status\":\"success\",\"code\":\"import numpy as np\\n\\n# Setup\\nH, W = 64, 64\\nimg = np.zeros((H, W, 3), dtype=np.uint8)\\n…",
+      "target": "server",
+      "status": "ok",
+      "ms": 7213
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "text": "I will solve Task 5 using the solve_lab_task tool."
+    },
+    {
+      "kind": "tool",
+      "name": "solve_lab_task",
+      "args": "task_text=Task 5. Threshold the grayscale image at its mean intensi… context=Course: CSCI3240 Introduction to Computer Vision\nLab: Lab…",
+      "summary": "{\"status\":\"success\",\"code\":\"import numpy as np\\n\\n# Setup\\nH, W = 64, 64\\nimg = np.zeros((H, W, 3), dtype=np.uint8)\\n…",
+      "target": "server",
+      "status": "ok",
+      "ms": 15551
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "text": "I will build the runnable Jupyter notebook containing all tasks and outputs."
+    },
+    {
+      "kind": "tool",
+      "name": "build_notebook",
+      "args": "cells=[{\"source\":\"# Task 1: RGB Gradient Image Creation\\nConstruct a 64x64 RGB gradient image using numpy broadcasting and inspect its prope",
+      "summary": "{\"status\":\"success\",\"file_name\":\"lab01.ipynb\",\"code_cells\":5,\"ipynb_json\":\"{\\n \\\"cells\\\": [\\n  {\\n   \\\"cell_type\\\": \\…",
+      "target": "server",
+      "status": "ok",
+      "ms": 1286
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "text": "I will generate the lab report using the build_report tool."
+    },
+    {
+      "kind": "tool",
+      "name": "build_report",
+      "args": "lab=Lab 01 - Image basics (numpy) summary=Covered fundamental image representation and manipulation… course=CSCI3240 Introduction to Compute",
+      "summary": "{\"status\":\"success\",\"file_name\":\"REPORT.md\",\"markdown\":\"# CSCI3240 Introduction to Computer Vision — Lab 01 - Image b…",
+      "target": "server",
+      "status": "ok",
+      "ms": 156
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "text": "I will create a private GitHub repository for Lab 1."
+    },
+    {
+      "kind": "tool",
+      "name": "create_repository",
+      "args": "autoInit=true name=csci3240-lab01 private=true description=CSCI3240 Introduction to Computer Vision - Lab 01 (Image …",
+      "summary": "{\"status\":\"success\",\"id\":1,\"name\":\"csci3240-lab01\",\"full_name\":\"dayflow-student/csci3240-lab01\",\"owner\":\"dayflow-stud…",
+      "target": "server",
+      "status": "ok",
+      "ms": 76
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "text": "I will push the project files (README.md, TODO.md, lab01.ipynb, REPORT.md, requirements.txt, .gitignore) to the GitHub repository."
+    },
+    {
+      "kind": "tool",
+      "name": "push_files",
+      "args": "message=Add Lab 01 solution, notebook, and report repo=csci3240-lab01 owner=dayflow-student branch=main files=[{\"path\":\"README.md\",\"content\"",
+      "summary": "{\"status\":\"success\",\"commit_sha\":\"fce467f60e6a7cfc926fa611b2e2b31c9258a76c\",\"branch\":\"main\",\"files\":[\"README.md\",\"TOD…",
+      "target": "server",
+      "status": "ok",
+      "ms": 209
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "text": "I will download the generated HTML report to the vault."
+    },
+    {
+      "kind": "tool",
+      "name": "download",
+      "args": "path=CSCI3240 Introduction to Computer Vision/Lab 01/REPORT.html url=http://localhost:8241/pages/report/nUxYBmh4k8uZ0P3hMb1abw",
+      "summary": "REPORT.html · 5 KB → Drive → indexed",
+      "target": "browser",
+      "status": "ok",
+      "ms": 53
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "artifact",
+      "type": "file",
+      "label": "CSCI3240 Introduction to Computer Vision/Lab 01/REPORT.html",
+      "href": "http://127.0.0.1:8242/view/f_446179666c6f772f435343493332343020496e74726f64756374696f6e20746f20436f6d707574657220566973696f6e2f4c61622030312f5245504f52542e68746d6c"
+    },
+    {
+      "kind": "artifact",
+      "type": "url",
+      "label": "REPORT.html (page)",
+      "href": "http://localhost:8241/pages/report/nUxYBmh4k8uZ0P3hMb1abw"
+    },
+    {
+      "kind": "text",
+      "text": "I will open the rendered HTML report in a new tab for the user."
+    },
+    {
+      "kind": "tool",
+      "name": "open_tab",
+      "args": "url=http://localhost:8241/pages/report/nUxYBmh4k8uZ0P3hMb1abw",
+      "summary": "CSCI3240 Introduction to Computer Vision — Lab 01 - Image basics (numpy) report",
+      "target": "browser",
+      "status": "ok",
+      "ms": 114
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "text": "### CSCI3240 Introduction to Computer Vision — Lab 01 (Image basics)\n\nAll 5 tasks were solved, executed, and verified using NumPy:\n\n- **Task 1 (RGB Gradient Image)**: Built $64 \\times 64$ RGB gradient array (`shape: (64, 64, 3)`, `dtype: uint8`, min: 0, max: 255, means: R=127.0312, G=127.0312, B=128.0000).\n- **Task 2 (Grayscale Conversion)**: Converted using $0.299R + 0.587G + 0.114B$ (`gray[0, 0]=14`, `gray[63, 63]=240`, `mean=126.6394`).\n- **Task 3 (Crop & Horizontal Flip)**: Cropped central $32 \\times 32$ region, performed horizontal flip with slicing, and verified idempotence (`np.array_equal == True`).\n- **Task 4 (Intensity Histogram)**: Computed 256-bin histogram (225 non-empty bins; top level: 111 with 32 pixels).\n- **Task 5 (Thresholding & ASCII Art)**: Applied mean thresholding (2,053 foreground pixels, ratio 50.12%) and downsampled to an $8 \\times 8$ ASCII art grid.\n\n---\n\n### Artifacts & Deliverables\n\n- **GitHub Repository**: [dayflow-student/csci3240-lab01](https://github.com/dayflow-student/csci3240-lab01) (private)\n  - `README.md`, `TODO.md`, `lab01.ipynb` (runnable with outputs), `REPORT.md`, `requirements.txt`, `.gitignore`\n- **Vault Report**: `CSCI3240 Introduction to Computer Vision/Lab 01/REPORT.html`\n- **Report Preview**: [http://localhost:8241/pages/report/nUxYBmh4k8uZ0P3hMb1abw](http://localhost:8241/pages/report/nUxYBmh4k8uZ0P3hMb1abw) (opened in active tab)\n- **Lab PDF in Vault**: `CSCI3240 Introduction to Computer Vision/Lab 01/Lab_01_Image_Basics.pdf`"
+    }
+  ],
+  "actions": 14,
+  "refusedActions": 0,
+  "toolCalls": {
+    "vault_list": 1,
+    "open_tab": 2,
+    "read_page": 4,
+    "click": 6,
+    "download": 2,
+    "vault_read": 1,
+    "solve_lab_task": 5,
+    "build_notebook": 1,
+    "build_report": 1,
+    "create_repository": 1,
+    "push_files": 1
+  },
+  "artifacts": [
+    {
+      "kind": "artifact",
+      "type": "file",
+      "label": "CSCI3240 Introduction to Computer Vision/Lab 01/Lab_01_Image_Basics.pdf",
+      "href": "http://127.0.0.1:8242/view/f_446179666c6f772f435343493332343020496e74726f64756374696f6e20746f20436f6d707574657220566973696f6e2f4c61622030312f4c61625f30315f496d6167655f4261736963732e706466"
+    },
+    {
+      "kind": "artifact",
+      "type": "file",
+      "label": "CSCI3240 Introduction to Computer Vision/Lab 01/REPORT.html",
+      "href": "http://127.0.0.1:8242/view/f_446179666c6f772f435343493332343020496e74726f64756374696f6e20746f20436f6d707574657220566973696f6e2f4c61622030312f5245504f52542e68746d6c"
+    },
+    {
+      "kind": "artifact",
+      "type": "url",
+      "label": "REPORT.html (page)",
+      "href": "http://localhost:8241/pages/report/nUxYBmh4k8uZ0P3hMb1abw"
+    }
+  ],
+  "confirms": [],
+  "drive": {
+    "root": "harness/out/drive/lab",
+    "entries": [
+      "Dayflow/",
+      "Dayflow/CSCI3240 Introduction to Computer Vision/",
+      "Dayflow/CSCI3240 Introduction to Computer Vision/Lab 01/",
+      "Dayflow/CSCI3240 Introduction to Computer Vision/Lab 01/Lab_01_Image_Basics.pdf",
+      "Dayflow/CSCI3240 Introduction to Computer Vision/Lab 01/REPORT.html"
+    ]
+  },
+  "vault": [
+    {
+      "id": "185fb092fcfeab69",
+      "path": "CSCI3240 Introduction to Computer Vision/Lab 01/Lab_01_Image_Basics.pdf",
+      "sha256": "9190fae9f6e405e337eedf6c3160499f90d8fc9b6b2cb5ed9c457b117761d62e",
+      "size": 2868,
+      "content_type": "application/pdf",
+      "drive_file_id": "f_446179666c6f772f435343493332343020496e74726f64756374696f6e20746f20436f6d707574657220566973696f6e2f4c61622030312f4c61625f30315f496d6167655f4261736963732e706466",
+      "title": "Lab 01 - Image basics (numpy)",
+      "summary": "This document outlines the first laboratory assignment for an Introduction to Computer Vision course. Students will learn to treat images as numpy arrays by performing basic operations such as generating gradients, converting to grayscale, cropping, computing histograms, and thresholding. The deliverable is a Jupyter notebook named lab01.ipynb containing code for each task, due by Friday at 23:59 in week 2.",
+      "deadlines": [
+        "Friday 23:59 (week 2)"
+      ],
+      "key_terms": [
+        "numpy",
+        "grayscale",
+        "array slicing",
+        "histogram",
+        "thresholding",
+        "ASCII art"
+      ],
+      "parse_error": "",
+      "updated_at": "2026-08-26T16:50:43+00:00"
+    },
+    {
+      "id": "f65e1330a81fa02c",
+      "path": "CSCI3240 Introduction to Computer Vision/Lab 01/REPORT.html",
+      "sha256": "5c4fe0ffdafb18cd7931d72066afac89f16f253ca1f9de196f5d42a1ed77b864",
+      "size": 5617,
+      "content_type": "text/html",
+      "drive_file_id": "f_446179666c6f772f435343493332343020496e74726f64756374696f6e20746f20436f6d707574657220566973696f6e2f4c61622030312f5245504f52542e68746d6c",
+      "title": "REPORT.html",
+      "summary": "",
+      "deadlines": [],
+      "key_terms": [],
+      "parse_error": "",
+      "updated_at": "2026-08-26T16:54:19+00:00"
+    }
+  ],
+  "downloads": [],
+  "connectorCalls": [
+    {
+      "ts": 1787763211.485743,
+      "tool": "create_repository",
+      "args": {
+        "name": "csci3240-lab01",
+        "description": "CSCI3240 Introduction to Computer Vision - Lab 01 (Image basics)",
+        "private": true,
+        "autoInit": true
+      },
+      "result": {
+        "status": "success",
+        "id": 1,
+        "name": "csci3240-lab01",
+        "full_name": "dayflow-student/csci3240-lab01",
+        "owner": "dayflow-student",
+        "private": true,
+        "default_branch": "main",
+        "html_url": "https://github.com/dayflow-student/csci3240-lab01",
+        "clone_url": "https://github.com/dayflow-student/csci3240-lab01.git"
+      }
+    },
+    {
+      "ts": 1787763253.9678438,
+      "tool": "push_files",
+      "args": {
+        "owner": "dayflow-student",
+        "repo": "csci3240-lab01",
+        "branch": "main",
+        "files": [
+          {
+            "path": "README.md",
+            "content": "# CSCI3240 Introduction to Computer Vision — Lab 01: Image basics (numpy)\n\nLaboratory assignment covering the representation and manipulation of digital images as NumPy arrays.\n\n## Overview\n- **Course**: CSCI3240 Introduction to Computer Vision\n- **Lab**: Lab 01 - Image basics (numpy)\n- **Topics**: RGB array synthesis, luminosity grayscale conversion, array slicing/flipping, 256-bin histogram calculation, intensity thresholding and ASCII downsampling.\n\n## Tasks Covered\n1. **Task 1**: RGB gradient image construction using NumPy broadcasting.\n2. **Task 2**: Standard luminosity grayscale conversion ($0.299R + 0.587G + 0.114B$).\n3. **Task 3**: Central 32x32 region extraction and horizontal flipping with slicing.\n4. **Task 4**: 256-bin intensity histogram computation using `np.bincount`.\n5. **Task 5**: Mean thresholding, foreground statistics, and 8x8 ASCII visualization.\n\n## How to Run\n1. Install dependencies:\n   ```bash\n   pip install -r requirements.txt\n   ```\n2. Run the Jupyter notebook:\n   ```bash\n   jupyter notebook lab01.ipynb\n   ```\n   or execute via command line:\n   ```bash\n   jupyter nbconvert --to notebook --execute lab01.ipynb\n   ```\n"
+          },
+          {
+            "path": "TODO.md",
+            "content": "# Future Improvements & Extensions\n\n1. Implement Otsu's thresholding algorithm to compare with global mean thresholding.\n2. Add support for image loading and saving using Pillow or OpenCV for real-world datasets.\n3. Implement 2D convolution filters (e.g. Gaussian blur, Sobel edge detectors) from scratch using NumPy strides/vectorization.\n4. Extend histogram analysis with histogram equalization for contrast enhancement.\n5. Implement arbitrary angle image rotation with bilinear interpolation.\n6. Benchmark NumPy vectorization performance against multi-threaded C++/Cython extensions.\n"
+          },
+          {
+            "path": "lab01.ipynb",
+            "content": "{\n \"cells\": [\n  {\n   \"cell_type\": \"markdown\",\n   \"id\": \"a80bb211\",\n   \"metadata\": {},\n   \"source\": \"# Task 1: RGB Gradient Image Creation\\nConstruct a 64x64 RGB gradient image using numpy broadcasting and inspect its properties.\"\n  },\n  {\n   \"cell_type\": \"code\",\n   \"execution_count\": 1,\n   \"id\": \"ccb7e598\",\n   \"metadata\": {\n    \"execution\": {\n     \"iopub.execute_input\": \"2026-08-26T16:52:50.270992Z\",\n     \"iopub.status.busy\": \"2026-08-26T16:52:50.270787Z\",\n     \"iopub.status.idle\": \"2026-08-26T16:52:50.355091Z\",\n     \"shell.execute_reply\": \"2026-08-26T16:52:50.354161Z\"\n    }\n   },\n   \"outputs\": [\n    {\n     \"name\": \"stdout\",\n     \"output_type\": \"stream\",\n     \"text\": \"shape: (64, 64, 3)\\ndtype: uint8\\nmin: 0\\nmax: 255\\nR mean: 127.0312\\nG mean: 127.0312\\nB mean: 128.0000\\n\"\n    }\n   ],\n   \"source\": \"import numpy as np\\n\\n# Setup\\nH, W = 64, 64\\nimg = np.zeros((H, W, 3), dtype=np.uint8)\\nimg[..., 0] = np.linspace(0, 255, W).astype(np.uint8)[None, :]   # R: left-to-right gradient\\nimg[..., 1] = np.linspace(0, 255, H).astype(np.uint8)[:, None]   # G: top-to-bottom gradient\\nimg[..., 2] = 128                                                  # B: constant\\n\\n# Task 1 requirements\\nprint(f\\\"shape: {img.shape}\\\")\\nprint(f\\\"dtype: {img.dtype}\\\")\\nprint(f\\\"min: {img.min()}\\\")\\nprint(f\\\"max: {img.max()}\\\")\\n\\nr_mean = img[..., 0].mean()\\ng_mean = img[..., 1].mean()\\nb_mean = img[..., 2].mean()\\n\\nprint(f\\\"R mean: {r_mean:.4f}\\\")\\nprint(f\\\"G mean: {g_mean:.4f}\\\")\\nprint(f\\\"B mean: {b_mean:.4f}\\\")\"\n  },\n  {\n   \"cell_type\": \"markdown\",\n   \"id\": \"87d588d9\",\n   \"metadata\": {},\n   \"source\": \"# Task 2: Grayscale Conversion\\nConvert the RGB gradient image to grayscale using luminosity weighting and evaluate pixel intensities.\"\n  },\n  {\n   \"cell_type\": \"code\",\n   \"execution_count\": 2,\n   \"id\": \"9dd3e7f2\",\n   \"metadata\": {\n    \"execution\": {\n     \"iopub.execute_input\": \"2026-08-26T16:52:50.361823Z\",\n     \"iopub.status.busy\": \"2026-08-26T16:52:50.357839Z\",\n     \"iopub.status.idle\": \"2026-08-26T16:52:50.370788Z\",\n     \"shell.execute_reply\": \"2026-08-26T16:52:50.370199Z\"\n    }\n   },\n   \"outputs\": [\n    {\n     \"name\": \"stdout\",\n     \"output_type\": \"stream\",\n     \"text\": \"gray[0, 0]: 14\\ngray[63, 63]: 240\\nmean gray level: 126.6394\\n\"\n    }\n   ],\n   \"source\": \"import numpy as np\\n\\n# Setup\\nH, W = 64, 64\\nimg = np.zeros((H, W, 3), dtype=np.uint8)\\nimg[..., 0] = np.linspace(0, 255, W).astype(np.uint8)[None, :]   # R: left-to-right gradient\\nimg[..., 1] = np.linspace(0, 255, H).astype(np.uint8)[:, None]   # G: top-to-bottom gradient\\nimg[..., 2] = 128                                                  # B: constant\\n\\n# Task 2\\n# Convert to grayscale: gray = 0.299 R + 0.587 G + 0.114 B\\n# Ensure calculation is done in floating point before casting to uint8\\nr = img[..., 0]\\ng = img[..., 1]\\nb = img[..., 2]\\n\\ngray = (0.299 * r + 0.587 * g + 0.114 * b).astype(np.uint8)\\n\\nprint(f\\\"gray[0, 0]: {gray[0, 0]}\\\")\\nprint(f\\\"gray[63, 63]: {gray[63, 63]}\\\")\\nprint(f\\\"mean gray level: {gray.mean():.4f}\\\")\"\n  },\n  {\n   \"cell_type\": \"markdown\",\n   \"id\": \"6a33136f\",\n   \"metadata\": {},\n   \"source\": \"# Task 3: Central Cropping and Horizontal Flipping\\nCrop the central 32x32 patch and flip it horizontally using slicing operations.\"\n  },\n  {\n   \"cell_type\": \"code\",\n   \"execution_count\": 3,\n   \"id\": \"4683415a\",\n   \"metadata\": {\n    \"execution\": {\n     \"iopub.execute_input\": \"2026-08-26T16:52:50.372206Z\",\n     \"iopub.status.busy\": \"2026-08-26T16:52:50.372028Z\",\n     \"iopub.status.idle\": \"2026-08-26T16:52:50.382441Z\",\n     \"shell.execute_reply\": \"2026-08-26T16:52:50.381211Z\"\n    }\n   },\n   \"outputs\": [\n    {\n     \"name\": \"stdout\",\n     \"output_type\": \"stream\",\n     \"text\": \"crop shape: (32, 32, 3)\\nflipped shape: (32, 32, 3)\\nflipping twice returns original: True\\n\"\n    }\n   ],\n   \"source\": \"import numpy as np\\n\\n# Setup\\nH, W = 64, 64\\nimg = np.zeros((H, W, 3), dtype=np.uint8)\\nimg[..., 0] = np.linspace(0, 255, W).astype(np.uint8)[None, :]   # R: left-to-right gradient\\nimg[..., 1] = np.linspace(0, 255, H).astype(np.uint8)[:, None]   # G: top-to-bottom gradient\\nimg[..., 2] = 128                                                  # B: constant\\n\\n# Task 3: Crop central 32x32 region\\nstart_y, end_y = (H - 32) // 2, (H + 32) // 2\\nstart_x, end_x = (W - 32) // 2, (W + 32) // 2\\ncrop = img[start_y:end_y, start_x:end_x]\\n\\n# Flip horizontally using slicing\\nflipped_h = crop[:, ::-1, :]\\n\\n# Flip twice\\nflipped_twice = flipped_h[:, ::-1, :]\\n\\n# Check equality\\nis_equal = np.array_equal(crop, flipped_twice)\\n\\nprint(f\\\"crop shape: {crop.shape}\\\")\\nprint(f\\\"flipped shape: {flipped_h.shape}\\\")\\nprint(f\\\"flipping twice returns original: {is_equal}\\\")\"\n  },\n  {\n   \"cell_type\": \"markdown\",\n   \"id\": \"7f0c4802\",\n   \"metadata\": {},\n   \"source\": \"# Task 4: Intensity Histogram Calculation\\nCalculate the 256-bin intensity histogram and find the most frequent gray levels.\"\n  },\n  {\n   \"cell_type\": \"code\",\n   \"execution_count\": 4,\n   \"id\": \"a8482bd3\",\n   \"metadata\": {\n    \"execution\": {\n     \"iopub.execute_input\": \"2026-08-26T16:52:50.384013Z\",\n     \"iopub.status.busy\": \"2026-08-26T16:52:50.383752Z\",\n     \"iopub.status.idle\": \"2026-08-26T16:52:50.389291Z\",\n     \"shell.execute_reply\": \"2026-08-26T16:52:50.388797Z\"\n    }\n   },\n   \"outputs\": [\n    {\n     \"name\": \"stdout\",\n     \"output_type\": \"stream\",\n     \"text\": \"Number of non-empty bins: 225\\nFive most frequent gray levels and their counts:\\n  1. Gray level 111: count = 32\\n  2. Gray level 140: count = 31\\n  3. Gray level 104: count = 31\\n  4. Gray level 162: count = 31\\n  5. Gray level 90: count = 31\\n\"\n    }\n   ],\n   \"source\": \"import numpy as np\\n\\n# Setup\\nH, W = 64, 64\\nimg = np.zeros((H, W, 3), dtype=np.uint8)\\nimg[..., 0] = np.linspace(0, 255, W).astype(np.uint8)[None, :]   # R: left-to-right gradient\\nimg[..., 1] = np.linspace(0, 255, H).astype(np.uint8)[:, None]   # G: top-to-bottom gradient\\nimg[..., 2] = 128                                                  # B: constant\\nr = img[..., 0]\\ng = img[..., 1]\\nb = img[..., 2]\\ngray = (0.299 * r + 0.587 * g + 0.114 * b).astype(np.uint8)\\n\\n# Task 4\\n# Compute the 256-bin intensity histogram with np.bincount(minlength=256)\\nhist = np.bincount(gray.ravel(), minlength=256)\\n\\n# Number of non-empty bins\\nnon_empty_bins = np.count_nonzero(hist)\\nprint(f\\\"Number of non-empty bins: {non_empty_bins}\\\")\\n\\n# Five most frequent gray levels with their counts\\ntop5_indices = np.argsort(hist)[::-1][:5]\\nprint(\\\"Five most frequent gray levels and their counts:\\\")\\nfor rank, idx in enumerate(top5_indices, 1):\\n    print(f\\\"  {rank}. Gray level {idx}: count = {hist[idx]}\\\")\"\n  },\n  {\n   \"cell_type\": \"markdown\",\n   \"id\": \"fb3e0759\",\n   \"metadata\": {},\n   \"source\": \"# Task 5: Mean Thresholding and ASCII Visualization\\nThreshold the grayscale image at its mean intensity and render the downsampled mask as ASCII art.\"\n  },\n  {\n   \"cell_type\": \"code\",\n   \"execution_count\": 5,\n   \"id\": \"b177bb68\",\n   \"metadata\": {\n    \"execution\": {\n     \"iopub.execute_input\": \"2026-08-26T16:52:50.390648Z\",\n     \"iopub.status.busy\": \"2026-08-26T16:52:50.390457Z\",\n     \"iopub.status.idle\": \"2026-08-26T16:52:50.395579Z\",\n     \"shell.execute_reply\": \"2026-08-26T16:52:50.394994Z\"\n    }\n   },\n   \"outputs\": [\n    {\n     \"name\": \"stdout\",\n     \"output_type\": \"stream\",\n     \"text\": \"Mean intensity: 126.64\\nForeground pixel count: 2053\\nForeground ratio: 0.5012\\nDownsampled 8x8 ASCII art:\\n........\\n........\\n.......#\\n.....###\\n...#####\\n.#######\\n########\\n########\\n\"\n    }\n   ],\n   \"source\": \"import numpy as np\\n\\n# Setup\\nH, W = 64, 64\\nimg = np.zeros((H, W, 3), dtype=np.uint8)\\nimg[..., 0] = np.linspace(0, 255, W).astype(np.uint8)[None, :]   # R: left-to-right gradient\\nimg[..., 1] = np.linspace(0, 255, H).astype(np.uint8)[:, None]   # G: top-to-bottom gradient\\nimg[..., 2] = 128                                                  # B: constant\\nr = img[..., 0]\\ng = img[..., 1]\\nb = img[..., 2]\\ngray = (0.299 * r + 0.587 * g + 0.114 * b).astype(np.uint8)\\n\\n# Task 5: Thresholding and ASCII art\\nmask = gray > gray.mean()\\nfg_count = np.sum(mask)\\nfg_ratio = mask.mean()\\n\\nprint(f\\\"Mean intensity: {gray.mean():.2f}\\\")\\nprint(f\\\"Foreground pixel count: {fg_count}\\\")\\nprint(f\\\"Foreground ratio: {fg_ratio:.4f}\\\")\\n\\n# Downsample to 8x8 blocks\\n# 64x64 divided into 8x8 blocks of shape 8x8\\nblock_h, block_w = H // 8, W // 8\\nblocks = mask.reshape(8, block_h, 8, block_w).swapaxes(1, 2) # shape: (8, 8, 8, 8)\\nblock_means = blocks.mean(axis=(2, 3))\\n\\nprint(\\\"Downsampled 8x8 ASCII art:\\\")\\nfor row in block_means:\\n    print(\\\"\\\".join('#' if val > 0.5 else '.' for val in row))\"\n  }\n ],\n \"metadata\": {\n  \"kernelspec\": {\n   \"display_name\": \"Python 3\",\n   \"language\": \"python\",\n   \"name\": \"python3\"\n  },\n  \"language_info\": {\n   \"codemirror_mode\": {\n    \"name\": \"ipython\",\n    \"version\": 3\n   },\n   \"file_extension\": \".py\",\n   \"mimetype\": \"text/x-python\",\n   \"name\": \"python\",\n   \"nbconvert_exporter\": \"python\",\n   \"pygments_lexer\": \"ipython3\",\n   \"version\": \"3.12.12\"\n  }\n },\n \"nbformat\": 4,\n \"nbformat_minor\": 5\n}"
+          },
+          {
+            "content": "# CSCI3240 Introduction to Computer Vision — Lab 01 - Image basics (numpy): report\n\nCovered fundamental image representation and manipulation using NumPy arrays without external image libraries. Implemented synthetic RGB gradient generation, standard luminosity grayscale conversion, central region cropping and horizontal flipping, intensity histogram computation, and mean-intensity thresholding with ASCII visualization. All tasks executed and verified successfully.\n\n## Tasks\n\n### 1. Task 1: Build RGB Gradient Image\n\n**Approach.** Constructed a 64x64 RGB uint8 array using NumPy broadcasting to create horizontal and vertical linear gradients with a constant blue channel (128).\n\n```python\nimport numpy as np\n\nH, W = 64, 64\nimg = np.zeros((H, W, 3), dtype=np.uint8)\nimg[..., 0] = np.linspace(0, 255, W).astype(np.uint8)[None, :]\nimg[..., 1] = np.linspace(0, 255, H).astype(np.uint8)[:, None]\nimg[..., 2] = 128\n\nprint(f\"shape: {img.shape}\")\nprint(f\"dtype: {img.dtype}\")\nprint(f\"min: {img.min()}\")\nprint(f\"max: {img.max()}\")\nprint(f\"R mean: {img[..., 0].mean():.4f}\")\nprint(f\"G mean: {img[..., 1].mean():.4f}\")\nprint(f\"B mean: {img[..., 2].mean():.4f}\")\n```\n\n**Result.**\n\n```\nshape: (64, 64, 3)\ndtype: uint8\nmin: 0\nmax: 255\nR mean: 127.0312\nG mean: 127.0312\nB mean: 128.0000\n```\n\n### 2. Task 2: Grayscale Conversion\n\n**Approach.** Converted the RGB image to grayscale using the luminosity formula (0.299*R + 0.587*G + 0.114*B) cast to uint8.\n\n```python\nr = img[..., 0]\ng = img[..., 1]\nb = img[..., 2]\ngray = (0.299 * r + 0.587 * g + 0.114 * b).astype(np.uint8)\n\nprint(f\"gray[0, 0]: {gray[0, 0]}\")\nprint(f\"gray[63, 63]: {gray[63, 63]}\")\nprint(f\"mean gray level: {gray.mean():.4f}\")\n```\n\n**Result.**\n\n```\ngray[0, 0]: 14\ngray[63, 63]: 240\nmean gray level: 126.6394\n```\n\n### 3. Task 3: Central Cropping and Horizontal Flipping\n\n**Approach.** Cropped the central 32x32 region via array slicing and performed horizontal flipping with negative step indexing. Checked idempotence via np.array_equal.\n\n```python\nstart_y, end_y = (H - 32) // 2, (H + 32) // 2\nstart_x, end_x = (W - 32) // 2, (W + 32) // 2\ncrop = img[start_y:end_y, start_x:end_x]\n\nflipped_h = crop[:, ::-1, :]\nflipped_twice = flipped_h[:, ::-1, :]\nis_equal = np.array_equal(crop, flipped_twice)\n\nprint(f\"crop shape: {crop.shape}\")\nprint(f\"flipped shape: {flipped_h.shape}\")\nprint(f\"flipping twice returns original: {is_equal}\")\n```\n\n**Result.**\n\n```\ncrop shape: (32, 32, 3)\nflipped shape: (32, 32, 3)\nflipping twice returns original: True\n```\n\n### 4. Task 4: Intensity Histogram Calculation\n\n**Approach.** Computed the 256-bin intensity histogram using np.bincount, counted non-zero bins, and extracted the top 5 most frequent intensities.\n\n```python\nhist = np.bincount(gray.ravel(), minlength=256)\nnon_empty_bins = np.count_nonzero(hist)\nprint(f\"Number of non-empty bins: {non_empty_bins}\")\n\ntop5_indices = np.argsort(hist)[::-1][:5]\nprint(\"Five most frequent gray levels and their counts:\")\nfor rank, idx in enumerate(top5_indices, 1):\n    print(f\"  {rank}. Gray level {idx}: count = {hist[idx]}\")\n```\n\n**Result.**\n\n```\nNumber of non-empty bins: 225\nFive most frequent gray levels and their counts:\n  1. Gray level 111: count = 32\n  2. Gray level 140: count = 31\n  3. Gray level 104: count = 31\n  4. Gray level 162: count = 31\n  5. Gray level 90: count = 31\n```\n\n### 5. Task 5: Mean Thresholding and ASCII Visualization\n\n**Approach.** Applied global mean-intensity thresholding to generate a binary mask, computed foreground statistics, and downsampled the mask into 8x8 blocks rendered as ASCII art.\n\n```python\nmask = gray > gray.mean()\nfg_count = np.sum(mask)\nfg_ratio = mask.mean()\n\nprint(f\"Mean intensity: {gray.mean():.2f}\")\nprint(f\"Foreground pixel count: {fg_count}\")\nprint(f\"Foreground ratio: {fg_ratio:.4f}\")\n\nblock_h, block_w = H // 8, W // 8\nblocks = mask.reshape(8, block_h, 8, block_w).swapaxes(1, 2)\nblock_means = blocks.mean(axis=(2, 3))\n\nprint(\"Downsampled 8x8 ASCII art:\")\nfor row in block_means:\n    print(\"\".join('#' if val > 0.5 else '.' for val in row))\n```\n\n**Result.**\n\n```\nMean intensity: 126.64\nForeground pixel count: 2053\nForeground ratio: 0.5012\nDownsampled 8x8 ASCII art:\n........\n........\n.......#\n.....###\n...#####\n.#######\n########\n########\n```\n\n## How to run\n\n```bash\npip install -r requirements.txt\njupyter nbconvert --to notebook --execute lab01.ipynb\n```\n\n_Generated by Dayflow: every cell was executed by the agent before this report was written._\n",
+            "path": "REPORT.md"
+          },
+          {
+            "path": "requirements.txt",
+            "content": "numpy\njupyter\n"
+          },
+          {
+            "path": ".gitignore",
+            "content": ".ipynb_checkpoints\n__pycache__/\n*.pyc\n.DS_Store\n"
+          }
+        ],
+        "message": "Add Lab 01 solution, notebook, and report"
+      },
+      "result": {
+        "status": "success",
+        "commit_sha": "fce467f60e6a7cfc926fa611b2e2b31c9258a76c",
+        "branch": "main",
+        "files": [
+          "README.md",
+          "TODO.md",
+          "lab01.ipynb",
+          "REPORT.md",
+          "requirements.txt",
+          ".gitignore"
+        ]
+      }
+    }
+  ],
+  "chatMessages": [],
+  "chatDom": [],
+  "brainConfigSynced": true,
+  "screenshotsDir": "harness/out/lab/shots",
+  "pass": true,
+  "failures": [],
+  "notebook": {
+    "path": "lab01.ipynb",
+    "saved": "harness/out/lab/lab01.ipynb",
+    "valid": true,
+    "errors": [],
+    "code_cells": 5,
+    "cells_with_outputs": 5,
+    "cells_with_nonempty_outputs": 5,
+    "executed": true,
+    "exec_error": null,
+    "exec_seconds": 1.18
+  }
+}

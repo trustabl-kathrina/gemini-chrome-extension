@@ -77,27 +77,47 @@ export interface DriveClientOptions {
   base: string;
   token: string;
   fetch?: typeof fetch;
+  /**
+   * Called on a 401 with the token that was refused; return a fresh one to retry the request once, or null to
+   * let the 401 surface. Chrome hands out a cached OAuth token until it expires, so a long run WILL hit this.
+   */
+  onUnauthorized?: (stale: string) => Promise<string | null>;
 }
 
 export class DriveClient {
   private readonly base: string;
-  private readonly token: string;
+  private token: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly onUnauthorized?: (stale: string) => Promise<string | null>;
   /** path → folder id, so a run touching 40 files does not re-resolve `Dayflow/<course>` each time. */
   private readonly folders = new Map<string, string>([['', 'root']]);
 
   constructor(opts: DriveClientOptions) {
     this.base = opts.base.replace(/\/+$/, '');
     this.token = opts.token;
+    this.onUnauthorized = opts.onUnauthorized;
     // Bound explicitly: a bare `fetch` called as a method (`this.fetchImpl(...)`) throws "Illegal invocation" in workers.
     this.fetchImpl = opts.fetch ?? ((input, init) => fetch(input, init));
   }
 
-  private async call<T>(path: string, init: RequestInit = {}): Promise<T> {
+  /** The token in use — after a 401 refresh this is the new one, so callers can cache it. */
+  get accessToken(): string {
+    return this.token;
+  }
+
+  private async call<T>(path: string, init: RequestInit = {}, retried = false): Promise<T> {
     const res = await this.fetchImpl(`${this.base}${path}`, {
       ...init,
       headers: { authorization: `Bearer ${this.token}`, ...(init.headers as Record<string, string> | undefined) },
     });
+    if (res.status === 401 && !retried && this.onUnauthorized) {
+      // Bodies here are strings or Blobs, both replayable; nothing is consumed by the failed attempt.
+      const fresh = await this.onUnauthorized(this.token).catch(() => null);
+      if (fresh && fresh !== this.token) {
+        this.token = fresh;
+        return this.call<T>(path, init, true);
+      }
+    }
     if (!res.ok) {
       const body = (await res.text().catch(() => '')).slice(0, 200);
       throw new Error(`Drive ${init.method ?? 'GET'} ${path.split('?')[0]} → HTTP ${res.status} ${body}`);

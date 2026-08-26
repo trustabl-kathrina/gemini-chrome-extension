@@ -1,8 +1,8 @@
 {
   "name": "dayflow-extension",
-  "description": "Dayflow — your student ops agent, living in Chrome",
+  "description": "Dayflow \u2014 your student ops agent, living in Chrome",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "engines": {
     "node": ">=22.18"
@@ -11,6 +11,10 @@
     "dev": "wxt",
     "build": "wxt build",
     "zip": "wxt zip",
+    "zip:store": "DAYFLOW_STORE_BUILD=1 wxt zip",
+    "icons": "node ../docs/store/scripts/make-icons.mjs",
+    "screenshots": "node ../docs/store/scripts/screenshots.mjs",
+    "build:store": "DAYFLOW_STORE_BUILD=1 wxt build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "verify": "pnpm typecheck && pnpm test",
