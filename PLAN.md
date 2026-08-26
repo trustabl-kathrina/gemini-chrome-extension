@@ -106,3 +106,22 @@ Lab solver:
 - Shell hook blocks commands containing `rm -rf` or the word "truncate"; never read `.env`.
 - No real credentials or personal data in the repo; fake-wsp/fake-drive content is synthetic.
 - "Works" = harness JSON or a test. If something can't be done, say so with evidence.
+
+## Ship (phase 7 — queued as workflow `dayflow-v3-ship`, starts when v2 finishes)
+Goal: a stranger can install Dayflow from a zip or the Chrome Web Store, run it against their own brain, and a judge can verify every claim.
+
+1. **Remaining scenes 4–6** (courseware, scaffold, pitch-deck) each to `make e2e` green, in parallel on separate port sets.
+2. **Real Drive + sign-in**: `oauth2.client_id` from `VITE_GOOGLE_CLIENT_ID` (needs the user's OAuth client for id `jagkpbdiempedibinmfafamdhnogognn`);
+   Sign in with Google via `chrome.identity`; graceful fallback to the brain vault when unconfigured; optional Google ID-token auth on the brain.
+3. **Chrome Web Store package**: branded icons; `pnpm zip:store` builds without the dev `key`; `docs/store/listing.md` (single purpose,
+   permission justifications, data-use disclosure); `docs/PRIVACY.md` served at `/pages/privacy`; ≥3 real 1280×800 screenshots.
+   Store review realities: `<all_urls>` + `scripting` + `identity` trigger manual review (days to weeks) — submit as **unlisted** first so the
+   hackathon link works immediately; keep the unpacked zip in GitHub Releases as the judge path.
+4. **Repo readiness** (`/hackathon-repo` after the GitHub remote exists): README to v2 reality with honest per-scene status from
+   `harness/out/*.json`, `docs/ARCHITECTURE.md` (diagram + sequence), `docs/JUDGES.md` (10-minute path), CI (`make verify`), LICENSE (MIT),
+   `.env.example` files, `git ls-files` audit. Then create the GitHub repo and push — **requires the user's OK** (public, or private shared with
+   testing@devpost.com and cloudhackathons@google.com).
+5. **Demo readiness**: `docs/DEMO.md` runbook (pre-flight, prompts per scene, shot list 0:00–4:00, narration ≈550 words), `docs/DEVPOST.md`
+   submission text + bonus checklist, `demo-browser.mjs --layout` (site window + docked panel at 1440×900). Recording: OBS or Chrome tab
+   capture at 1080p, Cloud Run logs + Firestore visible in a second window during scene 1; English narration or subtitles.
+6. **Final review** (correctness / security / judge lenses) → fixer → full `make e2e` for all six scenes → deploy → tag `v0.2.0`.
