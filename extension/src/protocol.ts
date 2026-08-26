@@ -151,7 +151,7 @@ export const DEFAULT_SKILLS: readonly Skill[] = [
 ];
 
 export const DEFAULT_SITES: readonly SiteProfile[] = [
-  { domain: 'wsp.kbtu.kz', notes: 'KBTU student portal. Course files live under Registration → Course → Files. Attendance marking button appears during lectures.', allow: true },
+  { domain: 'wsp.kbtu.kz', notes: "KBTU student portal (Vaadin app, no real links; navigation is by clicking). Top-right flag icon img[src*=gb.png] switches UI to English; home icon img[src*=home.png] opens the Desktop, which lists modules as links: Student files, Student's schedule, Attendance mark, Student's Journal, Transcript, Student exam schedule, Registration for disciplines, News. Student files (https://wsp.kbtu.kz/StudentFiles) is a folder browser: a table plus Back/Enter buttons; the tree is School > Instructor (surname name) > course folders > files. Select a row by clicking it, then click Enter; Back goes up. Student's schedule (https://wsp.kbtu.kz/StudentSchedule) is a weekly grid with 'CODE Course name Instructor room (hh:mm-hh:mm)' cells - read it first to learn each course's instructor.", allow: true },
   { domain: 'teams.microsoft.com', notes: 'Course announcements and assignments per team channel.', allow: true },
   { domain: 'web.telegram.org', notes: 'Use the “/k/” web client. Chat search is the input at the top of the left column.', allow: true },
   { domain: 'github.com', notes: '', allow: true },

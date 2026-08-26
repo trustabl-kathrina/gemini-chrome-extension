@@ -71,9 +71,14 @@ skills:
 sites:
   - domain: wsp.kbtu.kz
     notes: |
-      KBTU student portal. Login is SSO; assume the user is signed in. Courses are listed under
-      "Registration Online" → current semester. Each course row has a "Files" link; files are grouped
-      by week and show upload dates. Attendance and scores are under "Transcript / Attendance".
+      KBTU student portal (Vaadin app: no real links, navigate by clicking; take a fresh read_page after every click).
+      Top-right flag icon (img src gb.png) switches the UI to English; the home icon (img src home.png) opens the Desktop,
+      which lists modules as links: Student files, Student's schedule, Attendance mark, Student's Journal, Transcript,
+      Student exam schedule, Registration for disciplines, News.
+      Student files (/StudentFiles) is a folder browser: a table of rows plus Back and Enter buttons. The tree is
+      School > Instructor (Surname Name) > course folders > files. Select a row by clicking it, then click Enter; Back goes up.
+      Student's schedule (/StudentSchedule) is a weekly grid; cells read "CODE Course name Instructor room (hh:mm-hh:mm)";
+      it has Year and Term selectors - use them to see past semesters. Read the schedule first to learn each course's instructor.
   - domain: teams.microsoft.com
     notes: |
       Microsoft Teams web. Course teams are in the left rail; announcements are in the General channel,
