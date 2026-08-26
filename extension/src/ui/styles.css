@@ -1,4 +1,6 @@
 @import 'tailwindcss';
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
 
 /*
  * Direction: "Linear-style" dark SaaS.
@@ -16,8 +18,8 @@
   --color-ok: oklch(0.76 0.16 155);
   --color-warn: oklch(0.82 0.15 85);
   --color-err: oklch(0.7 0.19 25);
-  --font-sans: 'Inter', 'Inter Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-sans: 'Inter Variable', 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   --ease-snap: cubic-bezier(0.2, 0, 0, 1);
 }
 
@@ -57,3 +59,7 @@ body {
 }
 
 * { scrollbar-width: thin; scrollbar-color: rgb(255 255 255 / 0.12) transparent; }
+
+/* Horizontal tab strip: hide the scrollbar, fade the overflow edge instead of clipping. */
+.tab-strip { scrollbar-width: none; mask-image: linear-gradient(to right, black calc(100% - 20px), transparent); }
+.tab-strip::-webkit-scrollbar { display: none; }

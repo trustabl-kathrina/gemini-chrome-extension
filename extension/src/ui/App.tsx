@@ -65,12 +65,12 @@ export function App() {
       </header>
 
       {view.name === 'settings' && (
-        <nav className="hairline-b flex gap-0.5 overflow-x-auto px-2 py-1.5">
+        <nav className="hairline-b tab-strip flex overflow-x-auto px-1.5 py-1.5">
           {SETTINGS_TABS.map((t) => (
             <button
               key={t.id}
               onClick={() => setView({ name: 'settings', tab: t.id })}
-              className={`h-6 shrink-0 rounded-md px-2 text-[12px] transition-colors ${view.tab === t.id ? 'bg-bg-2 text-fg' : 'text-fg-3 hover:text-fg-2'}`}
+              className={`h-6 shrink-0 rounded-md px-1.5 text-[12px] transition-colors ${view.tab === t.id ? 'bg-bg-2 text-fg' : 'text-fg-3 hover:text-fg-2'}`}
             >
               {t.label}
             </button>

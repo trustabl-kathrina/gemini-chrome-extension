@@ -42,7 +42,7 @@ export function Toggle({ checked, onChange, label }: { checked: boolean; onChang
       onClick={() => onChange(!checked)}
       className={`relative h-4 w-7 shrink-0 rounded-full transition-colors duration-150 ${checked ? 'bg-accent' : 'bg-bg-2 hairline'}`}
     >
-      <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform duration-150 ${checked ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+      <span className={`absolute left-0 top-0.5 h-3 w-3 rounded-full bg-white transition-transform duration-150 ${checked ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
     </button>
   );
 }
