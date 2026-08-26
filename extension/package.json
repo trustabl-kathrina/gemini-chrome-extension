@@ -1,0 +1,32 @@
+{
+  "name": "dayflow-extension",
+  "description": "Dayflow — your student ops agent, living in Chrome",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "zip": "wxt zip",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "verify": "pnpm typecheck && pnpm test",
+    "postinstall": "wxt prepare"
+  },
+  "dependencies": {
+    "lucide-react": "^1.34.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@wxt-dev/module-react": "^1.1.5",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11",
+    "web-ext": "^10.5.0",
+    "wxt": "^0.21.3"
+  }
+}

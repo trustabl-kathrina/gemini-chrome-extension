@@ -1,0 +1,59 @@
+@import 'tailwindcss';
+
+/*
+ * Direction: "Linear-style" dark SaaS.
+ * Near-black OKLCH canvas, one accent, hairline borders as white-opacity overlays.
+ */
+@theme {
+  --color-bg: oklch(0.165 0.008 285);
+  --color-bg-1: oklch(0.2 0.009 285);
+  --color-bg-2: oklch(0.24 0.01 285);
+  --color-fg: oklch(0.93 0.004 285);
+  --color-fg-2: oklch(0.7 0.008 285);
+  --color-fg-3: oklch(0.5 0.01 285);
+  --color-accent: oklch(0.7 0.19 292);
+  --color-accent-soft: oklch(0.7 0.19 292 / 0.14);
+  --color-ok: oklch(0.76 0.16 155);
+  --color-warn: oklch(0.82 0.15 85);
+  --color-err: oklch(0.7 0.19 25);
+  --font-sans: 'Inter', 'Inter Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --ease-snap: cubic-bezier(0.2, 0, 0, 1);
+}
+
+:root { color-scheme: dark; }
+html, body, #root { height: 100%; }
+body {
+  @apply bg-bg text-fg font-sans text-[13px] leading-5 antialiased;
+  font-feature-settings: 'cv11', 'ss01', 'tnum';
+  overflow: hidden;
+}
+
+/* Hairline = white-opacity overlay, never a flat gray hex. */
+.hairline { box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08); }
+.hairline-b { box-shadow: inset 0 -1px 0 rgb(255 255 255 / 0.08); }
+.hairline-t { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08); }
+
+/* One light source: a low-opacity accent bloom at the top of the panel. */
+.bloom {
+  background:
+    radial-gradient(600px 220px at 50% -60px, oklch(0.7 0.19 292 / 0.16), transparent 70%),
+    var(--color-bg);
+}
+
+.kbd {
+  @apply inline-flex h-4.5 min-w-4.5 items-center justify-center rounded-sm px-1 font-mono text-[10px] text-fg-3;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1);
+}
+
+.fade-in { animation: fade-in 160ms var(--ease-snap) both; }
+@keyframes fade-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+
+.pulse-dot { animation: pulse-dot 1.2s ease-in-out infinite; }
+@keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-in, .pulse-dot { animation: none; }
+}
+
+* { scrollbar-width: thin; scrollbar-color: rgb(255 255 255 / 0.12) transparent; }
