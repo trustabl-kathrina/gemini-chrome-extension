@@ -10,7 +10,7 @@ def test_instruction_includes_skill_and_site_notes() -> None:
     text = compose_instruction(cfg, skill, skill.sites)
     assert "Active skill: Sync WSP files to vault" in text
     assert "mirror every course's file directory" in text
-    assert "### wsp.kbtu.kz" in text and "Registration Online" in text
+    assert "### wsp.kbtu.kz" in text and "School > Instructor" in text
     assert "request_confirmation before: type_text" in text
 
 
