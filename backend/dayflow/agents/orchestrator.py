@@ -39,7 +39,10 @@ from dayflow.core.pages import default_pages
 from dayflow.models.registry import registry
 from dayflow.tools.browser import BROWSER_ACTION_NAMES, BROWSER_TOOLS, CONFIRM_TOOL, URL_TOOL_NAMES
 from dayflow.tools.connectors import connector_toolsets
+from dayflow.tools.courseware import COURSEWARE_TOOLS
+from dayflow.tools.deck import DECK_TOOLS
 from dayflow.tools.lab import LAB_TOOLS
+from dayflow.tools.scaffold import SCAFFOLD_TOOLS
 from dayflow.tools.server import SERVER_TOOLS
 
 
@@ -296,6 +299,16 @@ def build_root_agent(store: ConfigStore) -> LlmAgent:
         model=registry().orchestrator,
         description="Dayflow orchestrator: drives the user's browser and server tools to run skills.",
         instruction=instruction,
-        tools=[*BROWSER_TOOLS, CONFIRM_TOOL, *SERVER_TOOLS, *LAB_TOOLS, lab_solver_tool(), *connector_toolsets()],
+        tools=[
+            *BROWSER_TOOLS,
+            CONFIRM_TOOL,
+            *SERVER_TOOLS,
+            *LAB_TOOLS,
+            *SCAFFOLD_TOOLS,
+            *COURSEWARE_TOOLS,
+            *DECK_TOOLS,
+            lab_solver_tool(),
+            *connector_toolsets(),
+        ],
         before_tool_callback=before_tool,
     )

@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 
 from dayflow.agents.orchestrator import ACTIONS_KEY, DOMAINS_KEY, SKILL_KEY, build_root_agent, result_state_delta
 from dayflow.api.auth import current_user
+from dayflow.api.deck_routes import router as deck_router
 from dayflow.api.oidc import verify_google_oidc
 from dayflow.api.pages import router as pages_router
 from dayflow.api.pubsub import router as pubsub_router
@@ -208,6 +209,8 @@ def create_app(
     )
     app.include_router(pubsub_router)
     app.include_router(vault_router)
+    # Before the pages router: its /pages/{kind}/{page_id} would swallow "<id>.pptx" and 404 on the dot.
+    app.include_router(deck_router)
     app.include_router(pages_router)
 
     @app.middleware("http")

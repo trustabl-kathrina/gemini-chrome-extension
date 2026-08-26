@@ -156,7 +156,7 @@ class LabSolverTool(AgentTool):
             f"{SOLVER_INSTRUCTION}\nYou cannot execute code here: reply with the complete script in ONE ```python "
             f"fence, then 2–4 sentences of notes.\n\nContext:\n{task.context}\n\nTask:\n{task.task_text}"
         )
-        history: list[types.Content] = [types.Content(role="user", parts=[types.Part.from_text(text=prompt)])]
+        history: list[types.ContentUnion] = [types.Content(role="user", parts=[types.Part.from_text(text=prompt)])]
         last: dict[str, Any] = {}
         for attempt in range(2):
             resp = await client().aio.models.generate_content(model=registry().solver, contents=history)

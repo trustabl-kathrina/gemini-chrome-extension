@@ -44,23 +44,72 @@ skills:
     title: Build courseware from syllabus
     blurb: Cheatsheet + quiz per topic, generated from the syllabus and opened as a page.
     prompt: Build a cheatsheet and a quiz from the syllabus of the current course.
-    sites: []
-    tools: [vault_list, vault_read, generate_courseware, open_tab, download]
+    sites: [wsp.kbtu.kz]
+    tools: [vault_list, vault_read, generate_courseware, download, open_tab, read_page, click, wait, screenshot]
     instructions: |
-      Find the course syllabus with vault_list and read it with vault_read (or read the current tab). Produce
-      a compact cheatsheet and a 10-question quiz for the requested scope as a single HTML page served by the
-      brain, open it in a new tab, and save the HTML to the vault under "<course>/Materials/".
+      Goal: ONE printable HTML page for the requested course - a cheatsheet plus a 10-question quiz with the
+      answers folded away - opened in a tab and saved to the vault as
+      "<course code> <course name>/Materials/courseware.html".
+      Steps:
+      1. vault_list(). Find the syllabus of the course the user named: an entry whose path contains the course
+         and whose file name contains "syllabus" (e.g. "CSCI3240 Introduction to Computer Vision/Materials/
+         syllabus.pdf"). Do not guess a path - use the one vault_list printed.
+      2. If there is no such entry, sync it from WSP first, following the vault-sync playbook but downloading
+         ONLY the syllabus: open_tab(<the portal URL from memory>/StudentFiles), read_page, then per level
+         click the row and click the Enter button - School ("School of Information Technology and Engineering")
+         -> Instructor (the course's instructor; the schedule page tells you who) -> the course folder -> the
+         syllabus subfolder if there is one ("1.Syllabus for the student"). Then
+         download(ref=<the syllabus row's download button ref>, path="<course code> <course name>/Materials/
+         syllabus.pdf"). About 12 browser actions; verify each step on the screenshot before the next click.
+      3. vault_read(<the syllabus path>) and keep the returned `text` as it is (it holds the weekly topic list).
+         If `text` is empty, say so and stop - there is nothing to build courseware from.
+      4. generate_courseware(course="<course code> <course name>", weeks=<the scope the user asked for, e.g.
+         "all 15 weeks" or "weeks 1-5">, syllabus_text=<that text VERBATIM, not summarised>). It returns
+         page_id, page_url, sections and questions. On status error, fix exactly what the message names (most
+         often: the syllabus text was empty or was not the syllabus) and call it once more, at most twice.
+      5. download(url=page_url, path="<course code> <course name>/Materials/courseware.html") - this saves the
+         page to the Drive vault and indexes it. The brain's own pages are always navigable, no allow-list entry
+         needed. Check the result: it must report bytes > 0 and a vault path.
+      6. open_tab(page_url) so the user sees the page, then read_page once and verify the heading "Quiz" and the
+         numbered questions are there.
+      7. Finish with: the page URL, the vault path, how many sections and how many quiz questions.
+      Budget: about 16 browser actions in total (only the syllabus sync browses); generate_courseware and the
+      vault tools are server tools and cost nothing from that budget.
   - id: scaffold
     key: "3"
     title: Scaffold vault folders
-    blurb: Per course, per week, per lab — folder tree initialized from the syllabus schedule.
+    blurb: Per course, per week, per lab — folder tree initialized in Drive from the syllabus schedule.
     prompt: Create the vault folder structure for this semester from my syllabi.
-    sites: []
-    tools: [vault_list, vault_read, plan_vault_folders]
+    sites: [wsp.kbtu.kz]
+    tools: [vault_list, vault_read, plan_vault_folders, make_folders, open_tab, read_page, click, download, wait, screenshot]
     instructions: |
-      Read each syllabus from the vault (vault_list, then vault_read); derive the weeks and labs from its
-      schedule; create "<course code> <course name>/Week NN/" and "Lab NN/" folders in the Drive vault
-      (plus "Materials/"). Report the tree.
+      Goal: the requested course's folder tree exists in the Drive vault - "<course code> <course name>/"
+      with "Materials", one "Week NN - <topic>" per week of the syllabus schedule and one "Lab NN - <topic>"
+      per lab. At least 15 week folders: a KBTU semester is 15 weeks.
+      Steps:
+      1. vault_list(). Find the syllabus of the course the user named: an entry whose path contains the
+         course and whose file name contains "syllabus" (e.g. "CSCI3240 Introduction to Computer Vision/
+         Materials/syllabus.pdf"). Use the path vault_list printed, never a guessed one.
+      2. If there is no such entry, sync it from WSP first, following the vault-sync playbook but downloading
+         ONLY the syllabus: open_tab(<the portal URL from memory>/StudentFiles), read_page, then per level
+         click the row and click the Enter button - School ("School of Information Technology and Engineering")
+         -> Instructor (the course's instructor; the schedule page tells you who) -> the course folder -> the
+         syllabus subfolder if there is one ("1.Syllabus for the student"). Then
+         download(ref=<the syllabus row's download button ref>, path="<course code> <course name>/Materials/
+         syllabus.pdf"). About 12 browser actions; check each screenshot before the next click.
+      3. vault_read(<that syllabus path>) and keep the returned `text` exactly as it is - it holds the weekly
+         schedule ("Week 01: ...") and the lab list ("Lab 01: ..."). If `text` is empty, say so and stop.
+      4. plan_vault_folders(course_code="<e.g. CSCI3240>", course_name="<e.g. Introduction to Computer
+         Vision>", syllabus_text=<that text VERBATIM, not summarised>). It returns {paths} - the complete
+         list of vault-relative folder paths. Do not edit, shorten, re-order or re-word them.
+      5. make_folders(paths=<the paths from step 4, verbatim, ALL of them in ONE call>). It creates the
+         folders in Drive and returns {created, existing, failed, folders, root}. Verify
+         created + existing == the number of paths you sent; if `failed` is non-empty, call make_folders once
+         more with only the failed paths. Never pass a file name and never prefix "Dayflow/" - the extension
+         puts the paths under the user's vault folder itself.
+      6. Finish with: the course folder, how many week and lab folders now exist, and any path that failed.
+      Budget: about 14 browser actions (only the syllabus sync browses); vault_list, vault_read and
+      plan_vault_folders are server tools and cost nothing from that budget.
   - id: lab
     key: "4"
     title: Solve a lab from the vault
@@ -97,51 +146,102 @@ skills:
     sites: [web.telegram.org, linear.app, github.com]
     tools: [get_file_contents, open_tab, read_page, click, type, press_key, wait, screenshot, request_confirmation, list_teams, list_projects, create_issue, issue_write, create_branch, push_files, create_pull_request]
     instructions: |
-      Goal: the weekly update posted in the team chat (only after the user approved the exact text), Linear
-      issues for the next milestone, and a GitHub issue + pull request on the diploma repo.
+      Goal: the weekly update posted in the team chat (only after the user approved the exact text), two
+      Linear issues for the next milestone, and a GitHub issue + exactly one pull request on the diploma repo.
       The repo is "<owner>/<repo>" from the prompt or memory (default dayflow-student/diploma); the chat is the
-      one named in the prompt (default "Diploma · Team").
-      Steps:
-      1. get_file_contents(owner, repo, "README.md") and get_file_contents(owner, repo, "TODO.md"). From them
-         draft the update: at most 3 sentences, plain text, one paragraph — what was done this week, what is
-         next (the next milestone = the first open TODO items), one ask or date. Keep it under 400 characters.
-      2. open_tab the messenger: the chat URL from the prompt or the site notes in scope (Telegram Web is
-         https://web.telegram.org/k/). read_page. The chat list is the left column; if the chat is not listed,
-         type the chat name into the search box at its top, then read_page again.
-      3. click the chat row whose label contains the chat name, wait(800), then read_page: the header must show
-         that chat name and the message composer (a textarea or contenteditable "Message" box at the bottom)
-         and the Send button must be listed. Do not type yet.
-      4. request_confirmation(action="Send message to '<chat name>'", details=<the update text, verbatim>).
-         Stop if the user denies. The approval grants ONE credit that the next type call spends.
-      5. type(ref=<composer ref>, text=<the SAME text you confirmed, verbatim>, submit=true) — one call: it
-         types and presses Enter, which sends. Then read_page: the message must now appear at the bottom of
-         the thread (outgoing bubble with your text). If it is still only in the composer, click the Send
-         button and read_page again. Leave the chat tab open.
-      6. Linear: list_teams() → take the team id (and list_projects(teamId) for the project id when one
-         matches the diploma project). Create 2 issues for the next milestone, each with a concrete title and
-         a 2-3 line description. Every create_issue needs its own approval: request_confirmation(action=
-         "Create Linear issue", details=<title + description>) then create_issue(title, teamId, description,
-         projectId) — one gated call per confirmation, never two gated calls in one turn.
-      7. GitHub: request_confirmation(action="Open GitHub issue", details=<title + body>) then
-         issue_write(method="create", owner, repo, title, body) tracking the milestone. Then
-         create_branch(owner, repo, branch="weekly-update-<YYYY-MM-DD>") and push_files(owner, repo, branch,
-         files=[{path: "docs/updates/<YYYY-MM-DD>.md", content: <the update + the issue links>}], message);
-         then request_confirmation(action="Open pull request", details=<PR title + body>) and ONE
-         create_pull_request(owner, repo, title, head=<that branch>, base="main", body).
-      8. Finish with: the message text and the chat it went to, the Linear identifiers + URLs, the GitHub
-         issue URL and the PR URL.
-      Budget: about 8 browser actions in total; the connector tools are not browser actions.
+      one named in the prompt (default "Diploma · Team"); the messenger is the URL in the prompt, else the one
+      in the site notes in scope (Telegram Web: https://web.telegram.org/k/).
+      Order of work: get_file_contents (README, TODO) → open_tab the messenger → read_page → click the chat row
+      → request_confirmation → type(the update, submit=true) → list_teams / list_projects → create_issue ×2 →
+      issue_write → create_branch + push_files → create_pull_request (exactly one).
+
+      APPROVAL RULE — read this before you act; every gated call depends on it.
+      Sending the message and creating the issues and the pull request are gated. Each of those calls needs its
+      OWN confirmation card in the turn before it — one gated call per confirmation — and the card's `details`
+      must carry that call's content arguments verbatim:
+        · sending the update    → details = the message text, i.e. exactly the string you pass as `text`.
+        · a Linear issue        → details = the title, a blank line, then the description — exactly the strings
+                                  you pass as `title` and `description`.
+        · the GitHub issue      → details = the title, a blank line, then the body (`title`, `body`).
+        · the pull request      → details = the title, a blank line, then the body (`title`, `body`).
+      Write each piece of content ONCE, then copy it verbatim into the card and into the call: same wording,
+      same punctuation, same characters. Re-wording, re-wrapping, translating, adding a heading or dropping a
+      sentence between the card and the call makes the call fail with "the ... differ from what the user
+      approved". One approval buys exactly ONE call and is spent when that call runs.
+      Never put a confirmation and a gated call in the same turn, and never two gated calls in the same turn:
+      confirm → wait for {"confirmed": true} → make the one call. If a gated call is refused for a missing
+      approval, do not repeat it blindly: ask again with details that are the exact argument strings of that
+      call, then repeat the call verbatim.
+
+      Steps, in this order, one tool call per turn:
+      1. get_file_contents(owner, repo, path="README.md") and get_file_contents(owner, repo, path="TODO.md").
+      2. Draft UPDATE from them: 2-3 sentences in ONE plain-text paragraph (no markdown, no bullet characters,
+         no line breaks), under 400 characters — what was done this week, what is next (the next milestone = the
+         first still-open TODO items), one ask or date. Keep this exact string: the card and the send call both
+         use it verbatim.
+      3. open_tab(<messenger URL>), then read_page. The chat list is the left column; each row shows the chat
+         name and its last message. If "<chat name>" is not listed, type its name into the search box at the top
+         of that column and read_page again.
+      4. click the chat row whose label contains the chat name, then read_page: the header of the right column
+         must show that chat name, and the composer (the "Message" textarea or contenteditable at the bottom)
+         and the Send button must be in the element list. Note the composer's ref. Do not type yet. If that chat
+         was already open when the page loaded, you may skip the click and use the refs you already have.
+      5. request_confirmation(action="Send message to '<chat name>'", details=UPDATE).
+      6. After {"confirmed": true}: type(ref=<the composer ref>, text=UPDATE, submit=true) — ONE call; it types
+         the text and presses Enter, which sends it. Then read_page once: UPDATE must now be the last outgoing
+         bubble of the thread. If it is still only in the composer, click the Send button and read_page again.
+         Send it once and once only. Leave the chat tab open until the run ends.
+      7. Linear: list_teams() for the team id, then list_projects(teamId) for the id of the diploma project.
+      8. First Linear issue: choose a concrete title and a 2-3 line description for the first next-milestone
+         task, then request_confirmation(action="Create Linear issue", details=<that title, blank line, that
+         description>); after the answer, create_issue(title=<that title>, teamId=<the id>, description=<that
+         description>, projectId=<the id>).
+      9. Second Linear issue: repeat step 8 for the second next-milestone task (new title and description).
+      10. GitHub issue: request_confirmation(action="Open GitHub issue", details=<title, blank line, body>),
+          then issue_write(method="create", owner=..., repo=..., title=<that title>, body=<that body>) — the
+          issue tracks the milestone and links the Linear identifiers.
+      11. create_branch(owner, repo, branch="weekly-update-<YYYY-MM-DD>"), then push_files(owner, repo,
+          branch=<that branch>, message=<commit message>, files=[{path: "docs/updates/<YYYY-MM-DD>.md",
+          content: <UPDATE plus the issue links>}]).
+      12. Pull request: request_confirmation(action="Open pull request", details=<title, blank line, body>),
+          then ONE create_pull_request(owner, repo, title=<that title>, head=<that branch>, base="main",
+          body=<that body>). Exactly one pull request per run — never call it twice.
+      13. Finish with: the update text and the chat it went to, the Linear identifiers + URLs, the GitHub issue
+          URL and the pull request URL.
+      Budget: about 6 browser actions in total (open_tab, read_page, click, read_page, type, read_page); the
+      confirmations and the GitHub/Linear tools are server-side and cost nothing from that budget.
   - id: pitch-deck
     key: "6"
     title: Pitch deck from repo
-    blurb: A deck about the diploma project, generated from the repo and saved to Drive.
-    prompt: Build a pitch deck about my diploma project repo and open it.
-    sites: [drive.google.com, github.com]
-    tools: [get_file_contents, build_deck, download, open_tab, screenshot, click_at]
+    blurb: A 16:9 .pptx pitch about the diploma project, built from its README/TODO, saved to the vault with an HTML preview.
+    prompt: Build a pitch deck about my diploma project repo, save it to my vault and open the preview.
+    sites: [github.com]
+    tools: [get_file_contents, build_deck, download, open_tab, vault_list]
     instructions: |
-      Read README and TODO from the repo, outline 8 slides (problem, users, solution, demo, architecture,
-      progress, plan, ask). Build the .pptx and an HTML preview server-side, save the .pptx to the vault under
-      "Diploma/", then open the preview in a tab.
+      Goal: a real PowerPoint deck (.pptx, 16:9, at least 6 slides) about the repo, stored in the vault, with
+      its HTML preview open in a tab. The repo is "<owner>/<repo>" from the prompt or memory (default
+      dayflow-student/diploma). No browsing is needed to gather the content: the GitHub tools read the repo.
+      Steps:
+      1. get_file_contents(owner=<owner>, repo=<repo>, path="README.md"), then get_file_contents(owner=<owner>,
+         repo=<repo>, path="TODO.md"). Use ONLY what those files say (what the project does, its stack and
+         architecture, what already works, what is still open) — never invent numbers, users or traction. If a
+         file is missing, continue with the other one.
+      2. Draft an 8-section outline in this order: Problem, Users, Solution, Demo, Architecture, Progress,
+         Plan, Ask. Each section = one heading plus 2-4 bullets; each bullet a phrase under ~90 characters
+         grounded in the README/TODO (Progress = what the README says works; Plan = the first open TODO items).
+      3. build_deck(title="<project> - <one-line positioning>", subtitle="<owner>/<repo>",
+         outline=[{"heading": "Problem", "bullets": ["...", "..."]}, ... all 8 entries]). It returns
+         {id, slides, preview_url, pptx_url}. Verify slides >= 6; if it returns status "error" (too few
+         sections, missing heading), fix the outline and call it once more. Do not build the file yourself.
+      4. download(url=<pptx_url>, path="<repo>/pitch/diploma-pitch.pptx") — this saves the .pptx into the Drive
+         vault and indexes it on the brain. The brain's own pages are always navigable, so no allow-list change
+         is needed. Check the result: bytes must be > 0 and vault_id must not be null.
+      5. download(url=<preview_url>, path="<repo>/pitch/diploma-pitch.html") — keeps the preview beside the deck
+         and shows the user a clickable link to the live page.
+      6. open_tab(<preview_url>) so the slides are on screen. Do not click anything on that page.
+      Finish with: the deck title, the slide count, the vault path of the .pptx and the preview URL.
+      Budget: 3 browser actions in total (two downloads and one open_tab); get_file_contents and build_deck are
+      server tools and cost nothing from that budget.
 sites:
   - domain: wsp.kbtu.kz
     mode: dom
@@ -173,7 +273,11 @@ sites:
       ("Message") at the bottom of the open chat with the Send button to its right; type(ref, text, submit=true)
       enters the text and presses Enter, which sends (or click Send). After sending, the message appears as the
       last outgoing bubble at the bottom of the thread — read_page to verify it. Never send without
-      request_confirmation of the exact text; never send twice.
+      request_confirmation whose `details` are the message text character for character (the approval only
+      covers that exact string, and the `type` call that follows must pass it unchanged); never send twice.
+      A stand-in messenger (a plain /chat page on another host) works the same way: search box and chat rows
+      on the left, a "Message" textarea plus a Send button on the right — the composer may be a textarea
+      instead of a contenteditable, and type(ref, text, submit=true) sends in both cases.
   - domain: github.com
     mode: dom
     notes: |

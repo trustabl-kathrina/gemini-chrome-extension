@@ -18,6 +18,9 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** captureVisibleTab quota is 2/s per extension; results with screenshots are spaced at least this far apart. */
 const CAPTURE_GAP_MS = 550;
+
+/** Upper bound for one make_folders call (the brain's tool declaration promises the same). */
+const MAX_FOLDERS = 200;
 let lastCaptureAt = 0;
 
 function waitForLoad(tabId: number, timeoutMs = 20000): Promise<void> {
@@ -370,6 +373,8 @@ export class BrowserTools {
       }
       case 'download':
         return this.download(str('path'), str('ref'), str('url'));
+      case 'make_folders':
+        return this.makeFolders(Array.isArray(a.paths) ? a.paths : typeof a.paths === 'string' ? [a.paths] : []);
       case 'list_tabs': {
         const tabs = await browser.tabs.query({});
         return { result: { tabs: tabs.slice(0, 30).map((t) => ({ id: t.id, title: t.title, url: t.url, active: t.active })) } };
@@ -377,6 +382,63 @@ export class BrowserTools {
       default:
         throw new Error(`unknown browser tool ${call.name}`);
     }
+  }
+
+  // ---------- make_folders → Drive (PLAN v2 scene 5: the vault's folder tree) ----------
+
+  /**
+   * Creates real Drive folders for a list of vault-relative paths (`plan_vault_folders` output).
+   * Idempotent: `ensureFolder` reuses a folder that is already there, so re-scaffolding never duplicates a
+   * tree. Paths are confined to the vault the same way `download(path=…)` is, and a leading copy of the
+   * vault folder ("Dayflow/CSCI3240 …") is dropped instead of nesting a second one.
+   */
+  private async makeFolders(raw: unknown[]): Promise<ToolOutcome> {
+    const s = this.settings;
+    const rootSegs = splitDrivePath(safeVaultPath(s.vaultFolder, 'x')).slice(0, -1);
+    const root = rootSegs.join('/');
+    const stripRoot = (p: string) => {
+      const segs = splitDrivePath(p);
+      const nested = segs.length > rootSegs.length && rootSegs.every((r, i) => segs[i]?.toLowerCase() === r.toLowerCase());
+      return (nested ? segs.slice(rootSegs.length) : segs).join('/');
+    };
+    const wanted = raw.map((p) => (typeof p === 'string' ? stripRoot(p) : '')).filter(Boolean);
+    const paths = [...new Set(wanted.map((p) => safeVaultPath(s.vaultFolder, p)))];
+    if (!paths.length) throw new Error('make_folders needs `paths`: a non-empty list of vault-relative folder paths');
+    if (paths.length > MAX_FOLDERS) throw new Error(`make_folders got ${paths.length} paths; at most ${MAX_FOLDERS} per call`);
+    if (s.vaultMode !== 'drive') throw new Error(`the vault is in "${s.vaultMode}" mode — connect Google Drive in Settings to create folders`);
+
+    const token = await getGoogleToken(s);
+    this.drive ??= new DriveClient({ base: s.driveApiBase, token });
+    const drive = this.drive;
+    const created: string[] = [];
+    const existing: string[] = [];
+    const failed: { path: string; error: string }[] = [];
+    for (const path of paths) {
+      try {
+        const segs = splitDrivePath(path);
+        const leaf = segs.pop() ?? '';
+        const parent = await drive.ensureFolder(segs.join('/'));
+        if (await drive.findChild(parent, leaf, true)) existing.push(path);
+        else {
+          await drive.ensureFolder(path);
+          created.push(path);
+        }
+      } catch (e) {
+        failed.push({ path, error: e instanceof Error ? e.message : String(e) });
+      }
+    }
+    this.guards.log?.(`make_folders under ${root}: ${created.length} created, ${existing.length} existing, ${failed.length} failed`);
+    if (!created.length && !existing.length) throw new ToolError(`no folder could be created: ${failed[0]?.error ?? 'unknown error'}`, { root, failed });
+    return {
+      result: {
+        root,
+        created: created.length,
+        existing: existing.length,
+        failed,
+        folders: [...created, ...existing].map((p) => p.split('/').slice(rootSegs.length).join('/')),
+        summary: `${created.length + existing.length}/${paths.length} folders under ${root}/ (${created.length} new)${failed.length ? `, ${failed.length} failed` : ''}`,
+      },
+    };
   }
 
   // ---------- download → Drive + brain vault ----------
