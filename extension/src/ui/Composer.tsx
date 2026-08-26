@@ -81,9 +81,9 @@ export function Composer({
   };
 
   return (
-    <div className="hairline-t relative bg-bg p-2">
+    <div className="relative px-3 pb-3 pt-1">
       {slash && (
-        <div className="fade-in hairline absolute bottom-full left-2 right-2 z-10 mb-1 max-h-64 overflow-y-auto rounded-md bg-bg-1 p-1 shadow-2xl" data-slash-palette>
+        <div className="fade-in absolute bottom-full left-3 right-3 z-10 mb-2 max-h-64 overflow-y-auto rounded-2xl bg-bg-1 p-1.5 shadow-xl" data-slash-palette>
           {matches.map((c, i) => (
             <button
               key={c.id}
@@ -93,7 +93,7 @@ export function Composer({
                 setText('');
                 c.run();
               }}
-              className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left ${i === idx ? 'bg-bg-2 text-fg' : 'text-fg-2'}`}
+              className={`flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-left ${i === idx ? 'bg-bg-2 text-fg' : 'text-fg-2'}`}
             >
               <Slash size={12} className="shrink-0 text-fg-3" />
               <span className="min-w-0 flex-1">
@@ -108,7 +108,7 @@ export function Composer({
           {matches.length === 0 && <div className="px-2 py-3 text-center text-[12px] text-fg-3">No skill matches “{text.slice(1)}”</div>}
         </div>
       )}
-      <div className="hairline flex items-end gap-1 rounded-md bg-bg-1 p-1 focus-within:ring-1 focus-within:ring-accent/60">
+      <div className="flex items-end gap-1.5 rounded-[26px] bg-bg-1 py-1.5 pl-4 pr-1.5 transition-shadow focus-within:ring-2 focus-within:ring-accent/40">
         <textarea
           ref={area}
           autoFocus
@@ -117,18 +117,18 @@ export function Composer({
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKey}
           placeholder={placeholder}
-          className="max-h-32 min-h-7 flex-1 resize-none bg-transparent px-1.5 py-1 outline-none placeholder:text-fg-3"
+          className="max-h-32 min-h-8 flex-1 resize-none bg-transparent py-1.5 text-[14px] outline-none placeholder:text-fg-3"
         />
         <button
           onClick={submit}
           disabled={!text.trim() || (slash && !matches.length)}
           aria-label="Send"
-          className="inline-flex h-6 w-6 items-center justify-center rounded-sm bg-accent text-white transition-opacity disabled:opacity-30"
+          className="mb-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent transition-opacity disabled:opacity-30"
         >
           <ArrowUp size={14} />
         </button>
       </div>
-      <div className="flex items-center gap-1 px-1 pt-1 text-[11px] text-fg-3">
+      <div className="flex items-center gap-1 px-3 pt-1.5 text-[11px] text-fg-3">
         <Kbd>⏎</Kbd> send · <Kbd>/</Kbd> skills · <Kbd>⌘K</Kbd> palette
       </div>
     </div>

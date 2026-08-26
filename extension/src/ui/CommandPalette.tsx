@@ -62,7 +62,7 @@ export function CommandPalette({ commands, onClose, initialQuery = '' }: { comma
 
   return (
     <div className="absolute inset-0 z-20 flex items-start justify-center bg-bg/70 p-3 pt-10 backdrop-blur-[2px]" onMouseDown={onClose}>
-      <div className="fade-in hairline w-full max-w-sm overflow-hidden rounded-lg bg-bg-1 shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
+      <div className="fade-in w-full max-w-sm overflow-hidden rounded-3xl bg-bg-1 shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
         <div className="hairline-b flex items-center gap-2 px-3">
           <Search size={14} className="text-fg-3" />
           <input
@@ -81,7 +81,7 @@ export function CommandPalette({ commands, onClose, initialQuery = '' }: { comma
               <button
                 onMouseEnter={() => setIdx(i)}
                 onClick={() => pick(c)}
-                className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left ${i === idx ? 'bg-bg-2 text-fg' : 'text-fg-2'}`}
+                className={`flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-left ${i === idx ? 'bg-bg-2 text-fg' : 'text-fg-2'}`}
               >
                 <span className="min-w-0 flex-1">
                   <span className="block truncate">{c.title}</span>

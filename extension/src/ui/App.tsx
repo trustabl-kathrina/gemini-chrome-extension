@@ -1,21 +1,25 @@
-import { ArrowLeft, FileCode2, Search, Settings as SettingsIcon } from 'lucide-react';
+import { ArrowLeft, FileCode2, Monitor, Moon, Search, Settings as SettingsIcon, Sun } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fromUserConfig, pullConfig, syncFingerprint } from '../agent/sync';
 import { Chat } from './Chat';
 import { CommandPalette, commandsFromSkills, type Command } from './CommandPalette';
 import { ConfigView } from './Config';
 import { SettingsView } from './Settings';
+import { Sparkle } from './Sparkle';
 import { inExtension, useAgent, useHotkey, useSettings } from './hooks';
 import { IconButton, Pill } from './primitives';
+import { useTheme } from './theme';
 
 type View = 'chat' | 'settings' | 'config';
 const TITLES: Record<View, string> = { chat: 'Dayflow', settings: 'Settings', config: 'Config' };
+const THEME_ICON = { system: Monitor, light: Sun, dark: Moon } as const;
 
 export function App() {
   const { settings, setSettings, loaded } = useSettings();
   const { runs, start, cancel, answer } = useAgent();
   const [view, setView] = useState<View>('chat');
   const [palette, setPalette] = useState(false);
+  const [theme, , cycleTheme] = useTheme();
 
   const runSkill = useCallback(
     (id: string) => {
@@ -58,15 +62,18 @@ export function App() {
       { id: 'nav:chat', title: 'Chat', hint: 'Back to the transcript', run: () => setView('chat') },
       { id: 'nav:config', title: 'Config', hint: 'Edit skills, sites, permissions, schedules (YAML)', run: () => setView('config') },
       { id: 'nav:settings', title: 'Settings', hint: 'Google account, brain, vision, Drive', run: () => setView('settings') },
+      { id: 'nav:theme', title: `Theme: ${theme}`, hint: 'Cycle system → light → dark', run: cycleTheme },
     ],
-    [settings.skills, runSkill],
+    [settings.skills, runSkill, theme, cycleTheme],
   );
 
   const anyRunning = Object.values(runs).some((r) => r.status === 'running');
+  const ThemeIcon = THEME_ICON[theme];
 
   if (!inExtension) {
     return (
       <div className="bloom flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
+        <Sparkle size={28} />
         <p className="text-fg">Dayflow runs as a Chrome side panel.</p>
         <p className="text-[12px] text-fg-3">Load the unpacked build from extension/.output/chrome-mv3 and click the toolbar icon.</p>
       </div>
@@ -75,27 +82,32 @@ export function App() {
 
   return (
     <div className="bloom relative flex h-full flex-col">
-      <header className="hairline-b flex h-10 items-center gap-1 px-2">
+      <header className="flex h-12 items-center gap-1 px-2">
         {view !== 'chat' ? (
           <IconButton label="Back" onClick={() => setView('chat')}>
-            <ArrowLeft size={15} />
+            <ArrowLeft size={16} />
           </IconButton>
         ) : (
-          <span className="ml-1.5 h-2 w-2 rounded-full bg-accent" />
+          <span className="ml-1 inline-flex h-7 w-7 items-center justify-center">
+            <Sparkle size={18} />
+          </span>
         )}
-        <span className="ml-1 font-medium tracking-tight">{TITLES[view]}</span>
-        <div className="ml-auto flex items-center gap-1">
+        <span className="ml-0.5 text-[15px] font-medium tracking-tight">{TITLES[view]}</span>
+        <div className="ml-auto flex items-center gap-0.5">
           <Pill tone={settings.token ? 'ok' : 'warn'} pulse={anyRunning}>
             {anyRunning ? 'working' : settings.token ? 'ready' : 'no brain'}
           </Pill>
+          <IconButton label={`Theme: ${theme} (click to change)`} onClick={cycleTheme} data-theme-toggle>
+            <ThemeIcon size={16} />
+          </IconButton>
           <IconButton label="Search (⌘K)" onClick={() => setPalette(true)}>
-            <Search size={15} />
+            <Search size={16} />
           </IconButton>
           <IconButton label="Config" onClick={() => setView(view === 'config' ? 'chat' : 'config')} className={view === 'config' ? 'bg-bg-2 text-fg' : ''}>
-            <FileCode2 size={15} />
+            <FileCode2 size={16} />
           </IconButton>
           <IconButton label="Settings" onClick={() => setView(view === 'settings' ? 'chat' : 'settings')} className={view === 'settings' ? 'bg-bg-2 text-fg' : ''}>
-            <SettingsIcon size={15} />
+            <SettingsIcon size={16} />
           </IconButton>
         </div>
       </header>

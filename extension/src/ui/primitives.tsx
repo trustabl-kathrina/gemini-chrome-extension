@@ -2,12 +2,13 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 
 type Variant = 'primary' | 'ghost' | 'danger';
 
+/** Material-style pills: filled primary, tonal ghost, tonal danger. */
 export function Button({ variant = 'ghost', className = '', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) {
-  const base = 'inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium transition-colors duration-150 disabled:opacity-40 disabled:pointer-events-none';
+  const base = 'inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-medium transition-colors duration-150 disabled:opacity-40 disabled:pointer-events-none';
   const look = {
-    primary: 'bg-accent text-white hover:brightness-110',
-    ghost: 'hairline text-fg-2 hover:bg-bg-2 hover:text-fg',
-    danger: 'hairline text-err hover:bg-err/10',
+    primary: 'bg-accent text-on-accent hover:brightness-110',
+    ghost: 'bg-bg-1 text-fg hover:bg-bg-2',
+    danger: 'bg-err/10 text-err hover:bg-err/15',
   }[variant];
   return <button className={`${base} ${look} ${className}`} {...props} />;
 }
@@ -17,7 +18,7 @@ export function IconButton({ label, className = '', ...props }: ButtonHTMLAttrib
     <button
       aria-label={label}
       title={label}
-      className={`inline-flex h-7 w-7 items-center justify-center rounded-md text-fg-2 transition-colors duration-150 hover:bg-bg-2 hover:text-fg ${className}`}
+      className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-fg-2 transition-colors duration-150 hover:bg-bg-2 hover:text-fg ${className}`}
       {...props}
     />
   );
@@ -26,13 +27,14 @@ export function IconButton({ label, className = '', ...props }: ButtonHTMLAttrib
 export function Pill({ tone = 'neutral', children, pulse }: { tone?: 'neutral' | 'accent' | 'ok' | 'warn' | 'err'; children: ReactNode; pulse?: boolean }) {
   const dot = { neutral: 'bg-fg-3', accent: 'bg-accent', ok: 'bg-ok', warn: 'bg-warn', err: 'bg-err' }[tone];
   return (
-    <span className="hairline inline-flex h-5 items-center gap-1.5 rounded-full px-2 text-[11px] text-fg-2">
+    <span className="inline-flex h-6 items-center gap-1.5 rounded-full bg-bg-1 px-2.5 text-[11.5px] text-fg-2">
       <span className={`h-1.5 w-1.5 rounded-full ${dot} ${pulse ? 'pulse-dot' : ''}`} />
       {children}
     </span>
   );
 }
 
+/** Material switch: 32×18 track, 14px thumb. */
 export function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label?: string }) {
   return (
     <button
@@ -40,9 +42,11 @@ export function Toggle({ checked, onChange, label }: { checked: boolean; onChang
       aria-checked={checked}
       aria-label={label}
       onClick={() => onChange(!checked)}
-      className={`relative h-4 w-7 shrink-0 rounded-full transition-colors duration-150 ${checked ? 'bg-accent' : 'bg-bg-2 hairline'}`}
+      className={`relative h-[18px] w-8 shrink-0 rounded-full transition-colors duration-150 ${checked ? 'bg-accent' : 'bg-bg-2 hairline'}`}
     >
-      <span className={`absolute left-0 top-0.5 h-3 w-3 rounded-full bg-white transition-transform duration-150 ${checked ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+      <span
+        className={`absolute left-0 top-0.5 h-[14px] w-[14px] rounded-full transition-transform duration-150 ${checked ? 'translate-x-[16px] bg-on-accent' : 'translate-x-0.5 bg-fg-3'}`}
+      />
     </button>
   );
 }
@@ -50,17 +54,17 @@ export function Toggle({ checked, onChange, label }: { checked: boolean; onChang
 export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-[11px] font-medium uppercase tracking-wide text-fg-3">{label}</span>
+      <span className="text-[12px] font-medium text-fg-2">{label}</span>
       {children}
       {hint && <span className="text-[11px] text-fg-3">{hint}</span>}
     </label>
   );
 }
 
-export const inputCls = 'hairline w-full rounded-md bg-bg-1 px-2 py-1.5 text-fg outline-none placeholder:text-fg-3 focus:ring-1 focus:ring-accent/60';
+export const inputCls = 'w-full rounded-xl bg-bg-1 px-3 py-2 text-fg outline-none placeholder:text-fg-3 focus:ring-2 focus:ring-accent/50';
 
 export function SectionLabel({ children }: { children: ReactNode }) {
-  return <div className="px-1 pb-1.5 pt-3 text-[11px] font-medium uppercase tracking-wide text-fg-3">{children}</div>;
+  return <div className="px-1 pb-1.5 pt-3 text-[12px] font-medium text-fg-2">{children}</div>;
 }
 
 export function Kbd({ children }: { children: ReactNode }) {

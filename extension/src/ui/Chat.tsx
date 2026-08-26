@@ -31,16 +31,33 @@ export function Chat({
   const latest = ordered.at(-1);
   const busy = ordered.some((r) => r.status === 'running');
   const unconfigured = !settings.token || !settings.backendUrl;
+  const firstName = settings.account?.name?.split(' ')[0] || settings.account?.email?.split('@')[0] || '';
+  const suggestions = settings.skills.filter((s) => s.enabled).slice(0, 4);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex-1 overflow-y-auto py-1" data-transcript>
         {ordered.length === 0 && (
-          <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-            <div className="hairline flex h-10 w-10 items-center justify-center rounded-lg bg-bg-1 font-mono text-[15px] text-accent">›_</div>
-            <p className="text-fg">Tell me what to do in your browser.</p>
+          <div className="flex h-full flex-col justify-center gap-5 px-5 pb-10">
+            <div>
+              <h1 className="gemini-text gemini-shimmer text-[30px] font-medium leading-tight tracking-tight">{firstName ? `Hello, ${firstName}` : 'Hello'}</h1>
+              <p className="mt-1 text-[24px] font-medium leading-tight tracking-tight text-fg-3">What should I do in your browser?</p>
+            </div>
+            {suggestions.length > 0 && (
+              <div className="grid grid-cols-2 gap-2">
+                {suggestions.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => onRunSkill(s.id)}
+                    className="rounded-2xl bg-bg-1 px-3.5 py-3 text-left text-[13px] leading-snug text-fg-2 transition-colors duration-150 hover:bg-bg-2 hover:text-fg"
+                  >
+                    {s.title}
+                  </button>
+                ))}
+              </div>
+            )}
             <p className="text-[12px] text-fg-3">
-              Type <Kbd>/</Kbd> to pick a skill, or just describe the task. I plan out loud, show every click with a screenshot, and ask before anything outward-facing.
+              Type <Kbd>/</Kbd> to pick a skill or describe the task. I plan out loud, show every click with a screenshot, and ask before anything outward-facing.
             </p>
             {unconfigured && <p className="text-[12px] text-warn">No brain configured — set the backend URL and token in Settings.</p>}
           </div>

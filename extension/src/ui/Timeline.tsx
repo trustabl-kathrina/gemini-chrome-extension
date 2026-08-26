@@ -68,7 +68,7 @@ function ToolRow({ step }: { step: Extract<Step, { kind: 'tool' }> }) {
   const args = argsSummary(step.call.args);
   return (
     <div
-      className="fade-in mx-1 rounded-md px-2 py-1 font-mono text-[11.5px]"
+      className="fade-in mx-2 rounded-xl px-2 py-1 font-mono text-[11.5px]"
       data-step="tool"
       data-name={step.call.name}
       data-args={args}
@@ -114,7 +114,7 @@ function ToolRow({ step }: { step: Extract<Step, { kind: 'tool' }> }) {
       </div>
       {open && step.screenshot && (
         <a href={step.screenshot} target="_blank" rel="noreferrer noopener" className="mt-1.5 block">
-          <img src={step.screenshot} alt={`Screenshot after ${step.call.name}`} className="hairline max-h-60 w-full rounded-md object-contain" style={{ maxWidth: 320 }} />
+          <img src={step.screenshot} alt={`Screenshot after ${step.call.name}`} className="hairline max-h-60 w-full rounded-xl object-contain" style={{ maxWidth: 320 }} />
         </a>
       )}
     </div>
@@ -130,7 +130,7 @@ function ArtifactRow({ step }: { step: Extract<Step, { kind: 'artifact' }> }) {
       <span className="truncate">{step.label}</span>
     </>
   );
-  const cls = 'fade-in hairline mx-2 my-0.5 flex items-center gap-2 rounded-md bg-accent-soft px-2.5 py-1.5 text-fg';
+  const cls = 'fade-in mx-3 my-0.5 flex items-center gap-2 rounded-full bg-accent-soft px-3 py-1.5 text-fg';
   return href ? (
     <a href={href} target="_blank" rel="noreferrer noopener" className={`${cls} hover:brightness-110`} data-step="artifact" data-type={step.type} data-href={href}>
       {inner}
@@ -145,7 +145,7 @@ function ArtifactRow({ step }: { step: Extract<Step, { kind: 'artifact' }> }) {
 function ConfirmCard({ step, onAnswer }: { step: Extract<Step, { kind: 'confirm' }>; onAnswer: (allow: boolean) => void }) {
   const pending = step.answer === 'pending';
   return (
-    <div className="fade-in hairline mx-2 my-1 rounded-md bg-bg-1 p-3" data-step="confirm" data-message={step.message} data-answer={step.answer}>
+    <div className="fade-in mx-3 my-1 rounded-2xl bg-bg-1 p-3.5" data-step="confirm" data-message={step.message} data-answer={step.answer}>
       <div className="mb-2 flex items-center gap-2">
         <Pill tone={pending ? 'warn' : step.answer === 'allowed' ? 'ok' : 'neutral'} pulse={pending}>
           {pending ? 'needs your OK' : step.answer}
@@ -198,8 +198,7 @@ export function RunBlock({
   const actions = browserActions(run);
   return (
     <section className="py-2" data-run={run.id}>
-      <div className="mx-2 mb-1 flex items-start gap-2 rounded-md bg-bg-1 px-3 py-2">
-        <span className="mt-0.5 font-mono text-[12px] text-accent">›</span>
+      <div className="mx-3 mb-1 flex items-start gap-2 rounded-2xl rounded-tr-md bg-bg-1 px-3.5 py-2.5">
         <p className="min-w-0 flex-1 whitespace-pre-wrap text-fg" {...(latest ? { 'data-run-title': true } : {})}>
           {run.prompt}
         </p>
@@ -215,7 +214,7 @@ export function RunBlock({
               aria-label="Stop"
               title="Stop"
               data-action="stop"
-              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-fg-2 hover:bg-bg-2 hover:text-fg"
+              className="inline-flex h-6 w-6 items-center justify-center rounded-full text-fg-2 hover:bg-bg-2 hover:text-fg"
             >
               <Square size={12} />
             </button>
@@ -235,7 +234,7 @@ export function RunBlock({
         }
       })}
       {run.status !== 'running' && run.summary && (
-        <div className="fade-in mx-2 mt-2 flex items-start gap-2 rounded-md px-1 py-1 text-fg-2">
+        <div className="fade-in mx-3 mt-2 flex items-start gap-2 rounded-xl px-1 py-1 text-fg-2">
           {run.status === 'done' ? <Check size={14} className="mt-0.5 shrink-0 text-ok" /> : <X size={14} className="mt-0.5 shrink-0 text-fg-3" />}
           <span className="min-w-0 flex-1 whitespace-pre-wrap" {...(latest ? { 'data-run-summary': true } : {})}>
             {run.summary}
