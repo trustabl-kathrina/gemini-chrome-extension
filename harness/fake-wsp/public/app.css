@@ -1,0 +1,72 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { font: 13px/1.4 Arial, Helvetica, sans-serif; color: #1d2733; background: #eef1f5; }
+.v-app { min-height: 100%; display: flex; flex-direction: column; }
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; background: #143d66; color: #fff; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-text { font-weight: bold; letter-spacing: 0.02em; }
+.home-icon, .flag { width: 18px; height: 18px; cursor: pointer; border-radius: 2px; }
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+.v-panel-content { flex: 1; padding: 16px 20px; }
+.footer { padding: 6px 20px; color: #6b7a8a; font-size: 11px; }
+.v-caption, h2 { font-size: 16px; margin: 0 0 12px; color: #143d66; }
+
+/* Desktop */
+.desktop { display: grid; grid-template-columns: repeat(3, minmax(180px, 260px)); gap: 10px; }
+.v-button { display: inline-block; padding: 8px 14px; background: #fff; border: 1px solid #c5cdd6; border-radius: 3px; cursor: pointer; user-select: none; }
+.v-button:hover { background: #f4f7fb; border-color: #8aa0b8; }
+.v-button:focus { outline: 2px solid #4f7dc4; }
+.v-button-caption { pointer-events: none; }
+.v-button.v-disabled { opacity: 0.45; cursor: default; }
+.desktop .v-button { width: 100%; text-align: left; }
+
+/* Folder browser */
+.toolbar { display: flex; gap: 8px; align-items: center; margin: 8px 0 10px; }
+.path { color: #4a5a6c; margin-left: 8px; }
+.v-table { background: #fff; border: 1px solid #c5cdd6; }
+.v-table-table { width: 100%; border-collapse: collapse; }
+.v-table-header { background: #f0f3f7; text-align: left; }
+.v-table-header td, .v-table-caption-container { padding: 6px 10px; font-weight: bold; color: #3b4a5c; border-bottom: 1px solid #c5cdd6; }
+.v-table-row { cursor: pointer; }
+.v-table-row:hover { background: #f7f9fc; }
+.v-table-row.v-selected { background: #d8e6f7; }
+.v-table-cell-content { padding: 6px 10px; border-bottom: 1px solid #e6eaf0; }
+.v-table-cell-wrapper { white-space: nowrap; }
+.empty { padding: 14px; color: #6b7a8a; }
+
+/* Schedule */
+.selectors { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
+.selectors label { color: #3b4a5c; }
+select { font: inherit; padding: 3px 6px; }
+.schedule { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #c5cdd6; }
+.schedule th, .schedule td { border: 1px solid #dde3ea; padding: 4px 6px; vertical-align: top; font-size: 12px; }
+.schedule th { background: #f0f3f7; }
+.schedule td.time { width: 56px; color: #6b7a8a; }
+.schedule .lesson { background: #e8f1fd; border-left: 3px solid #4f7dc4; padding: 3px 5px; margin: 1px 0; border-radius: 2px; }
+
+/* News */
+.news-item { background: #fff; border: 1px solid #c5cdd6; padding: 10px 14px; margin-bottom: 8px; }
+.news-date { color: #6b7a8a; font-size: 11px; }
+.news-title { font-weight: bold; margin: 2px 0 4px; }
+
+/* Chat */
+.chat { display: grid; grid-template-columns: 260px 1fr; height: calc(100vh - 140px); min-height: 380px; background: #fff; border: 1px solid #c5cdd6; }
+.chat-left { border-right: 1px solid #dde3ea; display: flex; flex-direction: column; }
+.chat-search { padding: 8px; border-bottom: 1px solid #dde3ea; }
+.chat-search input { width: 100%; padding: 6px 8px; font: inherit; border: 1px solid #c5cdd6; border-radius: 14px; }
+.chat-list { overflow-y: auto; }
+.chat-row { padding: 10px 12px; cursor: pointer; border-bottom: 1px solid #f0f3f7; }
+.chat-row:hover { background: #f7f9fc; }
+.chat-row.active { background: #d8e6f7; }
+.chat-row .chat-name { font-weight: bold; }
+.chat-row .chat-last { color: #6b7a8a; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-right { display: flex; flex-direction: column; }
+.chat-header { padding: 10px 14px; border-bottom: 1px solid #dde3ea; font-weight: bold; }
+.chat-header small { font-weight: normal; color: #6b7a8a; margin-left: 8px; }
+.messages { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+.msg { max-width: 70%; padding: 6px 10px; border-radius: 10px; background: #f0f3f7; }
+.msg.out { align-self: flex-end; background: #d8e6f7; }
+.msg .meta { font-size: 11px; color: #6b7a8a; }
+.composer { display: flex; gap: 8px; padding: 10px; border-top: 1px solid #dde3ea; }
+.composer textarea { flex: 1; font: inherit; padding: 6px 8px; border: 1px solid #c5cdd6; border-radius: 4px; resize: none; }
+.composer .v-button { align-self: flex-end; }

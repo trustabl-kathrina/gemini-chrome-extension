@@ -1,0 +1,11 @@
+{
+  "name": "dayflow-harness",
+  "private": true,
+  "type": "module",
+  "description": "Fake WSP + Playwright scene runner for Dayflow (PLAN.md §Harness). Playwright resolves from ../extension/node_modules.",
+  "scripts": {
+    "serve": "node serve.mjs",
+    "scene": "node run.mjs",
+    "gen": "python3 fake-wsp/gen.py"
+  }
+}

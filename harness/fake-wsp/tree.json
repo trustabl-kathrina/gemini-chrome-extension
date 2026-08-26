@@ -1,0 +1,111 @@
+{
+  "schools": [
+    {
+      "name": "School of Information Technology and Engineering",
+      "instructors": [
+        {
+          "name": "Koishiyeva Dinara",
+          "courses": [
+            {
+              "name": "CSCI3240 Introduction to Computer Vision",
+              "files": [
+                { "name": "syllabus.pdf", "modified": "2026-01-12 09:14" },
+                { "name": "Lecture_01_Introduction.pdf", "modified": "2026-01-14 11:02" },
+                { "name": "Lab_01_Image_Basics.pdf", "modified": "2026-01-16 15:40" }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Mukasheva Assel",
+          "courses": [
+            {
+              "name": "CSCI3210 Cyber Security",
+              "files": [
+                { "name": "syllabus.pdf", "modified": "2026-01-13 10:05" },
+                { "name": "Lecture_01_Threat_Landscape.pdf", "modified": "2026-01-15 09:30" }
+              ]
+            },
+            {
+              "name": "CSCI3211 Cyber Security Lab",
+              "files": [{ "name": "Lab_01_Recon.pdf", "modified": "2026-01-17 13:00" }]
+            }
+          ]
+        },
+        {
+          "name": "Aituov Askar",
+          "courses": [
+            {
+              "name": "CSCI4100 Field Projects",
+              "files": [{ "name": "syllabus.pdf", "modified": "2026-01-12 16:20" }]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Business School",
+      "instructors": [
+        {
+          "name": "Serikova Aigerim",
+          "courses": [
+            {
+              "name": "MGT2100 Principles of Management",
+              "files": [{ "name": "syllabus.pdf", "modified": "2026-01-11 12:00" }]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "schedule": {
+    "years": ["2024-2025", "2025-2026", "2026-2027"],
+    "terms": ["Fall", "Spring"],
+    "default": { "year": "2026-2027", "term": "Fall" },
+    "classes": {
+      "2025-2026/Spring": [
+        { "day": "Mon", "start": "10:00", "end": "10:50", "text": "CSCI3240 Introduction to Computer Vision Koishiyeva D. 501 (10:00-10:50)" },
+        { "day": "Wed", "start": "10:00", "end": "10:50", "text": "CSCI3240 Introduction to Computer Vision Koishiyeva D. 501 (10:00-10:50)" },
+        { "day": "Fri", "start": "13:00", "end": "14:50", "text": "CSCI3240 Introduction to Computer Vision Koishiyeva D. 412 lab (13:00-14:50)" },
+        { "day": "Tue", "start": "09:00", "end": "09:50", "text": "CSCI3210 Cyber Security Mukasheva A. 303 (09:00-09:50)" },
+        { "day": "Thu", "start": "09:00", "end": "10:50", "text": "CSCI3211 Cyber Security Lab Mukasheva A. 305 lab (09:00-10:50)" },
+        { "day": "Thu", "start": "14:00", "end": "14:50", "text": "MGT2100 Principles of Management Serikova A. 201 (14:00-14:50)" }
+      ],
+      "2026-2027/Fall": [
+        { "day": "Mon", "start": "11:00", "end": "11:50", "text": "CSCI4100 Field Projects Aituov A. 405 (11:00-11:50)" },
+        { "day": "Wed", "start": "11:00", "end": "12:50", "text": "CSCI4100 Field Projects Aituov A. 405 (11:00-12:50)" }
+      ],
+      "2025-2026/Fall": [
+        { "day": "Tue", "start": "10:00", "end": "10:50", "text": "MGT2100 Principles of Management Serikova A. 201 (10:00-10:50)" }
+      ]
+    }
+  },
+  "news": [
+    { "date": "2026-08-24", "title": "Fall 2026-2027 registration closes on 29 August", "body": "Students must finalise discipline registration in the portal before 18:00 on 29 August. Late changes go through the dean's office." },
+    { "date": "2026-08-20", "title": "Library hours extended during the first study week", "body": "The main reading hall is open until 23:00 from 31 August to 6 September." },
+    { "date": "2026-08-15", "title": "Diploma project proposals: template updated", "body": "Final-year students should use the new proposal template (v3) available from their supervisors." }
+  ],
+  "chats": [
+    {
+      "id": "diploma-team",
+      "name": "Diploma · Team",
+      "members": 4,
+      "messages": [
+        { "from": "Aruzhan", "text": "Supervisor meeting moved to Thursday 15:00.", "time": "Mon 09:12" },
+        { "from": "Daniyar", "text": "I pushed the data loader, review when you can.", "time": "Mon 18:40" }
+      ]
+    },
+    {
+      "id": "cv-group",
+      "name": "CSCI3240 CV group",
+      "members": 27,
+      "messages": [{ "from": "Madina", "text": "Lab 1 deadline is next Friday, right?", "time": "Sun 20:03" }]
+    },
+    {
+      "id": "kbtu-announcements",
+      "name": "KBTU Announcements",
+      "members": 3120,
+      "messages": [{ "from": "KBTU", "text": "Welcome to the new academic year!", "time": "Fri 10:00" }]
+    }
+  ]
+}

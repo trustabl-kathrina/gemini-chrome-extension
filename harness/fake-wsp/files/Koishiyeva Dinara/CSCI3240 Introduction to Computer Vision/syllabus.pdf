@@ -1,0 +1,95 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 1599 >>
+stream
+BT
+/F1 16 Tf
+50 790 Td
+(CSCI3240 Introduction to Computer Vision) Tj
+/F1 11 Tf
+0 -28 Td
+(Instructor: Koishiyeva Dinara) Tj
+0 -16 Td
+(KBTU, School of Information Technology and Engineering) Tj
+0 -16 Td
+() Tj
+0 -16 Td
+(Syllabus - weekly schedule \(15 weeks\)) Tj
+0 -16 Td
+(Week 01: Course overview, images as arrays, color spaces) Tj
+0 -16 Td
+(Week 02: Point operations, histograms, contrast and gamma) Tj
+0 -16 Td
+(Week 03: Linear filtering, convolution, Gaussian and box filters) Tj
+0 -16 Td
+(Week 04: Edge detection: Sobel, Canny, gradients) Tj
+0 -16 Td
+(Week 05: Image pyramids, scale space, resampling) Tj
+0 -16 Td
+(Week 06: Feature detection: Harris corners, blobs) Tj
+0 -16 Td
+(Week 07: Feature description and matching: SIFT, ORB) Tj
+0 -16 Td
+(Week 08: Midterm; geometric transforms, homographies) Tj
+0 -16 Td
+(Week 09: Image stitching, RANSAC) Tj
+0 -16 Td
+(Week 10: Camera model, calibration, stereo basics) Tj
+0 -16 Td
+(Week 11: Segmentation: thresholding, k-means, graph cuts) Tj
+0 -16 Td
+(Week 12: Optical flow and tracking) Tj
+0 -16 Td
+(Week 13: Convolutional networks for classification) Tj
+0 -16 Td
+(Week 14: Object detection: YOLO-style detectors) Tj
+0 -16 Td
+(Week 15: Project presentations and final review) Tj
+0 -16 Td
+() Tj
+0 -16 Td
+(Labs \(Fridays, room 412\):) Tj
+0 -16 Td
+(Lab 01: Image basics with numpy) Tj
+0 -16 Td
+(Lab 02: Filtering and edges) Tj
+0 -16 Td
+(Lab 03: Features and matching) Tj
+0 -16 Td
+(Lab 04: Homography and stitching) Tj
+0 -16 Td
+(Lab 05: A small CNN classifier) Tj
+0 -16 Td
+() Tj
+0 -16 Td
+(Grading: labs 30%, midterm 30%, final project 40%.) Tj
+0 -16 Td
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000247 00000 n 
+0000001898 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1968
+%%EOF

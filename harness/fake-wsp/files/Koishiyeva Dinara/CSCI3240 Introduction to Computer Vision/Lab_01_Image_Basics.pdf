@@ -1,0 +1,63 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 1058 >>
+stream
+BT
+/F1 16 Tf
+50 790 Td
+(CSCI3240 Introduction to Computer Vision) Tj
+/F1 11 Tf
+0 -28 Td
+(Instructor: Koishiyeva Dinara) Tj
+0 -16 Td
+(KBTU, School of Information Technology and Engineering) Tj
+0 -16 Td
+() Tj
+0 -16 Td
+(Lab 01 - Image basics \(numpy\)) Tj
+0 -16 Td
+(Goal: get comfortable treating images as numpy arrays.) Tj
+0 -16 Td
+() Tj
+0 -16 Td
+(Task 1. Load an RGB image with imageio \(or PIL\) into a numpy array; print shape, dtype, min and max.) Tj
+0 -16 Td
+(Task 2. Convert the image to grayscale with the weights 0.299 R + 0.587 G + 0.114 B using numpy only.) Tj
+0 -16 Td
+(Task 3. Crop the central 50% of the image and flip it horizontally with array slicing \(no loops\).) Tj
+0 -16 Td
+(Task 4. Compute a 256-bin intensity histogram with numpy.bincount and plot it; comment on the contrast.) Tj
+0 -16 Td
+(Task 5. Threshold the grayscale image at its mean intensity and count foreground pixels; save the mask as PNG.) Tj
+0 -16 Td
+(Deliverable: a notebook lab01.ipynb with the five tasks, submitted on WSP before Friday 23:59 \(week 2\).) Tj
+0 -16 Td
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000247 00000 n 
+0000001357 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1427
+%%EOF
