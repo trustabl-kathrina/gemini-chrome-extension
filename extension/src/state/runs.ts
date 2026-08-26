@@ -1,4 +1,4 @@
-import type { AgentEvent, ArtifactType, SceneId, ToolCall } from '../protocol';
+import type { AgentEvent, ArtifactType, ToolCall } from '../protocol';
 
 export type StepStatus = 'running' | 'ok' | 'error';
 
@@ -13,22 +13,22 @@ export type RunStatus = 'running' | 'done' | 'error' | 'cancelled';
 export interface Run {
   id: string;
   title: string;
-  sceneId?: SceneId;
+  skillId?: string;
   status: RunStatus;
   summary?: string;
   startedAt: number;
   steps: Step[];
 }
 
-export function newRun(id: string, title: string, sceneId: SceneId | undefined, now: number): Run {
-  return { id, title, sceneId, status: 'running', startedAt: now, steps: [] };
+export function newRun(id: string, title: string, skillId: string | undefined, now: number): Run {
+  return { id, title, skillId, status: 'running', startedAt: now, steps: [] };
 }
 
 /** Pure reducer: folds one agent event into a run. Returns the same object if nothing changed. */
 export function applyEvent(run: Run, ev: AgentEvent): Run {
   switch (ev.kind) {
     case 'run.start':
-      return { ...run, title: ev.title, sceneId: ev.sceneId ?? run.sceneId };
+      return { ...run, title: ev.title, skillId: ev.skillId ?? run.skillId };
     case 'text': {
       const last = run.steps.at(-1);
       if (last?.kind === 'text' && last.partial) {

@@ -1,5 +1,7 @@
 import type { AgentEvent, ArtifactType, SceneId } from '../protocol';
 
+const isScene = (id: string): id is SceneId => id in SCRIPTS;
+
 /**
  * Scripted runs for UX-driven development. Timings and wording mirror what the
  * Cloud Run brain will emit; only the tool execution is simulated.
@@ -103,9 +105,9 @@ const sleep = (ms: number, signal: AbortSignal) =>
     signal.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('aborted', 'AbortError')); }, { once: true });
   });
 
-export async function* mockRun(sceneId: SceneId | undefined, text: string, ctl: MockControls): AsyncGenerator<AgentEvent> {
-  const script = sceneId ? SCRIPTS[sceneId] : GENERIC;
-  yield { kind: 'run.start', title: sceneId ? text : text.slice(0, 60), sceneId };
+export async function* mockRun(skillId: string | undefined, text: string, ctl: MockControls): AsyncGenerator<AgentEvent> {
+  const script = skillId && isScene(skillId) ? SCRIPTS[skillId] : GENERIC;
+  yield { kind: 'run.start', title: text.slice(0, 80), skillId };
   let n = 0;
   try {
     for (const op of script) {

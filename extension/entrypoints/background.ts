@@ -28,7 +28,7 @@ async function startRun(req: Extract<PanelRequest, { type: 'run.start' }>, post:
       send({ kind: 'run.end', status: 'error', summary: 'Live backend not connected' });
       return;
     }
-    const stream = mockRun(req.sceneId, req.text, {
+    const stream = mockRun(req.skillId, req.text, {
       signal: abort.signal,
       waitForConfirm: (id) => new Promise<boolean>((resolve) => confirms.set(id, resolve)),
     });
