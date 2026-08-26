@@ -86,6 +86,9 @@ def guard_tool(name: str, args: dict[str, Any], state: StateLike, perms: Permiss
     """Pure policy check. Returns an error dict to short-circuit the tool, or None to allow."""
     if name in {"navigate", "open_tab", "download"}:
         url = str(args.get("url", ""))
+        scheme = urlparse(url).scheme.lower()
+        if url and scheme not in {"http", "https"}:
+            return {"status": "error", "error": f"Only http(s) URLs are allowed, got scheme '{scheme or 'none'}'."}
         host = host_of(url)
         if url and not host_allowed(host, perms.allowed_hosts):
             return {

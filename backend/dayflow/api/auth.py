@@ -17,13 +17,15 @@ from fastapi import Header, HTTPException, status
 
 
 def _user_for_token(token: str) -> str | None:
-    shared = os.getenv("DAYFLOW_TOKEN", "")
-    if shared and secrets.compare_digest(token, shared):
+    # Compare as bytes: compare_digest raises TypeError on non-ASCII str, which would be a 500.
+    raw = token.encode()
+    shared = os.getenv("DAYFLOW_TOKEN", "").encode()
+    if shared and secrets.compare_digest(raw, shared):
         return "local"
-    digest = hashlib.sha256(token.encode()).hexdigest()
+    digest = hashlib.sha256(raw).hexdigest().encode()
     for pair in filter(None, os.getenv("DAYFLOW_USERS", "").split(",")):
         expected, _, user_id = pair.strip().partition("=")
-        if user_id and secrets.compare_digest(digest, expected.strip()):
+        if user_id and secrets.compare_digest(digest, expected.strip().encode()):
             return user_id
     return None
 

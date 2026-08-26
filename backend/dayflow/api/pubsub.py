@@ -31,7 +31,7 @@ def decode_envelope(body: dict[str, Any]) -> dict[str, Any]:
 @router.post("/pubsub", status_code=status.HTTP_204_NO_CONTENT)
 async def pubsub_push(request: Request) -> Response:
     # Push subscriptions authenticate with an OIDC token from PUBSUB_PUSH_SA (audience = this URL).
-    verify_google_oidc(request, "PUBSUB_PUSH_SA")
+    await verify_google_oidc(request, "PUBSUB_PUSH_SA")
     payload = decode_envelope(await request.json())
     try:
         await dispatch(payload, verified=True)

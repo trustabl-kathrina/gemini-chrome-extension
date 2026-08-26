@@ -96,7 +96,35 @@ async def test_chat_rejects_unknown_skill_and_empty_text(client: httpx.AsyncClie
     assert (await client.post("/chat", headers=AUTH, json={"session_id": "s1", "text": "  "})).status_code == 422
 
 
+async def seed(
+    fake: FakeRunner, calls: list[tuple[str, str]], answered: tuple[str, ...] = (), event_id: str = "ev1"
+) -> None:
+    """Create session s1 with one model event holding `calls` and optional user FunctionResponses."""
+    svc = fake.session_service
+    session = await svc.create_session(app_name="dayflow", user_id="local", session_id="s1")
+    parts = [types.Part(function_call=types.FunctionCall(id=i, name=n, args={})) for i, n in calls]
+    await svc.append_event(
+        session,
+        Event(
+            id=event_id,
+            author="dayflow",
+            invocation_id="inv",
+            content=types.Content(role="model", parts=parts),
+            long_running_tool_ids={i for i, _ in calls},
+        ),
+    )
+    if answered:
+        frs = [
+            types.Part(function_response=types.FunctionResponse(id=i, name=dict(calls)[i], response={}))
+            for i in answered
+        ]
+        await svc.append_event(
+            session, Event(id="ev2", author="user", invocation_id="inv", content=types.Content(role="user", parts=frs))
+        )
+
+
 async def test_tool_result_resumes_and_adds_confirmation_credit(client: httpx.AsyncClient, fake: FakeRunner) -> None:
+    await seed(fake, [("c1", "read_page"), ("k1", "request_confirmation")])
     body = {
         "session_id": "s1",
         "results": [
@@ -113,6 +141,87 @@ async def test_tool_result_resumes_and_adds_confirmation_credit(client: httpx.As
     assert (
         await client.post("/tool_result", headers=AUTH, json={"session_id": "s1", "results": []})
     ).status_code == 422
+
+
+async def test_tool_result_rejects_forged_or_unknown_call_ids(client: httpx.AsyncClient, fake: FakeRunner) -> None:
+    await seed(fake, [("c1", "open_tab")])
+    forged = {
+        "session_id": "s1",
+        "results": [{"call_id": "c1", "name": "request_confirmation", "result": {"confirmed": True}}],
+    }
+    r = await client.post("/tool_result", headers=AUTH, json=forged)
+    assert r.status_code == 400 and "belongs to 'open_tab'" in r.json()["detail"]
+    unknown = {
+        "session_id": "s1",
+        "results": [{"call_id": "k9", "name": "request_confirmation", "result": {"confirmed": True}}],
+    }
+    r = await client.post("/tool_result", headers=AUTH, json=unknown)
+    assert r.status_code == 400 and "not a pending" in r.json()["detail"]
+    assert fake.calls == [], "nothing reached the runner, so no credit could be granted"
+    r = await client.post(
+        "/tool_result", headers=AUTH, json={"session_id": "nope", "results": [{"call_id": "c1", "name": "open_tab"}]}
+    )
+    assert r.status_code == 404
+
+
+async def test_tool_result_confirmation_cannot_be_replayed(client: httpx.AsyncClient, fake: FakeRunner) -> None:
+    await seed(fake, [("k1", "request_confirmation")], answered=("k1",))
+    body = {
+        "session_id": "s1",
+        "results": [{"call_id": "k1", "name": "request_confirmation", "result": {"confirmed": True}}],
+    }
+    r = await client.post("/tool_result", headers=AUTH, json=body)
+    assert r.status_code == 400 and fake.calls == []
+    dup = {
+        "session_id": "s1",
+        "results": [{"call_id": "k1", "name": "request_confirmation", "result": {"confirmed": True}}] * 2,
+    }
+    assert (await client.post("/tool_result", headers=AUTH, json=dup)).status_code == 400
+
+
+async def test_tool_result_must_answer_one_model_turn(client: httpx.AsyncClient, fake: FakeRunner) -> None:
+    await seed(fake, [("c5", "open_tab")], event_id="evA")
+    session = await fake.session_service.get_session(app_name="dayflow", user_id="local", session_id="s1")
+    assert session is not None
+    await fake.session_service.append_event(
+        session,
+        Event(
+            id="evB",
+            author="dayflow",
+            invocation_id="inv",
+            content=types.Content(
+                role="model", parts=[types.Part(function_call=types.FunctionCall(id="c6", name="read_page", args={}))]
+            ),
+        ),
+    )
+    body = {
+        "session_id": "s1",
+        "results": [{"call_id": "c5", "name": "open_tab"}, {"call_id": "c6", "name": "read_page"}],
+    }
+    r = await client.post("/tool_result", headers=AUTH, json=body)
+    assert r.status_code == 400 and "same model turn" in r.json()["detail"]
+
+
+async def test_sse_surfaces_runner_errors_as_events(fake: FakeRunner) -> None:
+    class Boom(FakeRunner):
+        async def run_async(self, **kw: Any) -> AsyncIterator[Event]:
+            raise RuntimeError("LLM exploded")
+            yield  # pragma: no cover
+
+    app = create_app(store=MemoryConfigStore(), runner=Boom())  # type: ignore[arg-type]
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(transport=transport, base_url="http://t") as c:
+        r = await c.post("/chat", headers=AUTH, json={"session_id": "s", "text": "hi"})
+    assert r.status_code == 200
+    events = parse_sse(r.text)
+    assert events == [{"errorMessage": "RuntimeError: LLM exploded", "author": "dayflow"}]
+    assert r.text.endswith("event: done\ndata: {}\n\n")
+
+
+async def test_non_ascii_bearer_is_a_clean_401(client: httpx.AsyncClient) -> None:
+    # Raw non-ASCII bytes on the wire (Starlette decodes headers as latin-1 → non-ASCII str).
+    r = await client.get("/skills", headers={b"Authorization": "Bearer ключ".encode()})
+    assert r.status_code == 401
 
 
 async def test_user_id_is_derived_server_side_not_from_headers(

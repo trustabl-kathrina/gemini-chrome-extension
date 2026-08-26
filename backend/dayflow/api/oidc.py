@@ -6,6 +6,7 @@ Local/test fallback: PUBSUB_VERIFY=0 disables verification, but ONLY when not ru
 
 from __future__ import annotations
 
+import asyncio
 import os
 from typing import Any
 
@@ -16,7 +17,9 @@ def verification_disabled() -> bool:
     return os.getenv("PUBSUB_VERIFY", "1") == "0" and not os.getenv("K_SERVICE")
 
 
-def verify_google_oidc(request: Request, expected_sa_env: str, audience_env: str = "OIDC_AUDIENCE") -> dict[str, Any]:
+async def verify_google_oidc(
+    request: Request, expected_sa_env: str, audience_env: str = "OIDC_AUDIENCE"
+) -> dict[str, Any]:
     """Returns the verified claims, or raises 401/503."""
     if verification_disabled():
         return {"email": os.getenv(expected_sa_env, "local"), "email_verified": True, "local": True}
@@ -31,7 +34,7 @@ def verify_google_oidc(request: Request, expected_sa_env: str, audience_env: str
         from google.auth.transport import requests as ga_requests
         from google.oauth2 import id_token
 
-        claims = dict(id_token.verify_oauth2_token(token, ga_requests.Request(), audience))
+        claims = dict(await asyncio.to_thread(id_token.verify_oauth2_token, token, ga_requests.Request(), audience))
     except (ValueError, ImportError) as e:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, f"invalid identity token: {e}") from e
     if not claims.get("email_verified") or claims.get("email") != expected_sa:

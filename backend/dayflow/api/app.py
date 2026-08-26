@@ -3,6 +3,7 @@ calls end the turn and the extension resumes it via POST /tool_result."""
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from collections.abc import AsyncIterator
@@ -71,17 +72,37 @@ def sse(
     runner: Runner, user_id: str, session_id: str, content: types.Content, state_delta: dict[str, Any] | None
 ) -> AsyncIterator[str]:
     async def gen() -> AsyncIterator[str]:
-        async for ev in runner.run_async(
-            user_id=user_id,
-            session_id=session_id,
-            new_message=content,
-            state_delta=state_delta,
-            run_config=RunConfig(streaming_mode=StreamingMode.SSE),
-        ):
-            yield f"data: {ev.model_dump_json(exclude_none=True, by_alias=True)}\n\n"
-        yield "event: done\ndata: {}\n\n"
+        try:
+            async for ev in runner.run_async(
+                user_id=user_id,
+                session_id=session_id,
+                new_message=content,
+                state_delta=state_delta,
+                run_config=RunConfig(streaming_mode=StreamingMode.SSE),
+            ):
+                yield f"data: {ev.model_dump_json(exclude_none=True, by_alias=True)}\n\n"
+        except Exception as e:  # noqa: BLE001 — surface any failure as an ADK-shaped event, never an empty 200
+            log.exception("run failed for user=%s session=%s", user_id, session_id)
+            err = {"errorMessage": f"{type(e).__name__}: {e}", "author": "dayflow"}
+            yield f"data: {json.dumps(err)}\n\n"
+        finally:
+            yield "event: done\ndata: {}\n\n"
 
     return gen()
+
+
+async def pending_calls(runner: Runner, user_id: str, session_id: str) -> dict[str, tuple[str, str]]:
+    """call_id -> (tool name, event id) for FunctionCalls in the session that have no FunctionResponse yet."""
+    session = await runner.session_service.get_session(app_name=APP_NAME, user_id=user_id, session_id=session_id)
+    if session is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"unknown session '{session_id}'")
+    answered = {fr.id for ev in session.events for fr in ev.get_function_responses()}
+    return {
+        fc.id: (fc.name or "", ev.id)
+        for ev in session.events
+        for fc in ev.get_function_calls()
+        if fc.id and fc.id not in answered
+    }
 
 
 def create_app(store: ConfigStore | None = None, runner: Runner | None = None) -> FastAPI:
@@ -139,14 +160,32 @@ def create_app(store: ConfigStore | None = None, runner: Runner | None = None) -
         body: ToolResultRequest, request: Request, user_id: str = Depends(current_user)
     ) -> StreamingResponse:
         runner: Runner = request.app.state.runner
+        pending = await pending_calls(runner, user_id, body.session_id)
+        seen: set[str] = set()
+        credits = 0
+        for r in body.results:
+            if r.call_id in seen:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, f"duplicate call_id '{r.call_id}'")
+            seen.add(r.call_id)
+            match = pending.get(r.call_id)
+            if match is None:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, f"call_id '{r.call_id}' is not a pending tool call")
+            name, _ = match
+            if name != r.name:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST, f"call_id '{r.call_id}' belongs to '{name}', not '{r.name}'"
+                )
+            if name == "request_confirmation" and r.result.get("confirmed") is True:
+                credits += 1
+        if len({pending[r.call_id][1] for r in body.results}) > 1:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "results must answer calls from the same model turn")
         state_delta: dict[str, Any] | None = None
-        confirmed = sum(1 for r in body.results if r.name == "request_confirmation" and r.result.get("confirmed"))
-        if confirmed:
+        if credits:
             session = await runner.session_service.get_session(
                 app_name=APP_NAME, user_id=user_id, session_id=body.session_id
             )
-            credits = int((session.state.get(CONFIRMATIONS_KEY, 0) if session else 0) or 0)
-            state_delta = {CONFIRMATIONS_KEY: credits + confirmed}
+            current = int((session.state.get(CONFIRMATIONS_KEY, 0) if session else 0) or 0)
+            state_delta = {CONFIRMATIONS_KEY: current + credits}
         parts = [
             types.Part(function_response=types.FunctionResponse(id=r.call_id, name=r.name, response=r.result))
             for r in body.results
@@ -161,7 +200,7 @@ def create_app(store: ConfigStore | None = None, runner: Runner | None = None) -
     @app.post("/cron")
     async def cron(request: Request) -> dict[str, Any]:
         # Cloud Scheduler calls with an OIDC token from CRON_INVOKER_SA — never the extension's user token.
-        verify_google_oidc(request, "CRON_INVOKER_SA")
+        await verify_google_oidc(request, "CRON_INVOKER_SA")
         jobs = await run_once(request.app.state.store)
         return {"enqueued": len(jobs), "jobs": jobs}
 

@@ -44,3 +44,12 @@ def test_guard_confirmation_credit_is_consumed() -> None:
     assert state[CONFIRMATIONS_KEY] == 0
     assert guard_tool("type_text", {"ref": "e1", "text": "hi"}, state, perms) is not None
     assert guard_tool("type_text", {}, {}, Permissions(ask_before=["type_text"], mode="auto")) is None
+
+
+def test_guard_rejects_non_http_schemes_even_without_allowlist() -> None:
+    perms = Permissions(allowed_hosts=[])
+    for name in ("navigate", "open_tab", "download"):
+        err = guard_tool(name, {"url": "file:///etc/passwd"}, {}, perms)
+        assert err is not None and "http(s)" in err["error"]
+        assert guard_tool(name, {"url": "javascript:alert(1)"}, {}, perms) is not None
+        assert guard_tool(name, {"url": "https://anything.example/x"}, {}, perms) is None
