@@ -4,7 +4,7 @@ export type StepStatus = 'running' | 'ok' | 'error';
 
 export type Step =
   | { id: string; kind: 'text'; text: string; partial: boolean }
-  | { id: string; kind: 'tool'; call: ToolCall; target: 'browser' | 'server'; status: StepStatus; summary?: string; ms?: number }
+  | { id: string; kind: 'tool'; call: ToolCall; target: 'browser' | 'server'; status: StepStatus; summary?: string; ms?: number; screenshot?: string }
   | { id: string; kind: 'artifact'; type: ArtifactType; label: string; href?: string }
   | { id: string; kind: 'confirm'; message: string; answer: 'pending' | 'allowed' | 'denied' };
 
@@ -12,7 +12,10 @@ export type RunStatus = 'running' | 'done' | 'error' | 'cancelled';
 
 export interface Run {
   id: string;
+  /** Short form of the prompt (header, recents). */
   title: string;
+  /** What the user typed, in full — the transcript shows it verbatim. */
+  prompt: string;
   skillId?: string;
   status: RunStatus;
   summary?: string;
@@ -20,8 +23,8 @@ export interface Run {
   steps: Step[];
 }
 
-export function newRun(id: string, title: string, skillId: string | undefined, now: number): Run {
-  return { id, title, skillId, status: 'running', startedAt: now, steps: [] };
+export function newRun(id: string, prompt: string, skillId: string | undefined, now: number): Run {
+  return { id, title: prompt.slice(0, 80), prompt, skillId, status: 'running', startedAt: now, steps: [] };
 }
 
 /** Pure reducer: folds one agent event into a run. Returns the same object if nothing changed. */
@@ -44,7 +47,7 @@ export function applyEvent(run: Run, ev: AgentEvent): Run {
       if (idx === -1) return run;
       const step = run.steps[idx];
       if (!step || step.kind !== 'tool') return run;
-      const updated: Step = { ...step, status: ev.ok ? 'ok' : 'error', summary: ev.summary, ms: ev.ms };
+      const updated: Step = { ...step, status: ev.ok ? 'ok' : 'error', summary: ev.summary, ms: ev.ms, screenshot: ev.screenshot ?? step.screenshot };
       return { ...run, steps: run.steps.with(idx, updated) };
     }
     case 'artifact':
@@ -65,4 +68,9 @@ export function answerConfirm(run: Run, confirmId: string, allow: boolean): Run 
 
 export function pendingConfirm(run: Run): Extract<Step, { kind: 'confirm' }> | undefined {
   return run.steps.find((s): s is Extract<Step, { kind: 'confirm' }> => s.kind === 'confirm' && s.answer === 'pending');
+}
+
+/** Browser actions so far (the brain caps a run at 40). */
+export function browserActions(run: Run): number {
+  return run.steps.filter((s) => s.kind === 'tool' && s.target === 'browser').length;
 }

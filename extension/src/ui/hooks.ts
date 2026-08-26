@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { browser } from 'wxt/browser';
-import { mockRun } from '../agent/mock';
-import { DEFAULT_SETTINGS, PANEL_PORT, type PanelMessage, type PanelRequest, type Settings } from '../protocol';
+import { DEFAULT_SETTINGS, normalizeSettings, PANEL_PORT, type PanelMessage, type PanelRequest, type Settings } from '../protocol';
 import { answerConfirm, applyEvent, newRun, type Run } from '../state/runs';
 
 type Port = ReturnType<typeof browser.runtime.connect>;
 
-/** True inside the real extension; false when the panel is opened as a plain page (design preview). */
-const inExtension = (() => {
+/** The panel only works inside the extension (chrome.storage, the background port, chrome.identity). */
+export const inExtension = (() => {
   try {
     return typeof browser !== 'undefined' && !!browser.runtime?.id;
   } catch {
@@ -17,33 +16,33 @@ const inExtension = (() => {
 
 const KEY = 'settings';
 
-async function loadStored(): Promise<Partial<Settings> | undefined> {
-  if (inExtension) return (await browser.storage.local.get(KEY))[KEY] as Partial<Settings> | undefined;
-  const raw = localStorage.getItem(KEY);
-  return raw ? (JSON.parse(raw) as Partial<Settings>) : undefined;
-}
-
-function persist(next: Settings) {
-  if (inExtension) void browser.storage.local.set({ [KEY]: next });
-  else localStorage.setItem(KEY, JSON.stringify(next));
-}
-
-/** Settings persisted in chrome.storage.local; defaults fill any missing field. */
+/** Settings persisted in chrome.storage.local; defaults fill any missing field; external writes are picked up. */
 export function useSettings() {
   const [settings, setSettingsState] = useState<Settings>(DEFAULT_SETTINGS);
   const [loaded, setLoaded] = useState(false);
+  const lastWritten = useRef<string>('');
 
   useEffect(() => {
-    void loadStored().then((stored) => {
-      setSettingsState({ ...DEFAULT_SETTINGS, ...stored });
+    if (!inExtension) return;
+    void browser.storage.local.get(KEY).then((r) => {
+      setSettingsState(normalizeSettings(r[KEY]));
       setLoaded(true);
     });
+    const onChanged = (changes: Record<string, { newValue?: unknown }>, area: string) => {
+      if (area !== 'local' || !changes[KEY]) return;
+      const raw = JSON.stringify(changes[KEY].newValue ?? null);
+      if (raw === lastWritten.current) return; // our own write
+      setSettingsState(normalizeSettings(changes[KEY].newValue));
+    };
+    browser.storage.onChanged.addListener(onChanged);
+    return () => browser.storage.onChanged.removeListener(onChanged);
   }, []);
 
   const setSettings = useCallback((update: Partial<Settings> | ((s: Settings) => Settings)) => {
     setSettingsState((prev) => {
       const next = typeof update === 'function' ? update(prev) : { ...prev, ...update };
-      persist(next);
+      lastWritten.current = JSON.stringify(next);
+      if (inExtension) void browser.storage.local.set({ [KEY]: next });
       return next;
     });
   }, []);
@@ -51,7 +50,6 @@ export function useSettings() {
   return { settings, setSettings, loaded };
 }
 
-/** Transport to whatever executes runs: the background port, or an in-page mock when previewing. */
 interface Transport {
   post: (req: PanelRequest) => void;
   dispose: () => void;
@@ -79,46 +77,21 @@ function portTransport(onMessage: (m: PanelMessage) => void): Transport {
   };
 }
 
-function inPageTransport(onMessage: (m: PanelMessage) => void): Transport {
-  const active = new Map<string, { abort: AbortController; confirms: Map<string, (allow: boolean) => void> }>();
-  return {
-    post: (req) => {
-      if (req.type === 'run.start') {
-        const abort = new AbortController();
-        const confirms = new Map<string, (allow: boolean) => void>();
-        active.set(req.runId, { abort, confirms });
-        void (async () => {
-          const stream = mockRun(req.skillId, req.text, {
-            signal: abort.signal,
-            waitForConfirm: (id) => new Promise<boolean>((resolve) => confirms.set(id, resolve)),
-          });
-          for await (const event of stream) onMessage({ type: 'event', runId: req.runId, event });
-          active.delete(req.runId);
-        })();
-      } else if (req.type === 'run.cancel') {
-        active.get(req.runId)?.abort.abort();
-      } else {
-        active.get(req.runId)?.confirms.get(req.confirmId)?.(req.allow);
-      }
-    },
-    dispose: () => active.forEach((a) => a.abort.abort()),
-  };
-}
-
-/** Runs folded with the pure reducer; transport chosen by environment. */
+/** Runs folded with the pure reducer; events arrive over the background port. */
 export function useAgent() {
   const [runs, setRuns] = useState<Record<string, Run>>({});
   const transport = useRef<Transport | null>(null);
 
   useEffect(() => {
+    if (!inExtension) return;
     const onMessage = (m: PanelMessage) => {
       if (m.type !== 'event') return;
       setRuns((prev) => {
-        const run = prev[m.runId] ?? newRun(m.runId, '…', undefined, Date.now());
+        const run = prev[m.runId] ?? newRun(m.runId, m.event.kind === 'run.start' ? m.event.title : '…', undefined, Date.now());
         return { ...prev, [m.runId]: applyEvent(run, m.event) };
       });
     };
-    transport.current = inExtension ? portTransport(onMessage) : inPageTransport(onMessage);
+    transport.current = portTransport(onMessage);
     return () => transport.current?.dispose();
   }, []);
 

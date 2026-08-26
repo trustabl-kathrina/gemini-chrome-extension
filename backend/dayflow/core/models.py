@@ -31,12 +31,17 @@ class SiteProfile(BaseModel):
     domain: str
     notes: str
     allow: bool = True
+    mode: Literal["dom", "vision"] = Field(
+        default="dom",
+        description="Perception on this site: 'dom' = element list + screenshot to verify; "
+        "'vision' = screenshot first, act by coordinates.",
+    )
 
 
 class Permissions(BaseModel):
     allowed_hosts: list[str] = Field(default_factory=list, description="Empty = any host.")
     ask_before: list[str] = Field(
-        default_factory=lambda: ["type_text", "create_pull_request", "issue_write", "create_issue"],
+        default_factory=lambda: ["type", "create_pull_request", "issue_write", "create_issue"],
         description="Tool names that require user confirmation before running.",
     )
     mode: Literal["ask", "auto"] = "ask"
@@ -54,7 +59,7 @@ class UserConfig(BaseModel):
     sites: list[SiteProfile] = Field(default_factory=list)
     permissions: Permissions = Field(default_factory=Permissions)
     connections: Connections = Field(default_factory=Connections)
-    vault_folder: str = "DayflowVault"
+    vault_folder: str = Field(default="Dayflow", description="Google Drive folder that holds the vault.")
     memory: str = Field(default="", description="Free-form notes the agent reads at run start.")
 
     def skill(self, skill_id: SkillId) -> Skill | None:

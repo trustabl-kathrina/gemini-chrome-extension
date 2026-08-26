@@ -1,12 +1,15 @@
-.PHONY: verify verify-backend verify-extension dev-brain dev-extension deploy-brain e2e e2e-up e2e-down e2e-run extension-build fake-wsp
+.PHONY: verify verify-backend verify-extension dev-brain dev-extension deploy-brain e2e e2e-up e2e-down e2e-run extension-build fake-wsp fake-drive
 
 PROJECT ?= dayflow-agentic
 REGION  ?= europe-west4
 
-# Harness (PLAN.md §Harness): fake-wsp on E2E_PORT_BASE, local brain on E2E_PORT_BASE+1.
+# Harness (PLAN v2 §Harness): fake-wsp on E2E_PORT_BASE, local brain on BASE+1, fake-drive on BASE+2.
+# Brain env: DAYFLOW_TOKEN=dev DAYFLOW_FAKE_CONNECTORS=1 DAYFLOW_FAKE_LOG=harness/out/<scene>-connectors.jsonl,
+# DAYFLOW_BUCKET unset, DAYFLOW_PUBLIC_URL=http://127.0.0.1:BASE+1. Logs + pids in harness/out/.
 E2E_PORT_BASE ?= 8099
-SCENES ?= vault-sync courseware scaffold bootstrap team-ops pitch-deck
+SCENES ?= vault-sync lab team-ops courseware scaffold pitch-deck
 E2E_SCENES = $(if $(SCENE),$(SCENE),$(SCENES))
+E2E_REAL ?= 0
 
 verify: verify-backend verify-extension
 
@@ -34,17 +37,22 @@ extension-build:
 fake-wsp:
 	FAKE_WSP_PORT=$(E2E_PORT_BASE) node harness/serve.mjs
 
-# Full loop: start fake-wsp + brain (DAYFLOW_TOKEN=dev, DAYFLOW_FAKE_CONNECTORS=1), run the scene(s), stop both.
-# make e2e            → all six scenes;  make e2e SCENE=vault-sync → one scene. Exit code = runner's.
-e2e: extension-build
-	E2E_PORT_BASE=$(E2E_PORT_BASE) bash harness/e2e.sh e2e $(E2E_SCENES)
+fake-drive:
+	FAKE_DRIVE_PORT=$$(( $(E2E_PORT_BASE) + 2 )) node harness/fake-drive.mjs
 
+# Full loop: build the extension, start fake-wsp + fake-drive once and the brain per scene, run the scene(s), stop all.
+# make e2e            → all six scenes;  make e2e SCENE=vault-sync → one scene;  E2E_REAL=1 → real portal (--real).
+# Exit code = runner's (0 only when every scene's spec passes). Results: harness/out/<scene>.json.
+e2e: extension-build
+	E2E_PORT_BASE=$(E2E_PORT_BASE) E2E_REAL=$(E2E_REAL) bash harness/e2e.sh e2e $(E2E_SCENES)
+
+# Servers only (for iterating on one scene): make e2e-up SCENE=vault-sync; then make e2e-run SCENE=vault-sync; make e2e-down.
 e2e-up:
-	E2E_PORT_BASE=$(E2E_PORT_BASE) bash harness/e2e.sh up
+	E2E_PORT_BASE=$(E2E_PORT_BASE) bash harness/e2e.sh up $(if $(SCENE),$(SCENE),dev)
 
 e2e-down:
 	E2E_PORT_BASE=$(E2E_PORT_BASE) bash harness/e2e.sh down
 
 # Run scene(s) against servers started with e2e-up (no build, no start/stop).
 e2e-run:
-	E2E_PORT_BASE=$(E2E_PORT_BASE) bash harness/e2e.sh run $(E2E_SCENES)
+	E2E_PORT_BASE=$(E2E_PORT_BASE) E2E_REAL=$(E2E_REAL) bash harness/e2e.sh run $(E2E_SCENES)

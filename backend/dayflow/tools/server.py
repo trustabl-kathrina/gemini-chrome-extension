@@ -1,14 +1,18 @@
-"""Server-side tools: document parsing and embeddings via google-genai."""
+"""Server-side tools: document parsing and embeddings via google-genai, and vault access."""
 
 from __future__ import annotations
 
 import base64
 from functools import lru_cache
 
+from google.adk.tools import ToolContext
 from google.genai import Client, types
 from pydantic import BaseModel, Field
 
+from dayflow.core.vault import default_vault
 from dayflow.models.registry import registry
+
+MAX_VAULT_READ_CHARS = 60_000
 
 
 class ParsedDocument(BaseModel):
@@ -65,4 +69,49 @@ async def embed_text(text: str) -> dict:
     return {"status": "success", "dims": len(values), "embedding": values}
 
 
-SERVER_TOOLS = [parse_document, embed_text]
+async def vault_list(tool_context: ToolContext) -> dict:
+    """Lists the user's vault: every file the agent downloaded, with its path, size, summary and deadlines.
+    Call it after a sync to confirm what landed, or before reading a document to find its path.
+    """
+    entries = await default_vault().list(tool_context.user_id)
+    files = [
+        {
+            "id": e.id,
+            "path": e.path,
+            "size": e.size,
+            "drive_file_id": e.drive_file_id,
+            "title": e.title,
+            "summary": e.summary,
+            "deadlines": e.deadlines,
+            **({"parse_error": e.parse_error} if e.parse_error else {}),
+        }
+        for e in entries
+    ]
+    return {"status": "success", "count": len(files), "files": files}
+
+
+async def vault_read(path_or_id: str, tool_context: ToolContext) -> dict:
+    """Returns the extracted text of one vault file (PDF text via the brain, or the file itself for text
+    formats) so you can work with its content — syllabus topics, lab tasks, notes.
+
+    Args:
+        path_or_id: The vault entry id, its full path, or just the file name (e.g. "Lab_01_Image_Basics.pdf").
+    """
+    vault = default_vault()
+    entry = await vault.resolve(tool_context.user_id, path_or_id)
+    if entry is None:
+        return {"status": "error", "error": f"No vault file matches '{path_or_id}'. Call vault_list to see paths."}
+    text = await vault.text(tool_context.user_id, entry)
+    truncated = len(text) > MAX_VAULT_READ_CHARS
+    return {
+        "status": "success",
+        "id": entry.id,
+        "path": entry.path,
+        "summary": entry.summary,
+        "deadlines": entry.deadlines,
+        "text": text[:MAX_VAULT_READ_CHARS],
+        "truncated": truncated,
+    }
+
+
+SERVER_TOOLS = [parse_document, embed_text, vault_list, vault_read]

@@ -1,6 +1,9 @@
-import type { Settings } from '../protocol';
+import type { Settings, SiteMode } from '../protocol';
 
-/** Backend `UserConfig` (backend/dayflow/core/models.py). Kept structural so the mapper is testable. */
+/**
+ * Backend `UserConfig` (backend/dayflow/core/models.py). Kept structural so the mapper is testable and
+ * so the harness can import this file straight into Node.
+ */
 export interface UserConfig {
   skills: Array<{
     id: string;
@@ -15,15 +18,16 @@ export interface UserConfig {
     enabled: boolean;
     key: string;
   }>;
-  sites: Array<{ domain: string; notes: string; allow: boolean }>;
+  sites: Array<{ domain: string; notes: string; allow: boolean; mode: SiteMode }>;
   permissions: { allowed_hosts: string[]; ask_before: string[]; mode: 'ask' | 'auto' };
   connections: { github: boolean; linear: boolean };
   vault_folder: string;
+  memory?: string;
 }
 
 /** Panel toggles → brain tool names that need a confirmation credit. */
 const ASK_BEFORE: Record<keyof Settings['permissions']['askBefore'], string[]> = {
-  sendMessage: ['type_text'],
+  sendMessage: ['type', 'type_text'],
   createPr: ['create_pull_request', 'issue_write', 'create_issue'],
   download: ['download'],
 };
@@ -32,7 +36,7 @@ export function toUserConfig(s: Settings): UserConfig {
   const ask = (Object.keys(ASK_BEFORE) as Array<keyof typeof ASK_BEFORE>).flatMap((k) => (s.permissions.askBefore[k] ? ASK_BEFORE[k] : []));
   return {
     skills: s.skills.map((k) => ({ ...k, key: k.key ?? '' })),
-    sites: s.sites.map(({ domain, notes, allow }) => ({ domain, notes, allow })),
+    sites: s.sites.map(({ domain, notes, allow, mode }) => ({ domain, notes, allow, mode: mode ?? 'dom' })),
     permissions: { allowed_hosts: s.permissions.navigationAllowlist, ask_before: ask, mode: 'ask' },
     connections: {
       github: s.connections.some((c) => c.id === 'github' && c.connected),
@@ -42,13 +46,60 @@ export function toUserConfig(s: Settings): UserConfig {
   };
 }
 
-/** PUT the panel's settings to the brain so Gemini reads what the user edited. No-op outside live mode. */
+/** The brain's config → the panel's cached slices (palette, scheduler, guards). */
+export function fromUserConfig(cfg: UserConfig, s: Settings): Settings {
+  const ask = (names: string[]) => names.some((n) => cfg.permissions.ask_before.includes(n));
+  return {
+    ...s,
+    skills: cfg.skills.map((k) => ({ ...k, schedule: k.schedule ?? null, key: k.key || undefined })),
+    sites: cfg.sites.map((x) => ({ domain: x.domain, notes: x.notes, allow: x.allow, mode: x.mode ?? 'dom' })),
+    permissions: {
+      navigationAllowlist: cfg.permissions.allowed_hosts,
+      askBefore: { sendMessage: ask(ASK_BEFORE.sendMessage), createPr: ask(ASK_BEFORE.createPr), download: ask(ASK_BEFORE.download) },
+    },
+    connections: s.connections.map((c) => (c.id === 'github' ? { ...c, connected: cfg.connections.github } : c.id === 'linear' ? { ...c, connected: cfg.connections.linear } : c)),
+    vaultFolder: cfg.vault_folder || s.vaultFolder,
+  };
+}
+
+/** The slices of Settings the brain owns a copy of; a change here is what triggers a push. */
+export function syncFingerprint(s: Settings): string {
+  return JSON.stringify(toUserConfig(s));
+}
+
+function authHeaders(s: Settings): Record<string, string> {
+  return { 'content-type': 'application/json', authorization: `Bearer ${s.token}` };
+}
+
+export function brainUrl(s: Settings, path: string): string {
+  return `${s.backendUrl.replace(/\/+$/, '')}${path}`;
+}
+
+/**
+ * PUT the panel's slices to the brain so Gemini reads what the user edited. Fields the panel does not own
+ * (`memory`, anything newer than this client) are preserved by merging over the brain's current config.
+ */
 export async function pushConfig(s: Settings, fetchImpl: typeof fetch = fetch): Promise<'skipped' | 'ok' | `error:${string}`> {
-  if (s.mode !== 'live' || !s.token) return 'skipped';
-  const res = await fetchImpl(`${s.backendUrl.replace(/\/+$/, '')}/config`, {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${s.token}` },
-    body: JSON.stringify(toUserConfig(s)),
-  });
+  if (!s.token || !s.backendUrl) return 'skipped';
+  let remote: Partial<UserConfig> = {};
+  try {
+    const cur = await fetchImpl(brainUrl(s, '/config'), { headers: authHeaders(s) });
+    if (cur.ok) remote = (await cur.json()) as Partial<UserConfig>;
+  } catch {
+    /* brain unreachable: PUT below reports it */
+  }
+  let res: Response;
+  try {
+    res = await fetchImpl(brainUrl(s, '/config'), { method: 'PUT', headers: authHeaders(s), body: JSON.stringify({ ...remote, ...toUserConfig(s) }) });
+  } catch (e) {
+    return `error:${e instanceof Error ? e.message : String(e)}`;
+  }
   return res.ok ? 'ok' : `error:${res.status}`;
+}
+
+export async function pullConfig(s: Settings, fetchImpl: typeof fetch = fetch): Promise<UserConfig | null> {
+  if (!s.token || !s.backendUrl) return null;
+  const res = await fetchImpl(brainUrl(s, '/config'), { headers: authHeaders(s) });
+  if (!res.ok) throw new Error(`GET /config → HTTP ${res.status}`);
+  return (await res.json()) as UserConfig;
 }

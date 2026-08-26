@@ -42,13 +42,30 @@ CV_LABS = [
     "Lab 05: A small CNN classifier",
 ]
 
+# Five concrete numpy tasks on a synthetic image, so a solver needs no external files or internet.
 LAB1_TASKS = [
-    "Task 1. Load an RGB image with imageio (or PIL) into a numpy array; print shape, dtype, min and max.",
-    "Task 2. Convert the image to grayscale with the weights 0.299 R + 0.587 G + 0.114 B using numpy only.",
-    "Task 3. Crop the central 50% of the image and flip it horizontally with array slicing (no loops).",
-    "Task 4. Compute a 256-bin intensity histogram with numpy.bincount and plot it; comment on the contrast.",
-    "Task 5. Threshold the grayscale image at its mean intensity and count foreground pixels; save the mask as PNG.",
-    "Deliverable: a notebook lab01.ipynb with the five tasks, submitted on WSP before Friday 23:59 (week 2).",
+    "Setup (used by every task; no image files are needed - build the sample image in code):",
+    "    import numpy as np",
+    "    H, W = 64, 64",
+    "    img = np.zeros((H, W, 3), dtype=np.uint8)",
+    "    img[..., 0] = np.linspace(0, 255, W).astype(np.uint8)[None, :]   # R: left-to-right gradient",
+    "    img[..., 1] = np.linspace(0, 255, H).astype(np.uint8)[:, None]   # G: top-to-bottom gradient",
+    "    img[..., 2] = 128                                                  # B: constant",
+    "",
+    "Task 1. Build the 64x64 RGB gradient image above with numpy. Print its shape, dtype, min, max",
+    "    and the mean of each channel (expected means approx. 127.5, 127.5, 128.0).",
+    "Task 2. Convert it to grayscale with gray = 0.299 R + 0.587 G + 0.114 B using numpy only",
+    "    (result dtype uint8). Print gray[0, 0], gray[63, 63] and the mean gray level.",
+    "Task 3. Crop the central 32x32 region and flip it horizontally using array slicing only (no loops).",
+    "    Print the crop shape and check that flipping twice returns the original crop (np.array_equal).",
+    "Task 4. Compute the 256-bin intensity histogram of the grayscale image with np.bincount(minlength=256).",
+    "    Print the number of non-empty bins and the five most frequent gray levels with their counts.",
+    "Task 5. Threshold the grayscale image at its mean intensity: mask = gray > gray.mean().",
+    "    Print the foreground pixel count and ratio, then print the mask downsampled to 8x8 blocks",
+    "    as ASCII art ('#' where more than half of the block is foreground, '.' otherwise).",
+    "",
+    "Deliverable: lab01.ipynb with one code cell per task; every cell must run and print its result.",
+    "Submit on WSP before Friday 23:59 (week 2). Only numpy is required.",
 ]
 
 
@@ -62,32 +79,49 @@ def pdf_escape(s: str) -> str:
     return s.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
 
+LINES_PER_PAGE = 44
+
+
 def make_pdf(lines: list[str]) -> bytes:
-    """One A4 page, Helvetica; the first line is the title (16pt), the rest 11pt."""
-    content = [
-        "BT",
-        "/F1 16 Tf",
-        "50 790 Td",
-        f"({pdf_escape(lines[0])}) Tj",
-        "/F1 11 Tf",
-        "0 -28 Td",
-    ]
-    for line in lines[1:]:
-        content.append(f"({pdf_escape(line)}) Tj")
-        content.append("0 -16 Td")
-    content.append("ET")
-    stream = "\n".join(content).encode("latin-1", "replace")
-    objs = [
+    """A4 pages, Helvetica; the first line is the title (16pt), the rest 11pt, 44 lines per page."""
+    pages = [
+        lines[i : i + LINES_PER_PAGE] for i in range(0, len(lines), LINES_PER_PAGE)
+    ] or [[""]]
+    streams: list[bytes] = []
+    for n, page in enumerate(pages):
+        content = ["BT", "/F1 16 Tf" if n == 0 else "/F1 11 Tf", "50 790 Td"]
+        for i, line in enumerate(page):
+            content.append(f"({pdf_escape(line)}) Tj")
+            if n == 0 and i == 0:
+                content += ["/F1 11 Tf", "0 -28 Td"]
+            else:
+                content.append("0 -16 Td")
+        content.append("ET")
+        streams.append("\n".join(content).encode("latin-1", "replace"))
+    # Objects: 1 catalog, 2 pages, 3 font, then (page, content) pairs from 4 on.
+    page_ids = [4 + 2 * i for i in range(len(pages))]
+    objs: list[bytes] = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
-        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
-        b"<< /Length "
-        + str(len(stream)).encode()
-        + b" >>\nstream\n"
-        + stream
-        + b"\nendstream",
+        b"<< /Type /Pages /Kids ["
+        + " ".join(f"{pid} 0 R" for pid in page_ids).encode()
+        + b"] /Count "
+        + str(len(pages)).encode()
+        + b" >>",
         b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
     ]
+    for pid, stream in zip(page_ids, streams, strict=True):
+        objs.append(
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents "
+            + f"{pid + 1} 0 R".encode()
+            + b" /Resources << /Font << /F1 3 0 R >> >> >>"
+        )
+        objs.append(
+            b"<< /Length "
+            + str(len(stream)).encode()
+            + b" >>\nstream\n"
+            + stream
+            + b"\nendstream"
+        )
     out = bytearray(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
     offsets = []
     for i, body in enumerate(objs, start=1):

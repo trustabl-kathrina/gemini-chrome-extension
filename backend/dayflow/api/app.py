@@ -3,6 +3,8 @@ calls end the turn and the extension resumes it via POST /tool_result."""
 
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import logging
 import os
@@ -15,21 +17,27 @@ from fastapi.responses import StreamingResponse
 from google.adk.agents.run_config import RunConfig, StreamingMode  # pyright: ignore[reportPrivateImportUsage]
 from google.adk.apps import App
 from google.adk.runners import Runner
-from google.adk.sessions import BaseSessionService, InMemorySessionService
+from google.adk.sessions import BaseSessionService, InMemorySessionService, Session
 from google.genai import types
 from pydantic import BaseModel, Field
 
-from dayflow.agents.orchestrator import CONFIRMATIONS_KEY, DOMAINS_KEY, SKILL_KEY, build_root_agent
+from dayflow.agents.orchestrator import ACTIONS_KEY, DOMAINS_KEY, SKILL_KEY, build_root_agent, result_state_delta
 from dayflow.api.auth import current_user
 from dayflow.api.oidc import verify_google_oidc
+from dayflow.api.pages import router as pages_router
 from dayflow.api.pubsub import router as pubsub_router
+from dayflow.api.vault import router as vault_router
 from dayflow.core.loader import ConfigStore, firestore_enabled, make_config_store
 from dayflow.core.models import Skill, UserConfig
+from dayflow.core.pages import PageStore, default_pages, set_default_pages
+from dayflow.core.vault import VaultStore, default_vault, set_default_vault
 from dayflow.scheduler import run_once
 
 log = logging.getLogger("dayflow.api")
 APP_NAME = "dayflow"
 SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+SCREENSHOT_KEY = "screenshot_b64"
+MAX_SCREENSHOT_BYTES = 1_500_000  # decoded; the extension sends JPEG ≤1280px q≈55, typically 100–200 KB
 
 
 class ChatRequest(BaseModel):
@@ -50,6 +58,45 @@ class ToolResultRequest(BaseModel):
 
     session_id: str
     results: list[ToolResult] = Field(min_length=1)
+
+
+def decode_screenshot(raw: str) -> tuple[bytes, str]:
+    """Base64 (optionally a data: URL) → (bytes, mime). Raises ValueError on bad input."""
+    payload = raw.split(",", 1)[1] if raw.startswith("data:") else raw
+    try:
+        data = base64.b64decode(payload, validate=True)
+    except (binascii.Error, ValueError) as e:
+        raise ValueError(f"screenshot_b64 is not valid base64: {e}") from e
+    if not data:
+        raise ValueError("screenshot_b64 is empty")
+    mime = "image/png" if data.startswith(b"\x89PNG") else "image/jpeg"
+    return data, mime
+
+
+def function_response_part(r: ToolResult) -> types.Part:
+    """FunctionResponse for one browser result. `screenshot_b64` leaves the JSON dict and becomes an inline
+    image part (FunctionResponse.parts) so the model sees the page, not a base64 string."""
+    response = dict(r.result)
+    raw = response.pop(SCREENSHOT_KEY, None)
+    parts: list[types.FunctionResponsePart] | None = None
+    if isinstance(raw, str) and raw:
+        try:
+            data, mime = decode_screenshot(raw)
+        except ValueError as e:
+            log.warning("call %s (%s): %s", r.call_id, r.name, e)
+            response["screenshot"] = f"dropped: {e}"
+        else:
+            if len(data) > MAX_SCREENSHOT_BYTES:
+                log.warning("call %s (%s): screenshot %d bytes exceeds cap, dropped", r.call_id, r.name, len(data))
+                response["screenshot"] = f"dropped: {len(data)} bytes exceeds the {MAX_SCREENSHOT_BYTES} byte cap"
+            else:
+                parts = [types.FunctionResponsePart(inline_data=types.FunctionResponseBlob(mime_type=mime, data=data))]
+                response["screenshot"] = "attached"
+    elif raw is not None:
+        response["screenshot"] = "dropped: screenshot_b64 must be a base64 string"
+    return types.Part(
+        function_response=types.FunctionResponse(id=r.call_id, name=r.name, response=response, parts=parts)
+    )
 
 
 def make_session_service() -> BaseSessionService:
@@ -91,13 +138,13 @@ def sse(
     return gen()
 
 
-async def pending_calls(runner: Runner, user_id: str, session_id: str) -> dict[str, tuple[str, str]]:
-    """call_id -> (tool name, event id) for FunctionCalls in the session that have no FunctionResponse yet."""
+async def pending_calls(runner: Runner, user_id: str, session_id: str) -> tuple[Session, dict[str, tuple[str, str]]]:
+    """The session and call_id -> (tool name, event id) for FunctionCalls that have no FunctionResponse yet."""
     session = await runner.session_service.get_session(app_name=APP_NAME, user_id=user_id, session_id=session_id)
     if session is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"unknown session '{session_id}'")
     answered = {fr.id for ev in session.events for fr in ev.get_function_responses()}
-    return {
+    return session, {
         fc.id: (fc.name or "", ev.id)
         for ev in session.events
         for fc in ev.get_function_calls()
@@ -105,11 +152,24 @@ async def pending_calls(runner: Runner, user_id: str, session_id: str) -> dict[s
     }
 
 
-def create_app(store: ConfigStore | None = None, runner: Runner | None = None) -> FastAPI:
+def create_app(
+    store: ConfigStore | None = None,
+    runner: Runner | None = None,
+    vault: VaultStore | None = None,
+    pages: PageStore | None = None,
+) -> FastAPI:
     store = store or make_config_store()
     app = FastAPI(title="Dayflow brain", version="0.1.0")
     app.state.store = store
     app.state.runner = runner or make_runner(store)
+    # The server tools (vault_list / vault_read, page builders) reach these through the module defaults,
+    # so an injected store must also become the default.
+    if vault is not None:
+        set_default_vault(vault)
+    if pages is not None:
+        set_default_pages(pages)
+    app.state.vault = default_vault()
+    app.state.pages = default_pages()
     app.add_middleware(
         CORSMiddleware,
         allow_origin_regex=r"chrome-extension://.*|http://localhost(:\d+)?",
@@ -117,6 +177,16 @@ def create_app(store: ConfigStore | None = None, runner: Runner | None = None) -
         allow_headers=["*"],
     )
     app.include_router(pubsub_router)
+    app.include_router(vault_router)
+    app.include_router(pages_router)
+
+    @app.middleware("http")
+    async def learn_public_url(request: Request, call_next: Any) -> Any:
+        # Without DAYFLOW_PUBLIC_URL, page links use the base URL the first request came in on.
+        pages_store: PageStore = request.app.state.pages
+        if not pages_store.base_url:
+            pages_store.base_url = str(request.base_url).rstrip("/")
+        return await call_next(request)
 
     @app.get("/health")
     async def healthz() -> dict[str, Any]:
@@ -147,7 +217,8 @@ def create_app(store: ConfigStore | None = None, runner: Runner | None = None) -
             text = text or skill.prompt
         if not text.strip():
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "text or skill_id required")
-        state_delta: dict[str, Any] = {SKILL_KEY: body.skill_id, DOMAINS_KEY: body.domains}
+        # A new prompt starts a new run: the browser action budget starts from zero.
+        state_delta: dict[str, Any] = {SKILL_KEY: body.skill_id, DOMAINS_KEY: body.domains, ACTIONS_KEY: 0}
         content = types.Content(role="user", parts=[types.Part(text=text)])
         return StreamingResponse(
             sse(request.app.state.runner, user_id, body.session_id, content, state_delta),
@@ -160,7 +231,7 @@ def create_app(store: ConfigStore | None = None, runner: Runner | None = None) -
         body: ToolResultRequest, request: Request, user_id: str = Depends(current_user)
     ) -> StreamingResponse:
         runner: Runner = request.app.state.runner
-        pending = await pending_calls(runner, user_id, body.session_id)
+        session, pending = await pending_calls(runner, user_id, body.session_id)
         seen: set[str] = set()
         credits = 0
         for r in body.results:
@@ -179,18 +250,11 @@ def create_app(store: ConfigStore | None = None, runner: Runner | None = None) -
                 credits += 1
         if len({pending[r.call_id][1] for r in body.results}) > 1:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "results must answer calls from the same model turn")
-        state_delta: dict[str, Any] | None = None
-        if credits:
-            session = await runner.session_service.get_session(
-                app_name=APP_NAME, user_id=user_id, session_id=body.session_id
-            )
-            current = int((session.state.get(CONFIRMATIONS_KEY, 0) if session else 0) or 0)
-            state_delta = {CONFIRMATIONS_KEY: current + credits}
-        parts = [
-            types.Part(function_response=types.FunctionResponse(id=r.call_id, name=r.name, response=r.result))
-            for r in body.results
-        ]
-        content = types.Content(role="user", parts=parts)
+        cfg: UserConfig = await request.app.state.store.get(user_id)
+        state_delta = (
+            result_state_delta([r.name for r in body.results], session.state, cfg.permissions, credits) or None
+        )
+        content = types.Content(role="user", parts=[function_response_part(r) for r in body.results])
         return StreamingResponse(
             sse(runner, user_id, body.session_id, content, state_delta),
             media_type="text/event-stream",

@@ -1,49 +1,67 @@
 # Default skill pack. Everything KBTU-specific lives here, not in code.
+# The vault is the user's Google Drive folder "Dayflow/<course code> <course name>/<Materials|Week NN|Lab NN>/".
 name: kbtu-student
 skills:
   - id: vault-sync
     key: "1"
     title: Sync WSP files to vault
-    blurb: Walk every course directory on WSP, pull new or changed files into Downloads/DayflowVault.
+    blurb: Walk a course's file directory on WSP and download every file into the Drive vault, parsed and indexed.
     prompt: Sync all course files from WSP into my vault and tell me what changed.
     sites: [wsp.kbtu.kz]
-    tools: [open_tab, read_page, click, download, wait, parse_document]
+    tools: [open_tab, read_page, click, press_key, scroll, download, wait, screenshot, vault_list, vault_read]
     schedule: "0 8 * * *"
     instructions: |
-      Goal: mirror every course's file directory from WSP into the vault, then index new files.
-      Procedure: open WSP in a pinned background tab; read the page; for each course open its Files
-      section; compare file names and dates with the vault index in state; download only new or
-      changed files into "<vault>/<Course>/<Week NN|Lab NN>/"; call parse_document for each new file.
-      Finish with a short changelog: files added, deadlines discovered.
+      Goal: mirror the requested course's files from WSP "Student files" into the vault
+      ("<course code> <course name>/<Materials|Week NN|Lab NN>/<file>"), then confirm the index.
+      The WSP tree: Desktop → "Student files" → School → Instructor (Surname Name) → course folder → files.
+      Steps:
+      1. open_tab the portal root (the Desktop) and read_page. Click "Student files".
+      2. The folder browser is a table with Back and Enter buttons and no links. To open a folder: click its
+         row (this only selects it), then press_key("Enter") — or click the Enter button. Check the screenshot:
+         the table must now show the next level. Back goes up one level.
+      3. Walk down: the School (e.g. "School of Information Technology and Engineering") → the Instructor →
+         the course folder whose name starts with the course code (e.g. "CSCI3240 ..."). If the instructor is
+         unknown, open "Student's schedule" first (Year and Term selectors; the cell reads "CODE Course name
+         Instructor room"), note the instructor, then return to Student files.
+      4. In the course folder, download EVERY file listed — one download call per row:
+         download(ref=<row ref>, path="<course code> <course name>/<folder>/<file name>") where <folder> is
+         "Materials" for the syllabus and general files, "Week NN" for lecture NN, "Lab NN" for lab NN
+         (two digits: Week 01, Lab 01). Keep the original file name. Do not skip files: if the user asked
+         only for changes, download anyway — the brain deduplicates by content.
+      5. After the last file call vault_list() and confirm every downloaded file is present with a summary.
+      Finish with a changelog: files added (with their vault paths), deadlines discovered, parse errors if any.
+      Budget: about 12 actions to reach the course folder, one per file, a few to verify — stay well under 40.
   - id: courseware
     key: "2"
     title: Build courseware from syllabus
     blurb: Cheatsheet + quiz per topic, generated from the syllabus and opened as a page.
     prompt: Build a cheatsheet and a quiz from the syllabus of the current course.
     sites: []
-    tools: [read_page, open_tab, parse_document]
+    tools: [vault_list, vault_read, generate_courseware, open_tab, download]
     instructions: |
-      Read the course syllabus from the vault (or the current tab). Produce a compact cheatsheet and a
-      10-question quiz for the requested scope, as a single HTML page served by the brain, then open it.
+      Find the course syllabus with vault_list and read it with vault_read (or read the current tab). Produce
+      a compact cheatsheet and a 10-question quiz for the requested scope as a single HTML page served by the
+      brain, open it in a new tab, and save the HTML to the vault under "<course>/Materials/".
   - id: scaffold
     key: "3"
     title: Scaffold vault folders
     blurb: Per course, per week, per lab — folder tree initialized from the syllabus schedule.
     prompt: Create the vault folder structure for this semester from my syllabi.
     sites: []
-    tools: [download, parse_document]
+    tools: [vault_list, vault_read, plan_vault_folders]
     instructions: |
-      From each syllabus derive weeks and labs; create "<vault>/<Course>/Week NN/" and "Lab NN/" by
-      downloading an empty .keep file into each. Report the tree.
+      Read each syllabus from the vault (vault_list, then vault_read); derive the weeks and labs from its
+      schedule; create "<course code> <course name>/Week NN/" and "Lab NN/" folders in the Drive vault
+      (plus "Materials/"). Report the tree.
   - id: bootstrap
     key: "4"
     title: Bootstrap coding project
     blurb: GitHub repo or notebook with a working foundation and a TODO list, via GitHub MCP.
     prompt: Bootstrap a GitHub repo for my course project with a notebook and a TODO list.
     sites: [github.com]
-    tools: [create_repository, create_branch, push_files, open_tab, parse_document]
+    tools: [vault_list, vault_read, create_repository, create_branch, push_files, open_tab]
     instructions: |
-      Read the lab/project requirements. Create a private repo, push README.md, TODO.md (7–10 concrete
+      Read the lab/project requirements from the vault. Create a private repo, push README.md, TODO.md (7–10 concrete
       tasks), a starter notebook or source tree, requirements and .gitignore in ONE push_files call,
       then open the repo in a tab.
   - id: team-ops
@@ -52,42 +70,59 @@ skills:
     blurb: Post an update to the diploma chat, file Linear issues, open a GitHub issue + PR.
     prompt: Post this week's update to the diploma project chat, create Linear issues for the next milestone, and open the PR.
     sites: [web.telegram.org, linear.app, github.com]
-    tools: [open_tab, read_page, click, type_text, list_teams, list_projects, create_issue, issue_write, create_pull_request, get_file_contents]
+    tools: [open_tab, read_page, click, type, press_key, request_confirmation, list_teams, list_projects, create_issue, issue_write, create_pull_request, get_file_contents]
     instructions: |
-      Draft the weekly update from recent repo activity. Open Telegram Web, find the team chat by name,
-      ask for confirmation before typing and sending. Then create Linear issues for the next milestone
-      and open a GitHub issue and PR. Summarise IDs and links.
+      Draft the weekly update from recent repo activity (get_file_contents on README/TODO). Open Telegram Web,
+      find the team chat by name in the chat list (search box at the top-left), open it, then call
+      request_confirmation with the exact message before typing it into the composer and sending (type with
+      submit=true). Then create Linear issues for the next milestone and open a GitHub issue and PR.
+      Summarise IDs and links.
   - id: pitch-deck
     key: "6"
     title: Pitch deck from repo
-    blurb: A deck about the diploma project, generated from the repo and opened in Slides.
+    blurb: A deck about the diploma project, generated from the repo and saved to Drive.
     prompt: Build a pitch deck about my diploma project repo and open it.
     sites: [drive.google.com, github.com]
-    tools: [get_file_contents, download, open_tab, click]
+    tools: [get_file_contents, build_deck, download, open_tab, screenshot, click_at]
     instructions: |
       Read README and TODO from the repo, outline 8 slides (problem, users, solution, demo, architecture,
-      progress, plan, ask). Build the .pptx server-side, download it into "<vault>/Diploma/", then open
-      Google Drive and upload it so it opens in Slides.
+      progress, plan, ask). Build the .pptx and an HTML preview server-side, save the .pptx to the vault under
+      "Diploma/", then open the preview in a tab.
 sites:
   - domain: wsp.kbtu.kz
+    mode: dom
     notes: |
       KBTU student portal (Vaadin app: no real links, navigate by clicking; take a fresh read_page after every click).
       Top-right flag icon (img src gb.png) switches the UI to English; the home icon (img src home.png) opens the Desktop,
       which lists modules as links: Student files, Student's schedule, Attendance mark, Student's Journal, Transcript,
       Student exam schedule, Registration for disciplines, News.
       Student files (/StudentFiles) is a folder browser: a table of rows plus Back and Enter buttons. The tree is
-      School > Instructor (Surname Name) > course folders > files. Select a row by clicking it, then click Enter; Back goes up.
+      School > Instructor (Surname Name) > course folders > files. Select a row by clicking it, then press Enter
+      (press_key("Enter") or the Enter button); Back goes up. Files download when their row is opened the same way —
+      use download(ref=<row>) so the file goes to the vault.
       Student's schedule (/StudentSchedule) is a weekly grid; cells read "CODE Course name Instructor room (hh:mm-hh:mm)";
       it has Year and Term selectors - use them to see past semesters. Read the schedule first to learn each course's instructor.
   - domain: teams.microsoft.com
+    mode: dom
     notes: |
       Microsoft Teams web. Course teams are in the left rail; announcements are in the General channel,
       assignments under the Assignments tab. Heavy SPA — always take a fresh read_page after clicking.
   - domain: web.telegram.org
+    mode: dom
     notes: |
-      Telegram Web (K version). Search chats with the search field at the top-left; the message
-      composer is a contenteditable div; Enter sends. Never send without confirmation.
+      Telegram Web (K version). The chat list is the left column with a search box at its top; the message
+      composer is a contenteditable div at the bottom of the open chat; Enter sends. Never send without confirmation.
+  - domain: github.com
+    mode: dom
+    notes: |
+      GitHub. Prefer the GitHub tools (create_repository, push_files, issue_write, create_pull_request) over
+      clicking; open the resulting URLs in a tab to show the user.
+  - domain: drive.google.com
+    mode: vision
+    notes: |
+      Google Drive web UI is canvas-heavy: work from screenshots and click_at coordinates. Files the agent saved
+      live under the "Dayflow" folder; double-click opens a file in Docs/Slides.
 permissions:
   allowed_hosts: [wsp.kbtu.kz, teams.microsoft.com, web.telegram.org, github.com, linear.app, drive.google.com, docs.google.com, dayflow-brain.run.app]
-  ask_before: [type_text, create_pull_request, issue_write, create_issue]
+  ask_before: [type, create_pull_request, issue_write, create_issue]
   mode: ask

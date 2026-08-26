@@ -4,13 +4,16 @@
 << /Type /Catalog /Pages 2 0 R >>
 endobj
 2 0 obj
-<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+<< /Type /Pages /Kids [4 0 R] /Count 1 >>
 endobj
 3 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
 endobj
 4 0 obj
-<< /Length 1058 >>
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 5 0 R /Resources << /Font << /F1 3 0 R >> >> >>
+endobj
+5 0 obj
+<< /Length 2319 >>
 stream
 BT
 /F1 16 Tf
@@ -30,23 +33,52 @@ BT
 0 -16 Td
 () Tj
 0 -16 Td
-(Task 1. Load an RGB image with imageio \(or PIL\) into a numpy array; print shape, dtype, min and max.) Tj
+(Setup \(used by every task; no image files are needed - build the sample image in code\):) Tj
 0 -16 Td
-(Task 2. Convert the image to grayscale with the weights 0.299 R + 0.587 G + 0.114 B using numpy only.) Tj
+(    import numpy as np) Tj
 0 -16 Td
-(Task 3. Crop the central 50% of the image and flip it horizontally with array slicing \(no loops\).) Tj
+(    H, W = 64, 64) Tj
 0 -16 Td
-(Task 4. Compute a 256-bin intensity histogram with numpy.bincount and plot it; comment on the contrast.) Tj
+(    img = np.zeros\(\(H, W, 3\), dtype=np.uint8\)) Tj
 0 -16 Td
-(Task 5. Threshold the grayscale image at its mean intensity and count foreground pixels; save the mask as PNG.) Tj
+(    img[..., 0] = np.linspace\(0, 255, W\).astype\(np.uint8\)[None, :]   # R: left-to-right gradient) Tj
 0 -16 Td
-(Deliverable: a notebook lab01.ipynb with the five tasks, submitted on WSP before Friday 23:59 \(week 2\).) Tj
+(    img[..., 1] = np.linspace\(0, 255, H\).astype\(np.uint8\)[:, None]   # G: top-to-bottom gradient) Tj
+0 -16 Td
+(    img[..., 2] = 128                                                  # B: constant) Tj
+0 -16 Td
+() Tj
+0 -16 Td
+(Task 1. Build the 64x64 RGB gradient image above with numpy. Print its shape, dtype, min, max) Tj
+0 -16 Td
+(    and the mean of each channel \(expected means approx. 127.5, 127.5, 128.0\).) Tj
+0 -16 Td
+(Task 2. Convert it to grayscale with gray = 0.299 R + 0.587 G + 0.114 B using numpy only) Tj
+0 -16 Td
+(    \(result dtype uint8\). Print gray[0, 0], gray[63, 63] and the mean gray level.) Tj
+0 -16 Td
+(Task 3. Crop the central 32x32 region and flip it horizontally using array slicing only \(no loops\).) Tj
+0 -16 Td
+(    Print the crop shape and check that flipping twice returns the original crop \(np.array_equal\).) Tj
+0 -16 Td
+(Task 4. Compute the 256-bin intensity histogram of the grayscale image with np.bincount\(minlength=256\).) Tj
+0 -16 Td
+(    Print the number of non-empty bins and the five most frequent gray levels with their counts.) Tj
+0 -16 Td
+(Task 5. Threshold the grayscale image at its mean intensity: mask = gray > gray.mean\(\).) Tj
+0 -16 Td
+(    Print the foreground pixel count and ratio, then print the mask downsampled to 8x8 blocks) Tj
+0 -16 Td
+(    as ASCII art \('#' where more than half of the block is foreground, '.' otherwise\).) Tj
+0 -16 Td
+() Tj
+0 -16 Td
+(Deliverable: lab01.ipynb with one code cell per task; every cell must run and print its result.) Tj
+0 -16 Td
+(Submit on WSP before Friday 23:59 \(week 2\). Only numpy is required.) Tj
 0 -16 Td
 ET
 endstream
-endobj
-5 0 obj
-<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
 endobj
 xref
 0 6
@@ -54,10 +86,10 @@ xref
 0000000015 00000 n 
 0000000064 00000 n 
 0000000121 00000 n 
-0000000247 00000 n 
-0000001357 00000 n 
+0000000191 00000 n 
+0000000317 00000 n 
 trailer
 << /Size 6 /Root 1 0 R >>
 startxref
-1427
+2688
 %%EOF

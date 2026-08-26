@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AdkAdapter, parseSse } from './adk';
+import { AdkAdapter, confirmMessage, parseSse, summarise } from './adk';
 import { uniqueById } from './live';
 
 describe('AdkAdapter', () => {
@@ -40,12 +40,30 @@ describe('AdkAdapter', () => {
   });
 });
 
+describe('AdkAdapter.lastError', () => {
+  it('records a streamed errorMessage so the run can end as an error', () => {
+    const a = new AdkAdapter();
+    const r = a.map({ errorMessage: 'RefreshError: invalid_grant', author: 'dayflow' });
+    expect(r.events).toEqual([{ kind: 'text', text: 'Error: RefreshError: invalid_grant' }]);
+    expect(a.lastError).toBe('RefreshError: invalid_grant');
+  });
+});
+
 describe('AdkAdapter.resolved', () => {
   it('records server-answered call ids so the browser can skip them', () => {
     const a = new AdkAdapter();
     a.map({ longRunningToolIds: ['n1'], content: { parts: [{ functionCall: { id: 'n1', name: 'navigate', args: { url: 'https://evil.com' } } }] } });
     a.map({ content: { parts: [{ functionResponse: { id: 'n1', name: 'navigate', response: { status: 'error', message: 'blocked' } } }] } });
     expect(a.resolved.has('n1')).toBe(true);
+  });
+});
+
+describe('confirmMessage / summarise', () => {
+  it('joins action + details, falls back to message, and hides screenshots from summaries', () => {
+    expect(confirmMessage({ action: 'Send message', details: 'hello' })).toBe('Send message\n\nhello');
+    expect(confirmMessage({ message: 'Proceed with X?' })).toBe('Proceed with X?');
+    expect(confirmMessage({})).toBe('Proceed?');
+    expect(summarise({ status: 'success', screenshot_b64: 'x'.repeat(500), tabId: 4 })).toBe('{"status":"success","tabId":4}');
   });
 });
 

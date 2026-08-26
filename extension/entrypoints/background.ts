@@ -1,9 +1,8 @@
 import { liveRun } from '@/src/agent/live';
-import { mockRun } from '@/src/agent/mock';
-import { BrowserTools } from '@/src/agent/tools';
+import { BrowserTools, watchDownloads } from '@/src/agent/tools';
 import { notify, skillIdFromAlarm, syncAlarms } from '@/src/agent/scheduler';
-import { pushConfig } from '@/src/agent/sync';
-import { DEFAULT_SETTINGS, PANEL_PORT, type AgentEvent, type PanelMessage, type PanelRequest, type Settings } from '@/src/protocol';
+import { pushConfig, syncFingerprint } from '@/src/agent/sync';
+import { normalizeSettings, PANEL_PORT, type AgentEvent, type PanelMessage, type PanelRequest, type Settings } from '@/src/protocol';
 
 /** One in-flight run: cancellation + pending confirmations. */
 interface Active {
@@ -16,7 +15,7 @@ const panels = new Set<ReturnType<typeof browser.runtime.connect>>();
 
 async function loadSettings(): Promise<Settings> {
   const { settings } = await browser.storage.local.get('settings');
-  return { ...DEFAULT_SETTINGS, ...(settings as Partial<Settings> | undefined) };
+  return normalizeSettings(settings);
 }
 
 async function startRun(req: Extract<PanelRequest, { type: 'run.start' }>, post: (m: PanelMessage) => void, background = false) {
@@ -34,11 +33,8 @@ async function startRun(req: Extract<PanelRequest, { type: 'run.start' }>, post:
       send({ kind: 'confirm', id, message });
       return waitForConfirm(id);
     };
-    const tools = new BrowserTools({ vaultFolder: settings.vaultFolder, permissions: settings.permissions, showWork: settings.showWork, confirm });
-    const stream =
-      settings.mode === 'live'
-        ? liveRun(settings, req, { signal: abort.signal, waitForConfirm, executeTool: (call) => tools.execute(call) })
-        : mockRun(req.skillId, req.text, { signal: abort.signal, waitForConfirm });
+    const tools = new BrowserTools({ settings, confirm, log: (line) => console.log('[dayflow]', line) });
+    const stream = liveRun(settings, req, { signal: abort.signal, waitForConfirm, executeTool: (call) => tools.execute(call) });
     for await (const ev of stream) {
       send(ev);
       if (background && ev.kind === 'run.end') notify(ev.status === 'done' ? 'Dayflow finished a scheduled skill' : `Dayflow: ${ev.status}`, ev.summary);
@@ -51,6 +47,7 @@ async function startRun(req: Extract<PanelRequest, { type: 'run.start' }>, post:
 }
 
 export default defineBackground(() => {
+  watchDownloads();
   browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(console.error);
 
   browser.runtime.onConnect.addListener((port) => {
@@ -87,7 +84,7 @@ export default defineBackground(() => {
   const rearm = () => void loadSettings().then(syncAlarms);
   browser.runtime.onInstalled.addListener(rearm);
   browser.runtime.onStartup.addListener(rearm);
-  // Settings → brain: debounce edits, then PUT /config so Gemini reads what the user changed.
+  // Settings → brain: when the slices the brain owns a copy of change, debounce and PUT /config.
   let syncTimer: ReturnType<typeof setTimeout> | undefined;
   const syncConfig = () => {
     clearTimeout(syncTimer);
@@ -99,10 +96,13 @@ export default defineBackground(() => {
     }, 800);
   };
   browser.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes.settings) {
-      rearm();
-      syncConfig();
-    }
+    if (area !== 'local' || !changes.settings) return;
+    rearm();
+    const before = changes.settings.oldValue ? syncFingerprint(normalizeSettings(changes.settings.oldValue)) : '';
+    const after = syncFingerprint(normalizeSettings(changes.settings.newValue));
+    const next = normalizeSettings(changes.settings.newValue);
+    const prev = changes.settings.oldValue ? normalizeSettings(changes.settings.oldValue) : null;
+    if (before !== after || !prev || prev.token !== next.token || prev.backendUrl !== next.backendUrl) syncConfig();
   });
   browser.alarms.onAlarm.addListener(async (alarm) => {
     const skillId = skillIdFromAlarm(alarm.name);

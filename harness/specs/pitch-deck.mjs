@@ -1,15 +1,14 @@
-// Scene 6 — Pitch deck. PLAN: a .pptx under DayflowVault/… (valid zip with ppt/presentation.xml, ≥6 slides)
-// and a `deck` artifact href to a served HTML preview (200).
+// Scene 6 — Pitch deck (PLAN v2): a .pptx in fake-Drive that is a valid zip with ≥6 slides; a preview href serving 200 HTML.
 export default {
   prompt: () => 'Build a pitch deck about my diploma project repo (dayflow-student/diploma on GitHub), save it to my vault and open the preview.',
   async expect(r, ctx) {
     const f = [];
     if (r.status !== 'done') f.push(`status is "${r.status}", expected "done" (${r.summary || 'no summary'})`);
-    const decks = ctx.files.filter((p) => /^DayflowVault\/.+\.pptx$/i.test(p));
-    if (!decks.length) f.push(`no .pptx under DayflowVault/ (files: [${ctx.files.join(', ') || 'none'}])`);
+    const decks = ctx.driveFiles.filter((p) => /^Dayflow\/.+\.pptx$/i.test(p));
+    if (!decks.length) f.push(`no .pptx under Dayflow/ in fake-Drive (entries: [${ctx.drive.join(', ') || 'empty'}])`);
     for (const d of decks) {
       try {
-        const entries = ctx.zipEntries(d);
+        const entries = ctx.zipEntries(ctx.readDrive(d));
         const slides = entries.filter((e) => /^ppt\/slides\/slide\d+\.xml$/.test(e));
         if (!entries.includes('ppt/presentation.xml')) f.push(`${d} has no ppt/presentation.xml`);
         if (slides.length < 6) f.push(`${d} has ${slides.length} slides, expected ≥6`);
@@ -17,9 +16,8 @@ export default {
         f.push(`${d} is not a valid zip: ${e.message}`);
       }
     }
-    const deckArtifacts = r.artifacts.filter((a) => a.type === 'deck' || /deck|pptx|slides|preview/i.test(a.label || ''));
-    const withHref = deckArtifacts.filter((a) => /^https?:\/\//.test(a.href || ''));
-    if (!withHref.length) return [...f, `no deck artifact with an http(s) href (artifacts: ${JSON.stringify(r.artifacts)})`];
+    const withHref = r.artifacts.filter((a) => /^https?:\/\//.test(a.href || ''));
+    if (!withHref.length) return [...f, `no artifact with an http(s) href for the preview (artifacts: ${JSON.stringify(r.artifacts)})`];
     let ok = false;
     const seen = [];
     for (const a of withHref) {

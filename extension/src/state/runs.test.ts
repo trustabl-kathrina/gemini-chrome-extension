@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { answerConfirm, applyEvent, newRun, pendingConfirm } from './runs';
+import { answerConfirm, applyEvent, browserActions, newRun, pendingConfirm } from './runs';
 
 describe('applyEvent', () => {
   it('merges streamed partial text into one step', () => {
@@ -16,9 +16,18 @@ describe('applyEvent', () => {
     const before = run;
     run = applyEvent(run, { kind: 'tool.result', callId: 'nope', ok: true, summary: '', ms: 1 });
     expect(run).toBe(before);
-    run = applyEvent(run, { kind: 'tool.result', callId: 'c1', ok: false, summary: 'timeout', ms: 30 });
+    run = applyEvent(run, { kind: 'tool.result', callId: 'c1', ok: false, summary: 'timeout', ms: 30, screenshot: 'data:image/jpeg;base64,AAA' });
     const step = run.steps[0];
     expect(step?.kind === 'tool' && step.status).toBe('error');
+    expect(step?.kind === 'tool' && step.screenshot).toBe('data:image/jpeg;base64,AAA');
+  });
+
+  it('keeps the full prompt and counts browser actions', () => {
+    let run = newRun('r1', 'Sync my files from WSP into the vault, please', 'vault-sync', 0);
+    expect(run.prompt).toBe('Sync my files from WSP into the vault, please');
+    run = applyEvent(run, { kind: 'tool.call', target: 'browser', call: { id: 'c1', name: 'read_page', args: {} } });
+    run = applyEvent(run, { kind: 'tool.call', target: 'server', call: { id: 'c2', name: 'parse_document', args: {} } });
+    expect(browserActions(run)).toBe(1);
   });
 
   it('tracks confirmations', () => {

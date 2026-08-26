@@ -177,7 +177,7 @@
   }
 
   // ---------- Chat (stand-in for Telegram Web) ----------
-  const chat = { active: null, filter: '' };
+  const chat = { active: null, filter: '', draft: '' };
   async function renderChat() {
     const chats = await (await fetch('/api/chat')).json();
     chat.active = chat.active || chats[0].id;
@@ -193,13 +193,35 @@
         ),
       );
     const search = h('input', { type: 'search', placeholder: 'Search', value: chat.filter, oninput: (e) => ((chat.filter = e.target.value), renderChat()) });
-    const messages = h('div', { class: 'messages' }, current.messages.map((m) => h('div', { class: 'msg' + (m.from === 'me' ? ' out' : '') }, h('div', { class: 'meta' }, `${m.from} · ${m.time}`), h('div', null, m.text))));
-    const ta = h('textarea', { rows: '2', placeholder: 'Write a message…', 'aria-label': 'Message' });
+    // Outgoing messages carry data-sent/data-chat/data-text so the harness (and read_page) can verify what was posted.
+    const messages = h(
+      'div',
+      { class: 'messages', 'data-chat': current.name },
+      current.messages.map((m) =>
+        h(
+          'div',
+          m.from === 'me' ? { class: 'msg out', 'data-sent': '1', 'data-chat': current.name, 'data-text': m.text } : { class: 'msg' },
+          h('div', { class: 'meta' }, `${m.from} · ${m.time}`),
+          h('div', { class: 'msg-text' }, m.text),
+        ),
+      ),
+    );
+    const sentAll = chats.flatMap((c) => c.messages.filter((m) => m.from === 'me').map((m) => ({ chat: c.name, text: m.text, time: m.time })));
+    const sentLog = h(
+      'div',
+      { class: 'sent-log', 'data-sent-log': '1', 'aria-label': 'Sent messages' },
+      sentAll.length ? h('div', { class: 'meta' }, `Sent in this session (${sentAll.length})`) : null,
+      sentAll.map((m) => h('div', { class: 'sent-item', 'data-sent-item': '1', 'data-chat': m.chat, 'data-text': m.text }, `${m.time} → ${m.chat}: ${m.text}`)),
+    );
+    // The draft survives re-renders (chat switch, search) like a real messenger's composer.
+    const ta = h('textarea', { rows: '2', placeholder: 'Write a message…', 'aria-label': 'Message', name: 'message', oninput: (e) => (chat.draft = e.target.value) });
+    ta.value = chat.draft || '';
     const send = async () => {
       const text = ta.value.trim();
       if (!text) return;
       await fetch(`/api/chat/${current.id}/messages`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }) });
       ta.value = '';
+      chat.draft = '';
       await renderChat();
     };
     ta.addEventListener('keydown', (e) => {
@@ -220,6 +242,7 @@
           h('div', { class: 'chat-header' }, current.name, h('small', null, `${current.members} members`)),
           messages,
           h('div', { class: 'composer' }, ta, vButton('Send', send)),
+          sentLog,
         ),
       ),
     );

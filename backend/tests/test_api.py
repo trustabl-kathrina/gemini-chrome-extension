@@ -6,7 +6,7 @@ from typing import Any
 
 import httpx
 import pytest
-from google.adk.events import Event
+from google.adk.events import Event, EventActions
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
@@ -137,10 +137,84 @@ async def test_tool_result_resumes_and_adds_confirmation_credit(client: httpx.As
     sent = fake.calls[0]
     frs = [p.function_response for p in sent["new_message"].parts]
     assert [(f.id, f.name) for f in frs] == [("c1", "read_page"), ("k1", "request_confirmation")]
-    assert sent["state_delta"] == {"confirmations": 1}
+    assert sent["state_delta"] == {"confirmations": 1, "actions": 1}  # read_page spent one action
     assert (
         await client.post("/tool_result", headers=AUTH, json={"session_id": "s1", "results": []})
     ).status_code == 422
+
+
+JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 64
+
+
+async def test_tool_result_turns_screenshot_into_an_inline_image_part(
+    client: httpx.AsyncClient, fake: FakeRunner
+) -> None:
+    await seed(fake, [("c1", "click"), ("c2", "read_page"), ("c3", "wait")])
+    body = {
+        "session_id": "s1",
+        "results": [
+            {
+                "call_id": "c1",
+                "name": "click",
+                "result": {"clicked": True, "screenshot_b64": base64.b64encode(JPEG).decode()},
+            },
+            {"call_id": "c2", "name": "read_page", "result": {"snapshot": '[e1] link "Student files" @10,20'}},
+            {"call_id": "c3", "name": "wait", "result": {"waited": True, "screenshot_b64": "not base64!!"}},
+        ],
+    }
+    r = await client.post("/tool_result", headers=AUTH, json=body)
+    assert r.status_code == 200
+    content = fake.calls[0]["new_message"]
+    assert content.role == "user" and len(content.parts) == 3
+    fr = content.parts[0].function_response
+    assert fr is not None and (fr.id, fr.name) == ("c1", "click")
+    assert fr.response == {"clicked": True, "screenshot": "attached"}, "base64 must not reach the model as text"
+    assert fr.parts is not None and len(fr.parts) == 1
+    blob = fr.parts[0].inline_data
+    assert blob is not None and blob.mime_type == "image/jpeg" and blob.data == JPEG
+    plain = content.parts[1].function_response
+    assert (
+        plain is not None and plain.parts is None and plain.response == {"snapshot": '[e1] link "Student files" @10,20'}
+    )
+    bad = content.parts[2].function_response
+    assert bad is not None and bad.parts is None and str(bad.response["screenshot"]).startswith("dropped:")
+    assert bad.response["waited"] is True
+
+
+async def test_tool_result_drops_screenshots_over_the_cap(client: httpx.AsyncClient, fake: FakeRunner) -> None:
+    await seed(fake, [("c1", "screenshot")])
+    huge = base64.b64encode(b"\xff\xd8" + b"\x00" * 1_600_000).decode()
+    results = [{"call_id": "c1", "name": "screenshot", "result": {"screenshot_b64": huge}}]
+    body = {"session_id": "s1", "results": results}
+    r = await client.post("/tool_result", headers=AUTH, json=body)
+    assert r.status_code == 200
+    fr = fake.calls[0]["new_message"].parts[0].function_response
+    assert fr.parts is None and "exceeds" in fr.response["screenshot"] and "screenshot_b64" not in fr.response
+
+
+async def test_tool_result_charges_gated_browser_tools_on_answer(client: httpx.AsyncClient, fake: FakeRunner) -> None:
+    # ADK drops state the guard writes for long-running tools, so the credit `type` consumed is booked here.
+    await seed(fake, [("t1", "type")])
+    session = await fake.session_service.get_session(app_name="dayflow", user_id="local", session_id="s1")
+    assert session is not None
+    await fake.session_service.append_event(
+        session,
+        Event(
+            id="ev-state",
+            author="user",
+            invocation_id="inv",
+            actions=EventActions(state_delta={"confirmations": 2, "actions": 7}),
+        ),
+    )
+    r = await client.post(
+        "/tool_result", headers=AUTH, json={"session_id": "s1", "results": [{"call_id": "t1", "name": "type"}]}
+    )
+    assert r.status_code == 200 and fake.calls[0]["state_delta"] == {"actions": 8, "confirmations": 1}
+
+
+async def test_chat_resets_the_action_budget(client: httpx.AsyncClient, fake: FakeRunner) -> None:
+    r = await client.post("/chat", headers=AUTH, json={"session_id": "s1", "text": "go"})
+    assert r.status_code == 200 and fake.calls[0]["state_delta"]["actions"] == 0
 
 
 async def test_tool_result_rejects_forged_or_unknown_call_ids(client: httpx.AsyncClient, fake: FakeRunner) -> None:
@@ -234,10 +308,10 @@ async def test_user_id_is_derived_server_side_not_from_headers(
     # A second token maps to its own user via DAYFLOW_USERS.
     monkeypatch.setenv("DAYFLOW_USERS", f"{hashlib.sha256(b'other-token').hexdigest()}=u2")
     other = {"Authorization": "Bearer other-token"}
-    assert (await client.get("/config", headers=other)).json()["vault_folder"] == "DayflowVault"
+    assert (await client.get("/config", headers=other)).json()["vault_folder"] == "Dayflow"
     assert (await client.get("/config", headers={**other, "X-Dayflow-User": "local"})).json()[
         "vault_folder"
-    ] == "DayflowVault"
+    ] == "Dayflow"
 
 
 def oidc(monkeypatch: pytest.MonkeyPatch, claims: dict[str, Any] | None) -> None:

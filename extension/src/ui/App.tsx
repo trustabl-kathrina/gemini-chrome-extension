@@ -1,102 +1,112 @@
-import { ArrowLeft, Search, Settings as SettingsIcon } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { ArrowLeft, FileCode2, Search, Settings as SettingsIcon } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { fromUserConfig, pullConfig, syncFingerprint } from '../agent/sync';
+import { Chat } from './Chat';
 import { CommandPalette, commandsFromSkills, type Command } from './CommandPalette';
-import { Composer } from './Composer';
-import { Home } from './Home';
-import { RunView } from './RunView';
-import { SETTINGS_TABS, SettingsView, type SettingsTab } from './Settings';
-import { useAgent, useHotkey, useSettings } from './hooks';
+import { ConfigView } from './Config';
+import { SettingsView } from './Settings';
+import { inExtension, useAgent, useHotkey, useSettings } from './hooks';
 import { IconButton, Pill } from './primitives';
 
-type View = { name: 'home' } | { name: 'run'; id: string } | { name: 'settings'; tab: SettingsTab };
+type View = 'chat' | 'settings' | 'config';
+const TITLES: Record<View, string> = { chat: 'Dayflow', settings: 'Settings', config: 'Config' };
 
 export function App() {
-  const { settings, setSettings } = useSettings();
+  const { settings, setSettings, loaded } = useSettings();
   const { runs, start, cancel, answer } = useAgent();
-  const [view, setView] = useState<View>({ name: 'home' });
+  const [view, setView] = useState<View>('chat');
   const [palette, setPalette] = useState(false);
 
   const runSkill = useCallback(
     (id: string) => {
       const skill = settings.skills.find((s) => s.id === id);
       if (!skill) return;
-      setView({ name: 'run', id: start(skill.prompt, skill.id) });
+      setView('chat');
+      start(skill.prompt, skill.id);
     },
     [settings.skills, start],
   );
-  const runText = useCallback((text: string) => setView({ name: 'run', id: start(text) }), [start]);
+  const runText = useCallback(
+    (text: string) => {
+      setView('chat');
+      start(text);
+    },
+    [start],
+  );
 
   useHotkey('k', useCallback(() => setPalette((p) => !p), []));
+
+  // The brain owns skills/sites/permissions: refresh the panel's cached slices once per open.
+  useEffect(() => {
+    if (!loaded || !settings.token) return;
+    void pullConfig(settings)
+      .then((cfg) => {
+        // An empty brain (fresh deploy, no pack) has nothing to teach the panel; keep the local defaults.
+        if (!cfg || !cfg.skills?.length) return;
+        setSettings((s) => {
+          const next = fromUserConfig(cfg, s);
+          return syncFingerprint(next) === syncFingerprint(s) ? s : next;
+        });
+      })
+      .catch((e: unknown) => console.warn('[dayflow] config pull failed', e));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded]);
 
   const commands = useMemo<Command[]>(
     () => [
       ...commandsFromSkills(settings.skills, runSkill),
-      { id: 'nav:home', title: 'Go home', run: () => setView({ name: 'home' }) },
-      ...SETTINGS_TABS.map((t) => ({ id: `nav:${t.id}`, title: `Settings → ${t.label}`, run: () => setView({ name: 'settings', tab: t.id }) })),
+      { id: 'nav:chat', title: 'Chat', hint: 'Back to the transcript', run: () => setView('chat') },
+      { id: 'nav:config', title: 'Config', hint: 'Edit skills, sites, permissions, schedules (YAML)', run: () => setView('config') },
+      { id: 'nav:settings', title: 'Settings', hint: 'Google account, brain, vision, Drive', run: () => setView('settings') },
     ],
     [settings.skills, runSkill],
   );
 
-  const activeRun = view.name === 'run' ? runs[view.id] : undefined;
   const anyRunning = Object.values(runs).some((r) => r.status === 'running');
+
+  if (!inExtension) {
+    return (
+      <div className="bloom flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
+        <p className="text-fg">Dayflow runs as a Chrome side panel.</p>
+        <p className="text-[12px] text-fg-3">Load the unpacked build from extension/.output/chrome-mv3 and click the toolbar icon.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="bloom relative flex h-full flex-col">
       <header className="hairline-b flex h-10 items-center gap-1 px-2">
-        {view.name !== 'home' ? (
-          <IconButton label="Back" onClick={() => setView({ name: 'home' })}>
+        {view !== 'chat' ? (
+          <IconButton label="Back" onClick={() => setView('chat')}>
             <ArrowLeft size={15} />
           </IconButton>
         ) : (
           <span className="ml-1.5 h-2 w-2 rounded-full bg-accent" />
         )}
-        <span className="ml-1 font-medium tracking-tight">{view.name === 'settings' ? 'Settings' : 'Dayflow'}</span>
+        <span className="ml-1 font-medium tracking-tight">{TITLES[view]}</span>
         <div className="ml-auto flex items-center gap-1">
-          <Pill tone={settings.mode === 'live' ? 'ok' : 'neutral'} pulse={anyRunning}>
-            {settings.mode}
+          <Pill tone={settings.token ? 'ok' : 'warn'} pulse={anyRunning}>
+            {anyRunning ? 'working' : settings.token ? 'ready' : 'no brain'}
           </Pill>
           <IconButton label="Search (⌘K)" onClick={() => setPalette(true)}>
             <Search size={15} />
           </IconButton>
-          <IconButton label="Settings" onClick={() => setView({ name: 'settings', tab: 'skills' })}>
+          <IconButton label="Config" onClick={() => setView(view === 'config' ? 'chat' : 'config')} className={view === 'config' ? 'bg-bg-2 text-fg' : ''}>
+            <FileCode2 size={15} />
+          </IconButton>
+          <IconButton label="Settings" onClick={() => setView(view === 'settings' ? 'chat' : 'settings')} className={view === 'settings' ? 'bg-bg-2 text-fg' : ''}>
             <SettingsIcon size={15} />
           </IconButton>
         </div>
       </header>
 
-      {view.name === 'settings' && (
-        <nav className="hairline-b tab-strip flex overflow-x-auto px-1.5 py-1.5">
-          {SETTINGS_TABS.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setView({ name: 'settings', tab: t.id })}
-              className={`h-6 shrink-0 rounded-md px-1.5 text-[12px] transition-colors ${view.tab === t.id ? 'bg-bg-2 text-fg' : 'text-fg-3 hover:text-fg-2'}`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </nav>
-      )}
-
-      {view.name === 'home' && (
-        <>
-          <Home settings={settings} runs={Object.values(runs)} onRunSkill={runSkill} onOpenRun={(id) => setView({ name: 'run', id })} />
-          <Composer placeholder="Ask Dayflow to do something in this tab…" onSubmit={runText} autoFocus />
-        </>
-      )}
-
-      {view.name === 'run' && activeRun && (
-        <>
-          <RunView run={activeRun} onCancel={() => cancel(activeRun.id)} onAnswer={(cid, allow) => answer(activeRun.id, cid, allow)} />
-          <Composer placeholder="Follow up…" onSubmit={runText} />
-        </>
-      )}
-
-      {view.name === 'settings' && (
+      {view === 'chat' && <Chat settings={settings} runs={runs} onSubmit={runText} onRunSkill={runSkill} onCancel={cancel} onAnswer={answer} />}
+      {view === 'settings' && (
         <div className="flex-1 overflow-y-auto">
-          <SettingsView tab={view.tab} settings={settings} update={(fn) => setSettings(fn)} />
+          <SettingsView settings={settings} update={(fn) => setSettings(fn)} />
         </div>
       )}
+      {view === 'config' && loaded && <ConfigView key={`${settings.backendUrl}|${settings.token}`} settings={settings} update={(fn) => setSettings(fn)} />}
 
       {palette && <CommandPalette commands={commands} onClose={() => setPalette(false)} />}
     </div>

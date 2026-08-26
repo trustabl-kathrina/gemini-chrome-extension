@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkNavigable, safeVaultPath } from './guard';
+import { checkNavigable, hostAllowed, safeVaultPath } from './guard';
 
 describe('checkNavigable', () => {
   const allow = ['wsp.kbtu.kz', 'github.com'];
@@ -21,6 +21,15 @@ describe('checkNavigable', () => {
   });
 });
 
+describe('hostAllowed', () => {
+  it('matches exact hosts and subdomains only; an empty list allows nothing (run_js gate)', () => {
+    expect(hostAllowed('127.0.0.1', ['127.0.0.1'])).toBe(true);
+    expect(hostAllowed('api.github.com', ['github.com'])).toBe(true);
+    expect(hostAllowed('github.com.evil', ['github.com'])).toBe(false);
+    expect(hostAllowed('anything.test', [])).toBe(false);
+  });
+});
+
 describe('safeVaultPath', () => {
   it('keeps nested relative paths', () => {
     expect(safeVaultPath('DayflowVault', 'ML/Week 07/lecture.pdf')).toBe('DayflowVault/ML/Week 07/lecture.pdf');
@@ -31,7 +40,8 @@ describe('safeVaultPath', () => {
     expect(safeVaultPath('DayflowVault', 'C:\\Windows\\x.dll')).toBe('DayflowVault/C/Windows/x.dll');
     expect(safeVaultPath('../Vault', 'a.pdf')).toBe('Vault/a.pdf');
   });
-  it('never returns an empty leaf', () => {
+  it('never returns an empty leaf and defaults the root to Dayflow', () => {
     expect(safeVaultPath('DayflowVault', '..')).toBe('DayflowVault/download.bin');
+    expect(safeVaultPath('', 'CSCI3240 CV/Lab 01/lab.pdf')).toBe('Dayflow/CSCI3240 CV/Lab 01/lab.pdf');
   });
 });

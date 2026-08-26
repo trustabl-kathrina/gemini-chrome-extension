@@ -34,6 +34,8 @@ export class AdkAdapter {
   private started = new Map<string, number>();
   /** Last non-empty model text; used as the run summary. */
   lastText = '';
+  /** Last `errorMessage` the brain streamed (model/auth failure); the run ends as an error when set. */
+  lastError = '';
 
   /** Calls the brain answered itself in the same stream (e.g. a guard's error response) — the browser must NOT execute these. */
   resolved = new Set<string>();
@@ -43,7 +45,10 @@ export class AdkAdapter {
     const pending: PendingCall[] = [];
     const lr = new Set(ev.longRunningToolIds ?? []);
 
-    if (ev.errorMessage) events.push({ kind: 'text', text: `Error: ${ev.errorMessage}` });
+    if (ev.errorMessage) {
+      this.lastError = ev.errorMessage;
+      events.push({ kind: 'text', text: `Error: ${ev.errorMessage}` });
+    }
 
     for (const part of ev.content?.parts ?? []) {
       if (part.thought) continue;
@@ -69,7 +74,7 @@ export class AdkAdapter {
         const id = fc.id ?? `${fc.name}-${now}`;
         const call: ToolCall = { id, name: fc.name, args: fc.args ?? {} };
         if (fc.name === CONFIRM_TOOL) {
-          events.push({ kind: 'confirm', id, message: String(fc.args?.message ?? 'Proceed?') });
+          events.push({ kind: 'confirm', id, message: confirmMessage(fc.args ?? {}) });
           pending.push({ ...call, kind: 'confirm' });
         } else if (lr.has(id)) {
           events.push({ kind: 'tool.call', call, target: 'browser' });
@@ -95,11 +100,20 @@ export class AdkAdapter {
   }
 }
 
+/** request_confirmation(action, details) → one card text; older brains sent `message`. */
+export function confirmMessage(args: Record<string, unknown>): string {
+  const action = typeof args.action === 'string' ? args.action.trim() : '';
+  const details = typeof args.details === 'string' ? args.details.trim() : '';
+  const message = typeof args.message === 'string' ? args.message.trim() : '';
+  return [action, details].filter(Boolean).join('\n\n') || message || 'Proceed?';
+}
+
 export function summarise(r: Record<string, unknown>): string {
   if (typeof r.message === 'string') return r.message;
   if (typeof r.summary === 'string') return r.summary;
   if (typeof r.result === 'string') return r.result.slice(0, 120);
-  const s = JSON.stringify(r);
+  const { screenshot_b64: _shot, ...rest } = r;
+  const s = JSON.stringify(rest);
   return s.length > 120 ? s.slice(0, 117) + '…' : s;
 }
 

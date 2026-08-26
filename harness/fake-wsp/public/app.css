@@ -70,3 +70,7 @@ select { font: inherit; padding: 3px 6px; }
 .composer { display: flex; gap: 8px; padding: 10px; border-top: 1px solid #dde3ea; }
 .composer textarea { flex: 1; font: inherit; padding: 6px 8px; border: 1px solid #c5cdd6; border-radius: 4px; resize: none; }
 .composer .v-button { align-self: flex-end; }
+
+/* Messenger: log of messages sent in this session (also exposed via data-sent-item for the harness). */
+.sent-log { margin-top: 8px; padding: 6px 8px; border-top: 1px dashed #c9d2dc; font-size: 12px; color: #4a5866; }
+.sent-item { padding: 2px 0; white-space: pre-wrap; }

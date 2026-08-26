@@ -20,11 +20,13 @@ class ScriptedLlm(BaseLlm):
     model: str = "scripted"
     script: list[list[types.Part]] = []
     calls: int = 0
+    requests: list[LlmRequest] = []
 
     async def generate_content_async(
         self, llm_request: LlmRequest, stream: bool = False
     ) -> AsyncGenerator[LlmResponse, None]:
         self.calls += 1
+        self.requests.append(llm_request)
         yield LlmResponse(content=types.Content(role="model", parts=self.script.pop(0)))
 
 
@@ -89,3 +91,43 @@ async def test_guard_error_is_returned_to_the_model_immediately() -> None:
     # extension the call is not pending. (Extension rule: a call is pending only if no FR for it arrives.)
     assert events[0].long_running_tool_ids == {"c7"}
     assert llm.calls == 2 and final_text(events[-1]) == "blocked, ok"
+
+
+async def test_action_budget_from_state_blocks_the_next_browser_call() -> None:
+    from dayflow.agents.orchestrator import ACTIONS_KEY, MAX_ACTIONS
+
+    script = [[fc("c1", "open_tab", url="https://wsp.kbtu.kz")], [fc("c2", "click", ref="e1")], [txt("Over budget.")]]
+    runner, llm = make_runner(script)
+    await collect(runner, [txt("go")])
+    session = await runner.session_service.get_session(app_name="dayflow", user_id="u", session_id="s")
+    assert session is not None and ACTIONS_KEY not in session.state, "no state survives a pending long-running call"
+    fr = types.Part(function_response=types.FunctionResponse(id="c1", name="open_tab", response={"tab": 41}))
+    events = [
+        ev
+        async for ev in runner.run_async(
+            user_id="u",
+            session_id="s",
+            new_message=types.Content(role="user", parts=[fr]),
+            state_delta={ACTIONS_KEY: MAX_ACTIONS},  # what /tool_result books via result_state_delta
+        )
+    ]
+    frs = [fr for ev in events for fr in ev.get_function_responses()]
+    assert frs and frs[0].id == "c2" and "budget exhausted" in str(frs[0].response)
+    assert llm.calls == 3 and final_text(events[-1]) == "Over budget."
+
+
+async def test_screenshot_part_reaches_the_model_as_an_image() -> None:
+    runner, llm = make_runner([[fc("c1", "click", ref="e2")], [txt("I see the folder opened.")]])
+    await collect(runner, [txt("go")])
+    blob = types.FunctionResponseBlob(mime_type="image/jpeg", data=b"\xff\xd8\xff\x00")
+    fr = types.Part(
+        function_response=types.FunctionResponse(
+            id="c1", name="click", response={"clicked": True}, parts=[types.FunctionResponsePart(inline_data=blob)]
+        )
+    )
+    events = await collect(runner, [fr])
+    assert final_text(events[-1]) == "I see the folder opened."
+    parts = [p for c in llm.requests[-1].contents for p in (c.parts or []) if p.function_response]
+    assert parts and parts[-1].function_response is not None
+    inline = parts[-1].function_response.parts
+    assert inline and inline[0].inline_data is not None and inline[0].inline_data.data == b"\xff\xd8\xff\x00"

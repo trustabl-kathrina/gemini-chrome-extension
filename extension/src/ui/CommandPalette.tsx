@@ -17,14 +17,17 @@ export function commandsFromSkills(skills: Skill[], run: (id: string) => void): 
     .map((s) => ({ id: `skill:${s.id}`, title: s.title, hint: s.blurb, key: s.key, run: () => run(s.id) }));
 }
 
-export function CommandPalette({ commands, onClose }: { commands: Command[]; onClose: () => void }) {
-  const [q, setQ] = useState('');
+/** Substring match on title + hint + id, case-insensitive; empty query = everything. */
+export function filterCommands(commands: Command[], query: string): Command[] {
+  const needle = query.trim().toLowerCase();
+  return needle ? commands.filter((c) => `${c.title} ${c.hint ?? ''} ${c.id}`.toLowerCase().includes(needle)) : commands;
+}
+
+export function CommandPalette({ commands, onClose, initialQuery = '' }: { commands: Command[]; onClose: () => void; initialQuery?: string }) {
+  const [q, setQ] = useState(initialQuery);
   const [idx, setIdx] = useState(0);
   const input = useRef<HTMLInputElement>(null);
-  const list = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    return needle ? commands.filter((c) => `${c.title} ${c.hint ?? ''}`.toLowerCase().includes(needle)) : commands;
-  }, [q, commands]);
+  const list = useMemo(() => filterCommands(commands, q), [q, commands]);
 
   useEffect(() => input.current?.focus(), []);
   useEffect(() => setIdx(0), [q]);
@@ -59,10 +62,7 @@ export function CommandPalette({ commands, onClose }: { commands: Command[]; onC
 
   return (
     <div className="absolute inset-0 z-20 flex items-start justify-center bg-bg/70 p-3 pt-10 backdrop-blur-[2px]" onMouseDown={onClose}>
-      <div
-        className="fade-in hairline w-full max-w-sm overflow-hidden rounded-lg bg-bg-1 shadow-2xl"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
+      <div className="fade-in hairline w-full max-w-sm overflow-hidden rounded-lg bg-bg-1 shadow-2xl" onMouseDown={(e) => e.stopPropagation()}>
         <div className="hairline-b flex items-center gap-2 px-3">
           <Search size={14} className="text-fg-3" />
           <input
