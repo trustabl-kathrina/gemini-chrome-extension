@@ -12,12 +12,15 @@ type ToolRequest =
   | { channel: typeof TOOL_CHANNEL; name: 'press_key'; key: string }
   | { channel: typeof TOOL_CHANNEL; name: 'scroll'; ref?: string; dy?: number }
   | { channel: typeof TOOL_CHANNEL; name: 'viewport' }
-  | { channel: typeof TOOL_CHANNEL; name: 'href'; ref: string };
+  | { channel: typeof TOOL_CHANNEL; name: 'href'; ref: string }
+  | { channel: typeof TOOL_CHANNEL; name: 'activate'; ref: string; row?: boolean };
 
 type ToolResponse = { ok: true; data: unknown } | { ok: false; error: string };
 
 const refs = new WeakMap<Element, string>();
 const byRef = new Map<string, Element>();
+/** What a ref pointed at when it was handed out, so it can be re-found after the page re-renders the element. */
+const signatures = new Map<string, { tag: string; role: string | null; label: string; x: number; y: number }>();
 let counter = 0;
 
 function refFor(el: Element): string {
@@ -73,7 +76,12 @@ function labelOf(el: Element, own: string): string {
   if (el instanceof HTMLImageElement) return el.alt || el.src.split('/').pop() || 'image';
   if (el instanceof HTMLInputElement && (el.type === 'submit' || el.type === 'button')) return el.value;
   const text = own || (el as HTMLElement).innerText?.replace(/\s+/g, ' ').trim() || '';
-  return text;
+  if (text) return text;
+  // Icon-only controls (Vaadin buttons, toolbar icons): describe them by their image.
+  const img = el.querySelector('img');
+  if (img) return img.alt || img.title || img.src.split('/').pop()?.split('?')[0] || '';
+  const svg = el.querySelector('svg');
+  return svg?.getAttribute('aria-label') ?? svg?.querySelector('title')?.textContent?.trim() ?? '';
 }
 
 /**
@@ -103,7 +111,9 @@ function snapshot(maxNodes = 400): { text: string; nodes: number; truncated: boo
     const value = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement ? ` value=${JSON.stringify(el.value.slice(0, 40))}` : '';
     const href = el instanceof HTMLAnchorElement && el.href ? ` href=${el.href.slice(0, 80)}` : '';
     const state = el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio') ? (el.checked ? ' checked' : '') : el.classList.contains('v-selected') || el.getAttribute('aria-selected') === 'true' ? ' selected' : '';
-    const line = `[${refFor(el)}] ${role} ${JSON.stringify(label)} @${x},${y}${value}${href}${state}`;
+    const ref = refFor(el);
+    signatures.set(ref, { tag: el.tagName, role: el.getAttribute('role'), label, x, y });
+    const line = `[${ref}] ${role} ${JSON.stringify(label)} @${x},${y}${value}${href}${state}`;
     // Nested wrappers repeat the same label at the same spot: keep the outermost only.
     const key = `${role}|${label}|${x}|${y}`;
     if (seen.has(key)) continue;
@@ -128,11 +138,36 @@ function highlight(el: Element) {
   }, 900);
 }
 
+/**
+ * SPAs (Vaadin) re-create toolbar buttons and rows on every state change, which would invalidate refs the
+ * agent just read. When the original element is gone, re-find the same control: same tag + role + label,
+ * nearest to where it was (within 120px). Sighted users do the same — "the Enter button is still there".
+ */
+function relocate(ref: string): Element | null {
+  const sig = signatures.get(ref);
+  if (!sig) return null;
+  let best: { el: Element; d: number } | null = null;
+  for (const cand of document.querySelectorAll(sig.tag)) {
+    if (cand.getAttribute('role') !== sig.role) continue;
+    if (labelOf(cand, ownText(cand)).slice(0, 80) !== sig.label) continue;
+    const r = cand.getBoundingClientRect();
+    if (!isVisible(cand, r)) continue;
+    const d = Math.hypot(r.left + r.width / 2 - sig.x, r.top + r.height / 2 - sig.y);
+    if (!best || d < best.d) best = { el: cand, d };
+  }
+  if (!best || best.d > 120) return null;
+  refs.set(best.el, ref);
+  byRef.set(ref, best.el);
+  return best.el;
+}
+
 function resolve(raw: string): Element {
   const ref = raw.trim().replace(/^\[|\]$/g, '');
   const el = byRef.get(ref);
-  if (!el || !el.isConnected) throw new Error(`ref ${ref} is gone — call read_page again`);
-  return el;
+  if (el?.isConnected) return el;
+  const again = relocate(ref);
+  if (!again) throw new Error(`ref ${ref} is gone — call read_page again`);
+  return again;
 }
 
 function mouseSequence(el: Element, x: number, y: number) {
@@ -228,6 +263,28 @@ function scroll(ref?: string, dy = 600) {
   return { scrollY: Math.round(scrollY), viewport: [innerWidth, innerHeight] };
 }
 
+const ACTIVATABLE = '.v-button, button, a[href], [role="button"], input[type="button"], input[type="submit"], img, [onclick]';
+
+/**
+ * Clicks the interactive controls INSIDE a ref (or inside its table row when `row` is set) — the download
+ * icon of a Vaadin file row, a link inside a cell. Used when clicking the ref itself did nothing.
+ */
+function activate(ref: string, row = false): { activated: string[] } {
+  const el = resolve(ref);
+  const scope = row ? (el.closest('tr') ?? el) : el;
+  const targets = [...scope.querySelectorAll<HTMLElement>(ACTIVATABLE)].filter((t) => t !== el && isVisible(t, t.getBoundingClientRect()));
+  const activated: string[] = [];
+  for (const t of targets.slice(0, 4)) {
+    highlight(t);
+    t.focus?.();
+    const r = t.getBoundingClientRect();
+    mouseSequence(t, r.left + r.width / 2, r.top + r.height / 2);
+    t.click();
+    activated.push(`${t.tagName.toLowerCase()} ${JSON.stringify(labelOf(t, ownText(t)).slice(0, 40))}`);
+  }
+  return { activated };
+}
+
 function hrefOf(ref: string): { href?: string } {
   const el = resolve(ref);
   const a = el.closest('a[href]') ?? el.querySelector('a[href]');
@@ -253,6 +310,8 @@ function handle(req: ToolRequest): ToolResponse {
         return { ok: true, data: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio, title: document.title, url: location.href } };
       case 'href':
         return { ok: true, data: hrefOf(req.ref) };
+      case 'activate':
+        return { ok: true, data: activate(req.ref, req.row) };
     }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };

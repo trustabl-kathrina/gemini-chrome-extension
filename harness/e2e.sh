@@ -44,8 +44,20 @@ stop() { # name...
   done
 }
 
+# A restarted server must not race its predecessor's graceful shutdown (uvicorn keeps the port for a moment and
+# would still answer /health while the new process fails to bind). Wait until nothing answers any more.
+wait_free() { # url label
+  for _ in $(seq 1 40); do
+    curl -fsS -m 1 "$1" >/dev/null 2>&1 || return 0
+    sleep 0.5
+  done
+  echo "  $2 still answers at $1 after 20s; is another instance running?" >&2
+  return 1
+}
+
 up_fakes() {
   stop fake-wsp fake-drive
+  wait_free "$FAKE_WSP_URL/health" fake-wsp && wait_free "$FAKE_DRIVE_URL/health" fake-drive || return 1
   (cd "$ROOT" && FAKE_WSP_PORT=$WSP_PORT start_bg fake-wsp "$OUT/fake-wsp.log" node harness/serve.mjs)
   (cd "$ROOT" && FAKE_DRIVE_PORT=$DRIVE_PORT FAKE_DRIVE_SCENE="${1:-dev}" start_bg fake-drive "$OUT/fake-drive.log" node harness/fake-drive.mjs)
   wait_for "$FAKE_WSP_URL/health" fake-wsp fake-wsp && wait_for "$FAKE_DRIVE_URL/health" fake-drive fake-drive
@@ -54,6 +66,7 @@ up_fakes() {
 up_brain() { # scene
   local scene=${1:-dev}
   stop brain
+  wait_free "$DAYFLOW_URL/health" brain || return 1
   # DAYFLOW_BUCKET is unset on purpose: the vault store stays in-memory; DAYFLOW_PUBLIC_URL makes artifact links resolvable.
   (cd "$ROOT/backend" && unset DAYFLOW_BUCKET DAYFLOW_FIRESTORE && \
     PORT=$BRAIN_PORT DAYFLOW_TOKEN="$DAYFLOW_TOKEN" DAYFLOW_FAKE_CONNECTORS=1 DAYFLOW_FAKE_LOG="$OUT/$scene-connectors.jsonl" \

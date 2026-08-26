@@ -41,6 +41,7 @@ export function applyEvent(run: Run, ev: AgentEvent): Run {
       return { ...run, steps: [...run.steps, { id: `t${run.steps.length}`, kind: 'text', text: ev.text, partial: ev.partial ?? false }] };
     }
     case 'tool.call':
+      if (run.steps.some((s) => s.kind === 'tool' && s.id === ev.call.id)) return run; // repeated stream copy of one call
       return { ...run, steps: [...run.steps, { id: ev.call.id, kind: 'tool', call: ev.call, target: ev.target, status: 'running' }] };
     case 'tool.result': {
       const idx = run.steps.findIndex((s) => s.kind === 'tool' && s.id === ev.callId);

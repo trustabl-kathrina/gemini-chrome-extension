@@ -42,7 +42,11 @@ def test_instruction_mentions_mode_per_domain_in_scope() -> None:
     text = compose_instruction(cfg, None, ["docs.drive.google.com", "wsp.kbtu.kz", "example.org"])
     assert "Perception modes: drive.google.com → vision, wsp.kbtu.kz → dom, example.org → dom (no profile)." in text
     assert "### drive.google.com (mode: vision)\ncanvas UI" in text
-    assert compose_instruction(cfg, None, []).count("Sites in scope") == 0
+    # No skill and no domains: every configured profile is in scope (a free prompt may go anywhere).
+    unscoped = compose_instruction(cfg, None, [])
+    assert unscoped.count("Sites in scope") == 1
+    assert "Perception modes: drive.google.com → vision, wsp.kbtu.kz → dom." in unscoped
+    assert compose_instruction(cfg, None, ["wsp.kbtu.kz"]).count("drive.google.com") == 0
 
 
 def test_guard_caps_browser_actions_per_run() -> None:
@@ -68,9 +72,19 @@ def test_result_state_delta_books_actions_and_credits() -> None:
     assert result_state_delta([], {}, perms) == {}
 
 
-def test_instruction_without_skill_has_base_only() -> None:
-    text = compose_instruction(default_config(), None, [])
+def test_instruction_without_skill_lists_playbooks_and_all_sites() -> None:
+    cfg = default_config()
+    text = compose_instruction(cfg, None, [])
     assert "Active skill" not in text and "You are Dayflow" in text
+    # A free-text prompt still gets the skill steps (as playbooks) and every site profile.
+    assert "## Skills you know (playbooks)" in text
+    assert "### Sync WSP files to vault (/vault-sync)" in text and 'press_key("Enter")' in text
+    assert "### wsp.kbtu.kz (mode: dom)" in text and "### drive.google.com (mode: vision)" in text
+    # An active skill narrows the prompt to its own steps and sites.
+    skill = cfg.skill("vault-sync")
+    assert skill is not None
+    scoped = compose_instruction(cfg, skill, skill.sites)
+    assert "Skills you know" not in scoped and "### drive.google.com" not in scoped
 
 
 def test_host_allowlist() -> None:

@@ -2,7 +2,7 @@ from dayflow.core.loader import MemoryConfigStore, default_config, load_pack
 from dayflow.core.models import Permissions, SiteProfile, Skill, UserConfig
 from dayflow.models.registry import registry
 
-SIX = ["vault-sync", "courseware", "scaffold", "bootstrap", "team-ops", "pitch-deck"]
+SIX = ["vault-sync", "courseware", "scaffold", "lab", "team-ops", "pitch-deck"]
 
 
 def test_default_pack_has_six_skills_and_sites() -> None:

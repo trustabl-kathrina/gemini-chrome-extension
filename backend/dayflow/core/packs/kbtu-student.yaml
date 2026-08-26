@@ -15,22 +15,30 @@ skills:
       ("<course code> <course name>/<Materials|Week NN|Lab NN>/<file>"), then confirm the index.
       The WSP tree: Desktop → "Student files" → School → Instructor (Surname Name) → course folder → files.
       Steps:
-      1. open_tab the portal root (the Desktop) and read_page. Click "Student files".
+      1. open_tab the portal's Student files page (or the Desktop, then click "Student files") and read_page.
       2. The folder browser is a table with Back and Enter buttons and no links. To open a folder: click its
-         row (this only selects it), then press_key("Enter") — or click the Enter button. Check the screenshot:
-         the table must now show the next level. Back goes up one level.
-      3. Walk down: the School (e.g. "School of Information Technology and Engineering") → the Instructor →
-         the course folder whose name starts with the course code (e.g. "CSCI3240 ..."). If the instructor is
-         unknown, open "Student's schedule" first (Year and Term selectors; the cell reads "CODE Course name
-         Instructor room"), note the instructor, then return to Student files.
-      4. In the course folder, download EVERY file listed — one download call per row:
-         download(ref=<row ref>, path="<course code> <course name>/<folder>/<file name>") where <folder> is
-         "Materials" for the syllabus and general files, "Week NN" for lecture NN, "Lab NN" for lab NN
-         (two digits: Week 01, Lab 01). Keep the original file name. Do not skip files: if the user asked
-         only for changes, download anyway — the brain deduplicates by content.
+         row (this only selects it), then click the Enter button right away — reuse the Back/Enter refs
+         from the last read_page, the extension re-finds them if the portal re-rendered the toolbar
+         (press_key("Enter") is only a fallback, it does not work on the real portal). Check the screenshot:
+         the table must now show the next level. Back goes up one level. Call read_page once per level to get
+         the new rows' refs; never re-read just to find Back/Enter.
+      3. Walk down: the School (e.g. "School of Information Technology and Engineering") → the Instructor
+         (Surname Name) → the course folder (name contains the course name; the code may be absent). If the
+         instructor is unknown, look at the schools' instructor lists first or open "Student's schedule"
+         (Year and Term selectors; the cell reads "CODE Course name Instructor room").
+      4. Inside a course folder the files may be grouped in numbered subfolders ("1.Syllabus for the student",
+         "2.Lectures", "3.Labs", …) — open each one that can contain files. Download EVERY file — one call per
+         file: download(ref=<the row's download button ref, or the row itself>, path="<course code> <course
+         name>/<folder>/<file name>") where <folder> is "Materials" for the syllabus and general files,
+         "Week NN" for lecture NN, "Lab NN" for lab NN (two digits: Week 01, Lab 01). Keep the original file
+         name. Prefer the row's download button (the icon-only button in the last cell, listed as
+         button "download…" or "Download"); the row ref works too. Do not skip files: if the user asked only for
+         changes, download anyway — the brain deduplicates by content. If download(ref) fails, do not call
+         run_js or plain click — try the other ref once, then move on to the next file.
       5. After the last file call vault_list() and confirm every downloaded file is present with a summary.
       Finish with a changelog: files added (with their vault paths), deadlines discovered, parse errors if any.
-      Budget: about 12 actions to reach the course folder, one per file, a few to verify — stay well under 40.
+      Budget: about 10 actions to reach the course folder, ~4 per subfolder plus one per file — stay under 40;
+      if the budget runs out, stop and report what was synced and what remains.
   - id: courseware
     key: "2"
     title: Build courseware from syllabus
@@ -53,30 +61,76 @@ skills:
       Read each syllabus from the vault (vault_list, then vault_read); derive the weeks and labs from its
       schedule; create "<course code> <course name>/Week NN/" and "Lab NN/" folders in the Drive vault
       (plus "Materials/"). Report the tree.
-  - id: bootstrap
+  - id: lab
     key: "4"
-    title: Bootstrap coding project
-    blurb: GitHub repo or notebook with a working foundation and a TODO list, via GitHub MCP.
-    prompt: Bootstrap a GitHub repo for my course project with a notebook and a TODO list.
+    title: Solve a lab from the vault
+    blurb: Read the lab PDF, solve every task with code that is actually run, push notebook + report to a private repo.
+    prompt: Solve Lab 1 of my Computer Vision course and push the solution to a new private GitHub repo.
     sites: [github.com]
-    tools: [vault_list, vault_read, create_repository, create_branch, push_files, open_tab]
+    tools: [vault_list, vault_read, solve_lab_task, build_notebook, build_report, create_repository, push_files, download, open_tab, read_page, click, press_key, wait, screenshot]
     instructions: |
-      Read the lab/project requirements from the vault. Create a private repo, push README.md, TODO.md (7–10 concrete
-      tasks), a starter notebook or source tree, requirements and .gitignore in ONE push_files call,
-      then open the repo in a tab.
+      Goal: a private GitHub repo with a runnable notebook (outputs included) and a report for the requested
+      lab, and the report saved to the vault.
+      Steps:
+      1. vault_list; find the lab PDF (e.g. "Lab_01_Image_Basics.pdf") and vault_read it. If the vault has no
+         such file, sync it first: follow the vault-sync playbook on WSP but download ONLY the lab file to
+         "<course code> <course name>/Lab NN/<file name>" (about 12 browser actions), then vault_read it.
+      2. Split the text into the shared setup (imports, sample data, constraints) and the numbered tasks.
+      3. For EACH task call solve_lab_task(task_text=<the task verbatim>, context=<setup + course and lab name
+         + constraints such as "numpy only">). Keep its code, stdout and notes. On an error call it again with
+         the error appended to the context (at most twice per task).
+      4. build_notebook(title, cells): per task a short markdown cell (task title) then a code cell
+         {source: code, stdout: stdout}. The brain re-runs the notebook; on an error fix that task and rebuild.
+      5. build_report(course, lab, tasks=[{title, approach, result, code}], summary) → markdown + page_url.
+      6. create_repository(name like "csci3240-lab01", private=true), then ONE push_files(owner, repo,
+         branch="main", message, files=[README.md (course, lab, how to run), TODO.md (5+ remaining
+         improvements), lab01.ipynb (ipynb_json verbatim), REPORT.md (markdown verbatim),
+         requirements.txt ("numpy" and "jupyter"), .gitignore]).
+      7. download(url=page_url, path="<course code> <course name>/Lab NN/REPORT.html") saves the report to the
+         vault; then open_tab(page_url) so the user sees it (skip if the brain host is not allow-listed).
+      Finish with: repo URL, report page URL, notebook path, tasks solved / failed.
   - id: team-ops
     key: "5"
     title: "Team ops: Telegram → Linear → GitHub"
     blurb: Post an update to the diploma chat, file Linear issues, open a GitHub issue + PR.
     prompt: Post this week's update to the diploma project chat, create Linear issues for the next milestone, and open the PR.
     sites: [web.telegram.org, linear.app, github.com]
-    tools: [open_tab, read_page, click, type, press_key, request_confirmation, list_teams, list_projects, create_issue, issue_write, create_pull_request, get_file_contents]
+    tools: [get_file_contents, open_tab, read_page, click, type, press_key, wait, screenshot, request_confirmation, list_teams, list_projects, create_issue, issue_write, create_branch, push_files, create_pull_request]
     instructions: |
-      Draft the weekly update from recent repo activity (get_file_contents on README/TODO). Open Telegram Web,
-      find the team chat by name in the chat list (search box at the top-left), open it, then call
-      request_confirmation with the exact message before typing it into the composer and sending (type with
-      submit=true). Then create Linear issues for the next milestone and open a GitHub issue and PR.
-      Summarise IDs and links.
+      Goal: the weekly update posted in the team chat (only after the user approved the exact text), Linear
+      issues for the next milestone, and a GitHub issue + pull request on the diploma repo.
+      The repo is "<owner>/<repo>" from the prompt or memory (default dayflow-student/diploma); the chat is the
+      one named in the prompt (default "Diploma · Team").
+      Steps:
+      1. get_file_contents(owner, repo, "README.md") and get_file_contents(owner, repo, "TODO.md"). From them
+         draft the update: at most 3 sentences, plain text, one paragraph — what was done this week, what is
+         next (the next milestone = the first open TODO items), one ask or date. Keep it under 400 characters.
+      2. open_tab the messenger: the chat URL from the prompt or the site notes in scope (Telegram Web is
+         https://web.telegram.org/k/). read_page. The chat list is the left column; if the chat is not listed,
+         type the chat name into the search box at its top, then read_page again.
+      3. click the chat row whose label contains the chat name, wait(800), then read_page: the header must show
+         that chat name and the message composer (a textarea or contenteditable "Message" box at the bottom)
+         and the Send button must be listed. Do not type yet.
+      4. request_confirmation(action="Send message to '<chat name>'", details=<the update text, verbatim>).
+         Stop if the user denies. The approval grants ONE credit that the next type call spends.
+      5. type(ref=<composer ref>, text=<the SAME text you confirmed, verbatim>, submit=true) — one call: it
+         types and presses Enter, which sends. Then read_page: the message must now appear at the bottom of
+         the thread (outgoing bubble with your text). If it is still only in the composer, click the Send
+         button and read_page again. Leave the chat tab open.
+      6. Linear: list_teams() → take the team id (and list_projects(teamId) for the project id when one
+         matches the diploma project). Create 2 issues for the next milestone, each with a concrete title and
+         a 2-3 line description. Every create_issue needs its own approval: request_confirmation(action=
+         "Create Linear issue", details=<title + description>) then create_issue(title, teamId, description,
+         projectId) — one gated call per confirmation, never two gated calls in one turn.
+      7. GitHub: request_confirmation(action="Open GitHub issue", details=<title + body>) then
+         issue_write(method="create", owner, repo, title, body) tracking the milestone. Then
+         create_branch(owner, repo, branch="weekly-update-<YYYY-MM-DD>") and push_files(owner, repo, branch,
+         files=[{path: "docs/updates/<YYYY-MM-DD>.md", content: <the update + the issue links>}], message);
+         then request_confirmation(action="Open pull request", details=<PR title + body>) and ONE
+         create_pull_request(owner, repo, title, head=<that branch>, base="main", body).
+      8. Finish with: the message text and the chat it went to, the Linear identifiers + URLs, the GitHub
+         issue URL and the PR URL.
+      Budget: about 8 browser actions in total; the connector tools are not browser actions.
   - id: pitch-deck
     key: "6"
     title: Pitch deck from repo
@@ -97,9 +151,11 @@ sites:
       which lists modules as links: Student files, Student's schedule, Attendance mark, Student's Journal, Transcript,
       Student exam schedule, Registration for disciplines, News.
       Student files (/StudentFiles) is a folder browser: a table of rows plus Back and Enter buttons. The tree is
-      School > Instructor (Surname Name) > course folders > files. Select a row by clicking it, then press Enter
-      (press_key("Enter") or the Enter button); Back goes up. Files download when their row is opened the same way —
-      use download(ref=<row>) so the file goes to the vault.
+      School > Instructor (Surname Name) > course folder > numbered subfolders (1.Syllabus for the student, 2.Lectures,
+      3.Labs, …) > files. Select a row by clicking it, then click the Enter button (keyboard Enter does not open
+      folders here; reuse the Back/Enter refs from the last read_page — they are re-found after re-renders);
+      Back goes up. A file row does not download when clicked: its last cell holds an icon-only download button —
+      call download(ref=<that button's ref>) (or the row's ref) so the file goes to the vault.
       Student's schedule (/StudentSchedule) is a weekly grid; cells read "CODE Course name Instructor room (hh:mm-hh:mm)";
       it has Year and Term selectors - use them to see past semesters. Read the schedule first to learn each course's instructor.
   - domain: teams.microsoft.com
@@ -110,8 +166,14 @@ sites:
   - domain: web.telegram.org
     mode: dom
     notes: |
-      Telegram Web (K version). The chat list is the left column with a search box at its top; the message
-      composer is a contenteditable div at the bottom of the open chat; Enter sends. Never send without confirmation.
+      Telegram Web (K version, https://web.telegram.org/k/). The user is signed in; never touch the phone/code
+      login. The chat list is the left column with a search input at its top: typing a name filters the list,
+      and the chat rows show the chat name and its last message — click the row to open the chat (the header at
+      the top of the right column then shows that chat's name). The message composer is a contenteditable div
+      ("Message") at the bottom of the open chat with the Send button to its right; type(ref, text, submit=true)
+      enters the text and presses Enter, which sends (or click Send). After sending, the message appears as the
+      last outgoing bubble at the bottom of the thread — read_page to verify it. Never send without
+      request_confirmation of the exact text; never send twice.
   - domain: github.com
     mode: dom
     notes: |

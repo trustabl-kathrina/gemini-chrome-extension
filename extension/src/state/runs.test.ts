@@ -26,6 +26,7 @@ describe('applyEvent', () => {
     let run = newRun('r1', 'Sync my files from WSP into the vault, please', 'vault-sync', 0);
     expect(run.prompt).toBe('Sync my files from WSP into the vault, please');
     run = applyEvent(run, { kind: 'tool.call', target: 'browser', call: { id: 'c1', name: 'read_page', args: {} } });
+    run = applyEvent(run, { kind: 'tool.call', target: 'browser', call: { id: 'c1', name: 'read_page', args: {} } }); // stream repeat → no second row
     run = applyEvent(run, { kind: 'tool.call', target: 'server', call: { id: 'c2', name: 'parse_document', args: {} } });
     expect(browserActions(run)).toBe(1);
   });

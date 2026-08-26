@@ -41,6 +41,9 @@ const TIMEOUT_MS = Number(process.env.HARNESS_TIMEOUT_MS || 8 * 60 * 1000);
 const HEADLESS = process.env.HARNESS_HEADLESS === '1';
 const KEEP = process.env.HARNESS_KEEP === '1';
 const FAKE_OAUTH_TOKEN = 'harness-fake-oauth-token';
+// Vault mode the panel is seeded with: fake Drive for fake scenes; on the real portal the user's Drive is not
+// configured (no OAuth client), so files are kept by the brain only (PLAN v2: settings.vault.mode = 'brain').
+const VAULT_MODE = process.env.HARNESS_VAULT_MODE || (REAL ? 'brain' : 'drive');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (...a) => console.log(`[${new Date().toISOString().slice(11, 19)}]`, ...a);
@@ -101,8 +104,9 @@ if (!REAL) {
 }
 if (REAL && !fs.existsSync(path.join(profileDir, 'Default'))) fail(`--real profile has no Default/ dir: ${profileDir}`);
 
-const ctxInfo = { scene, real: REAL, wspUrl: WSP_URL, brainUrl: BRAIN_URL, driveUrl: DRIVE_URL, driveDir, downloadsDir, fakeLog: FAKE_LOG, token: TOKEN };
-const prompt = REAL && spec.realPrompt ? spec.realPrompt(ctxInfo) : typeof spec.prompt === 'function' ? spec.prompt(ctxInfo) : spec.prompt;
+const ctxInfo = { scene, real: REAL, vaultMode: VAULT_MODE, wspUrl: WSP_URL, brainUrl: BRAIN_URL, driveUrl: DRIVE_URL, driveDir, downloadsDir, fakeLog: FAKE_LOG, token: TOKEN };
+// HARNESS_PROMPT overrides the spec's prompt (e.g. a different course on the real portal); the spec still judges.
+const prompt = process.env.HARNESS_PROMPT || (REAL && spec.realPrompt ? spec.realPrompt(ctxInfo) : typeof spec.prompt === 'function' ? spec.prompt(ctxInfo) : spec.prompt);
 if (!prompt) fail(`spec ${scene} has no prompt`);
 
 // ---------- pre-flight ----------
@@ -142,7 +146,8 @@ const settings = {
   vision: true,
   showWork: true,
   vaultFolder: 'Dayflow',
-  vault: { mode: 'drive', folder: 'Dayflow' },
+  vaultMode: VAULT_MODE,
+  vault: { mode: VAULT_MODE, folder: 'Dayflow' },
   // Drive client base URL → fake Drive; a fake OAuth token so the extension skips chrome.identity entirely.
   driveApiBase: DRIVE_URL,
   account: { email: 'harness@dayflow.local', name: 'Harness', token: FAKE_OAUTH_TOKEN, expiresAt: Date.now() + 6 * 3600 * 1000 },
@@ -180,6 +185,7 @@ const result = {
   durationMs: 0,
   steps: [],
   actions: 0,
+  refusedActions: 0,
   toolCalls: {},
   artifacts: [],
   confirms: [],
@@ -223,6 +229,14 @@ try {
 
   let sw = ctx.serviceWorkers()[0] ?? (await ctx.waitForEvent('serviceworker', { timeout: 20000 }).catch(() => null));
   if (!sw) throw new Error('extension service worker did not start (is the build valid?)');
+  if (REAL) {
+    // A persistent profile keeps the previous build's service worker script; reload the unpacked extension so the
+    // build on disk is what runs (the fake profiles are recreated per run and never hit this).
+    const fresh = ctx.waitForEvent('serviceworker', { timeout: 20000 }).catch(() => null);
+    await sw.evaluate(() => chrome.runtime.reload()).catch(() => {});
+    sw = (await fresh) ?? ctx.serviceWorkers().at(-1) ?? sw;
+    log('extension reloaded so the current build runs');
+  }
   const extId = new URL(sw.url()).host;
   const swLog = [];
   sw.on('console', (m) => swLog.push(`[${m.type()}] ${m.text()}`));
@@ -383,7 +397,9 @@ try {
   result.summary = snap?.summary || '';
   result.title = snap?.title || '';
   result.steps = snap?.steps ?? [];
-  result.actions = result.steps.filter((s) => s.kind === 'tool' && s.target !== 'server').length;
+  // Executed browser actions: a call the brain's guard refused ("budget exhausted") never reached the browser.
+  result.actions = result.steps.filter((s) => s.kind === 'tool' && s.target !== 'server' && !/budget exhausted/i.test(s.summary ?? '')).length;
+  result.refusedActions = result.steps.filter((s) => s.kind === 'tool' && /budget exhausted/i.test(s.summary ?? '')).length;
   for (const s of result.steps) if (s.kind === 'tool') result.toolCalls[s.name] = (result.toolCalls[s.name] ?? 0) + 1;
   result.artifacts = result.steps.filter((s) => s.kind === 'artifact');
   if (result.status === 'timeout') {

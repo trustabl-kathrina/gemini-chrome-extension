@@ -14,6 +14,7 @@ _YAML = Path(__file__).with_name("models.yaml")
 
 class ModelRegistry(BaseModel):
     orchestrator: str
+    solver: str = ""  # empty → same model as the orchestrator
     parser: str
     classifier: str
     embed: str
@@ -23,7 +24,10 @@ class ModelRegistry(BaseModel):
 @lru_cache(maxsize=1)
 def registry() -> ModelRegistry:
     data = yaml.safe_load(_YAML.read_text())
-    for role in ("orchestrator", "parser", "classifier", "embed"):
+    for role in ("orchestrator", "solver", "parser", "classifier", "embed"):
         if override := os.getenv(f"DAYFLOW_MODEL_{role.upper()}"):
             data[role] = override
-    return ModelRegistry.model_validate(data)
+    reg = ModelRegistry.model_validate(data)
+    if not reg.solver:
+        reg.solver = reg.orchestrator
+    return reg

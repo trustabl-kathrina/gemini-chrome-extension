@@ -12,6 +12,10 @@ describe('AdkAdapter', () => {
     expect(r2.events).toEqual([{ kind: 'text', text: 'lo', partial: true }]);
     expect(r3.events).toEqual([{ kind: 'text', text: '', partial: false }]);
     expect(a.lastText).toBe('Hello');
+    // The next streamed message replaces the summary instead of being appended to it.
+    a.map({ partial: true, content: { parts: [{ text: 'Done: 3 files' }] } });
+    a.map({ partial: false, content: { parts: [{ text: 'Done: 3 files' }] } });
+    expect(a.lastText).toBe('Done: 3 files');
   });
 
   it('routes long-running calls to the browser and others to the server', () => {
@@ -71,10 +75,14 @@ describe('uniqueById', () => {
   it('collapses the partial + aggregate copies of one function call', () => {
     const a = new AdkAdapter();
     const fc = { functionCall: { id: 'c1', name: 'read_page', args: {} } };
-    const p1 = a.map({ partial: true, longRunningToolIds: ['c1'], content: { parts: [fc] } }).pending;
-    const p2 = a.map({ partial: false, longRunningToolIds: ['c1'], content: { parts: [fc] } }).pending;
-    expect([...p1, ...p2]).toHaveLength(2);
-    expect(uniqueById([...p1, ...p2]).map((c) => c.id)).toEqual(['c1']);
+    const r1 = a.map({ partial: true, longRunningToolIds: ['c1'], content: { parts: [fc] } });
+    const r2 = a.map({ partial: false, longRunningToolIds: ['c1'], content: { parts: [fc] } });
+    // The adapter itself emits one row and one pending call per call id (the aggregate copy is silent).
+    expect(r1.events.map((e) => e.kind)).toEqual(['tool.call']);
+    expect(r2.events).toEqual([]);
+    expect(r1.pending.map((c) => c.id)).toEqual(['c1']);
+    expect(r2.pending).toEqual([]);
+    expect(uniqueById([...r1.pending, ...r1.pending]).map((c) => c.id)).toEqual(['c1']);
   });
 });
 

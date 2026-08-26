@@ -4,10 +4,22 @@ const COURSE_FILES = ['syllabus.pdf', 'Lecture_01_Introduction.pdf', 'Lab_01_Ima
 
 export default {
   prompt: ({ wspUrl }) => `Sync the CSCI3240 Introduction to Computer Vision course files from WSP (${wspUrl}) into my vault and tell me what changed.`,
-  realPrompt: () => 'Sync the CSCI3240 Introduction to Computer Vision course files from WSP into my vault and tell me what changed.',
+  realPrompt: () =>
+    'Sync the Computer Vision course files (Spring 2025-2026, Koishiyeva D.) from WSP into my vault; if her folder is missing, say so and sync Cyber Security Fundamentals (Mukasheva Assel) instead.',
   expect(r, ctx) {
     const f = [];
     if (r.status !== 'done') f.push(`status is "${r.status}", expected "done" (${r.summary || 'no summary'})`);
+    if (ctx.real && ctx.vaultMode === 'brain') {
+      // Real portal without a Drive client: the brain keeps the files. Either ≥1 vault entry, or an honest
+      // statement that the requested folder is missing (the portal's content is not under the harness's control).
+      const entries = Array.isArray(ctx.vault) ? ctx.vault : null;
+      if (!entries) f.push(`GET /vault did not return a list: ${JSON.stringify(ctx.vault).slice(0, 160)}`);
+      else if (entries.length === 0 && !/missing|not found|no such|could not find|couldn't find|does not exist|not present|absent/i.test(r.summary)) {
+        f.push(`vault is empty and the summary does not say the folder is missing: ${r.summary.slice(0, 200)}`);
+      }
+      if (r.actions > 40) f.push(`${r.actions} browser actions, cap is 40`);
+      return f;
+    }
     const pdfs = ctx.driveFiles.filter((p) => /^Dayflow\/CSCI3240[^/]*\/.+\.pdf$/i.test(p));
     if (pdfs.length < 3) f.push(`expected 3 PDFs under Dayflow/CSCI3240*/ in fake-Drive, found ${pdfs.length}: [${ctx.drive.join(', ') || 'empty'}]`);
     for (const name of COURSE_FILES) {

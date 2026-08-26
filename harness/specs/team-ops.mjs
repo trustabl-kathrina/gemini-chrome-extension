@@ -1,5 +1,8 @@
-// Scene 3 — Team ops (PLAN v2): a confirmation card answered (harness auto-allows); the message is present on the fake
-// chat page ("Diploma · Team", read from the DOM); fake log has create_issue ≥1 and create_pull_request exactly 1.
+// Scene 3 — Team ops (PLAN v2): a confirmation card answered (harness auto-allows) whose text is the message that
+// was then sent; the message is present on the fake chat page ("Diploma · Team", read from the DOM); fake log has
+// create_issue ≥1 and create_pull_request exactly 1; ≤40 browser actions.
+const norm = (s) => String(s || '').replace(/[“”"'`]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+
 export default {
   prompt: ({ wspUrl }) =>
     `Summarise this week's work on the diploma repo (dayflow-student/diploma) and post the update to the "Diploma · Team" chat in the messenger at ${wspUrl}/chat (ask me before sending). Then create Linear issues for the next milestone and open a GitHub issue and one pull request for the repo.`,
@@ -8,7 +11,8 @@ export default {
   expect(r, ctx) {
     const f = [];
     if (r.status !== 'done') f.push(`status is "${r.status}", expected "done" (${r.summary || 'no summary'})`);
-    if (!r.confirms.some((c) => c.answer === 'allowed')) f.push('no confirmation card was shown and allowed before sending');
+    const allowed = r.confirms.filter((c) => c.answer === 'allowed');
+    if (!allowed.length) f.push('no confirmation card was shown and allowed before sending');
     const names = ctx.connectorCalls.map((c) => c.tool);
     const issues = names.filter((n) => n === 'create_issue').length;
     const prs = names.filter((n) => n === 'create_pull_request').length;
@@ -18,7 +22,17 @@ export default {
     const diploma = sent.filter((m) => /Diploma/i.test(m.chat || ''));
     if (!ctx.real && !ctx.chatDom.length && ctx.chatMessages.length) f.push('a message was sent but the /chat tab was closed before the run ended (message not visible in the DOM)');
     if (!diploma.length) f.push(`no message present in the "Diploma · Team" chat (sent: ${JSON.stringify(sent).slice(0, 200) || 'none'})`);
-    else if (diploma.every((m) => (m.text || '').trim().length < 20)) f.push(`the posted update is too short: ${JSON.stringify(diploma.map((m) => m.text))}`);
+    else {
+      if (diploma.every((m) => (m.text || '').trim().length < 20)) f.push(`the posted update is too short: ${JSON.stringify(diploma.map((m) => m.text))}`);
+      // The user approved the exact text that went out: some allowed card contains the sent message (or its first 60 chars).
+      const approved = diploma.some((m) => {
+        const t = norm(m.text);
+        return t.length >= 20 && allowed.some((c) => norm(c.message).includes(t) || norm(c.message).includes(t.slice(0, 60)));
+      });
+      if (!approved) f.push(`the sent text was not the text the user approved (sent: ${JSON.stringify(diploma.map((m) => m.text)).slice(0, 200)}; cards: ${JSON.stringify(allowed.map((c) => c.message)).slice(0, 300)})`);
+      const dupes = ctx.real ? 0 : ctx.chatMessages.filter((m) => /Diploma/i.test(m.chatName || '')).length;
+      if (dupes > 1) f.push(`the update was sent ${dupes} times to the Diploma chat, expected once`);
+    }
     if (r.actions > 40) f.push(`${r.actions} browser actions, cap is 40`);
     return f;
   },

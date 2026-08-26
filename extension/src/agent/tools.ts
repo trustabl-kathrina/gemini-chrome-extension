@@ -364,10 +364,27 @@ export class BrowserTools {
         if (got && !got.blob.type.startsWith('text/html')) return { ...got, source: href };
       }
     }
-    const pending = nextDownload(20000);
-    pending.catch(() => undefined);
-    if (ref) await contentTool(id, { name: 'click', ref });
-    const item = await pending;
+    let item: DownloadItem;
+    if (ref) {
+      // Vaadin file browsers differ: some start the download when the row is clicked, others only from a
+      // download icon inside the row. Try the ref itself, then the controls inside it, then those in its row.
+      const attempts: Json[] = [{ name: 'click', ref }, { name: 'activate', ref }, { name: 'activate', ref, row: true }];
+      let got: DownloadItem | null = null;
+      for (const [i, req] of attempts.entries()) {
+        const pending = nextDownload(i === attempts.length - 1 ? 12000 : 6000);
+        pending.catch(() => undefined);
+        const r = await contentTool<{ activated?: string[] }>(id, req).catch((): { activated?: string[] } => ({}));
+        if (req.name === 'activate' && !(r.activated?.length ?? 0)) continue; // nothing to click inside
+        got = await pending.catch(() => null);
+        if (got) break;
+      }
+      if (!got) throw new Error('no download started after clicking the ref and the controls inside its row — is the ref a file row/link? (try the row\'s download icon, or download(url=…))');
+      item = got;
+    } else {
+      const pending = nextDownload(20000);
+      pending.catch(() => undefined);
+      item = await pending;
+    }
     const src = item.finalUrl || item.url;
     if (!checkNavigable(src, this.settings.permissions.navigationAllowlist).ok) {
       await discardDownload(item.id);
@@ -376,7 +393,8 @@ export class BrowserTools {
     this.guards.log?.(`download captured from ${src}`);
     try {
       const got = await this.fetchBytes(src);
-      const name = item.filename?.split(/[\\/]/).pop() || got.name;
+      // Chrome names a repeated download "file (1).pdf"; the vault wants the portal's own file name.
+      const name = item.filename?.split(/[\\/]/).pop()?.replace(/ \(\d+\)(\.[^.]+)$/, '$1') || got.name;
       return { blob: got.blob, name, source: src };
     } finally {
       await discardDownload(item.id);

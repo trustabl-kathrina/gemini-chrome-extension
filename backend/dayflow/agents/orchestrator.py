@@ -25,11 +25,13 @@ from google.adk.agents import LlmAgent
 from google.adk.agents.readonly_context import ReadonlyContext
 from google.adk.tools import BaseTool, ToolContext
 
+from dayflow.agents.lab_solver import lab_solver_tool
 from dayflow.core.loader import ConfigStore
 from dayflow.core.models import Permissions, SiteProfile, Skill, UserConfig
 from dayflow.models.registry import registry
 from dayflow.tools.browser import BROWSER_ACTION_NAMES, BROWSER_TOOLS, CONFIRM_TOOL, URL_TOOL_NAMES
 from dayflow.tools.connectors import connector_toolsets
+from dayflow.tools.lab import LAB_TOOLS
 from dayflow.tools.server import SERVER_TOOLS
 
 
@@ -64,12 +66,14 @@ How you work:
   decide the next step. If it did not, do not repeat the same click blindly: re-read the page, scroll,
   wait, or choose another element.
 - Sites are perceived per the site profile's mode:
-  · mode dom (default): call read_page after every navigation, click or Enter and act by element refs
-    ([eN]); refs are valid only for the latest snapshot. Use the screenshot to verify, not to locate.
+  · mode dom (default): call read_page after a navigation or when the view changed and act by element refs
+    ([eN]). A ref keeps working while its element stays on the page (toolbar buttons survive view changes);
+    if a ref is reported gone, read_page again. Use the screenshot to verify, not to locate.
   · mode vision: start from screenshot(), act by coordinates with click_at(x, y); use read_page only to
     read text you cannot make out. Take a screenshot after every action.
 - Vaadin portals (like WSP) have no real links: navigate by clicking. In folder tables a click only
-  SELECTS the row — then press_key("Enter") (or click the Enter button) to open it; Back goes up.
+  SELECTS the row — then click the Enter button to open it (press_key("Enter") is a fallback that some
+  portals ignore); Back goes up. Files download from the download icon in their row: download(ref=…).
 - Budget: at most {MAX_ACTIONS} browser actions per run. Plan the shortest path, avoid redundant reads,
   and when the budget is exhausted the tools return an error — then stop and report what was done.
 - Outward-facing or irreversible actions (sending messages, creating issues/PRs) need request_confirmation
@@ -84,7 +88,16 @@ def site_section(site: SiteProfile) -> str:
     return f"### {site.domain} (mode: {site.mode})\n{site.notes.strip()}"
 
 
+def skill_section(skill: Skill) -> str:
+    text = f"### {skill.title} (/{skill.id})\n{skill.instructions.strip()}"
+    if skill.tools:
+        text += "\nTools: " + ", ".join(skill.tools)
+    return text
+
+
 def compose_instruction(cfg: UserConfig, skill: Skill | None, domains: list[str]) -> str:
+    """Base prompt + memory + the active skill (or every enabled skill as a playbook when the user typed a
+    free prompt) + the site profiles in scope (every profile when no narrower scope is known) + permissions."""
     parts = [BASE_PROMPT]
     if cfg.memory:
         parts.append(f"## What you remember about this user\n{cfg.memory}")
@@ -93,8 +106,18 @@ def compose_instruction(cfg: UserConfig, skill: Skill | None, domains: list[str]
         parts.append(f"## Active skill: {skill.title}\n{skill.instructions.strip()}")
         if skill.tools:
             parts.append("Tools this skill may use: " + ", ".join(skill.tools))
+    else:
+        playbooks = [s for s in cfg.skills if s.enabled and s.instructions.strip()]
+        if playbooks:
+            intro = (
+                "## Skills you know (playbooks)\nWhen the request matches one of these, follow its steps as if the "
+                "user had invoked it; otherwise plan from the site notes.\n\n"
+            )
+            parts.append(intro + "\n\n".join(map(skill_section, playbooks)))
     profiles: list[SiteProfile] = []
     unprofiled: list[str] = []
+    if not domains and not skill:
+        profiles = list(cfg.sites)  # no narrower scope: the user may send the agent to any configured site
     for d in domains:
         site = cfg.site(d)
         if site is None:
@@ -198,6 +221,6 @@ def build_root_agent(store: ConfigStore) -> LlmAgent:
         model=registry().orchestrator,
         description="Dayflow orchestrator: drives the user's browser and server tools to run skills.",
         instruction=instruction,
-        tools=[*BROWSER_TOOLS, CONFIRM_TOOL, *SERVER_TOOLS, *connector_toolsets()],
+        tools=[*BROWSER_TOOLS, CONFIRM_TOOL, *SERVER_TOOLS, *LAB_TOOLS, lab_solver_tool(), *connector_toolsets()],
         before_tool_callback=before_tool,
     )

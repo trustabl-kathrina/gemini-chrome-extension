@@ -90,11 +90,39 @@
       renderFiles();
     } else download(row.url);
   }
+  // Like the real portal, the toolbar (Back, Enter, path) is created once and survives folder changes, so element
+  // refs the agent took for those buttons stay valid while the table below is re-rendered.
+  let toolbar = null;
+  function ensureToolbar() {
+    if (toolbar) return toolbar;
+    const backBtn = vButton('Back', back, false);
+    const enterBtn = vButton('Enter', enter, false);
+    const label = h('span', { class: 'path v-label' }, '');
+    toolbar = h('div', { class: 'toolbar' }, backBtn, enterBtn, label);
+    toolbar.update = () => {
+      backBtn.classList.toggle('v-disabled', fs.stack.length === 0);
+      label.textContent = pathLabel();
+    };
+    return toolbar;
+  }
   function back() {
     if (!fs.stack.length) return;
     fs.selected = fs.stack.pop();
     renderFiles();
   }
+  // Like the Vaadin table: with a row selected, the Enter key opens it (Backspace goes up) — the Enter/Back
+  // buttons do the same. Typing fields keep their keys.
+  document.addEventListener('keydown', (e) => {
+    if (location.pathname.replace(/\/+$/, '') !== '/StudentFiles') return;
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
+    if (e.key === 'Enter' && fs.selected >= 0) {
+      e.preventDefault();
+      enter();
+    } else if (e.key === 'Backspace') {
+      e.preventDefault();
+      back();
+    }
+  });
   function renderFiles() {
     const lv = level();
     const rows = lv.rows.map((row, idx) =>
@@ -103,31 +131,49 @@
         {
           class: 'v-table-row' + (idx === fs.selected ? ' v-selected' : ''),
           onclick: () => {
+            // A click only selects the row (real portal behaviour); files download from the row's download button
+            // or by pressing Enter on the selected row.
             fs.selected = idx;
             for (const tr of view.querySelectorAll('tr.v-table-row')) tr.classList.toggle('v-selected', tr.rowIndex - 1 === idx);
-            if (!row.folder) download(row.url);
           },
         },
         h('td', { class: 'v-table-cell-content' }, h('div', { class: 'v-table-cell-wrapper' }, row.name)),
         h('td', { class: 'v-table-cell-content' }, h('div', { class: 'v-table-cell-wrapper' }, row.folder ? 'Folder' : 'File')),
         h('td', { class: 'v-table-cell-content' }, h('div', { class: 'v-table-cell-wrapper' }, row.folder ? '' : (row.size ? row.size + ' B' : ''))),
         h('td', { class: 'v-table-cell-content' }, h('div', { class: 'v-table-cell-wrapper' }, row.modified || '')),
+        h(
+          'td',
+          { class: 'v-table-cell-content' },
+          h(
+            'div',
+            { class: 'v-table-cell-wrapper' },
+            row.folder
+              ? ''
+              : h(
+                  'div',
+                  { class: 'v-button v-widget v-button-link dl-button', role: 'button', tabindex: '0', title: 'Download', onclick: (e) => (e.stopPropagation(), download(row.url)) },
+                  h('span', { class: 'v-button-wrap' }, h('img', { class: 'v-icon', src: '/icons/download.svg', alt: 'Download' })),
+                ),
+          ),
+        ),
       ),
     );
+    const bar = ensureToolbar();
+    bar.update();
     view.replaceChildren(
       h('h2', { class: 'v-caption' }, 'Student files'),
-      h('div', { class: 'toolbar' }, vButton('Back', back, fs.stack.length === 0), vButton('Enter', enter), h('span', { class: 'path v-label' }, pathLabel())),
+      bar,
       h(
         'div',
         { class: 'v-table' },
         h(
           'table',
           { class: 'v-table-table' },
-          h('thead', null, h('tr', { class: 'v-table-header' }, ['Name', 'Type', 'Size', 'Modified'].map((t) => h('td', null, t)))),
-          h('tbody', null, rows.length ? rows : h('tr', null, h('td', { class: 'empty', colspan: '4' }, 'Empty folder'))),
+          h('thead', null, h('tr', { class: 'v-table-header' }, ['Name', 'Type', 'Size', 'Modified', ''].map((t) => h('td', null, t)))),
+          h('tbody', null, rows.length ? rows : h('tr', null, h('td', { class: 'empty', colspan: '5' }, 'Empty folder'))),
         ),
       ),
-      h('p', { class: 'v-label', style: 'color:#6b7a8a;margin-top:8px' }, 'Select a row, then press Enter to open a folder. Files download when opened.'),
+      h('p', { class: 'v-label', style: 'color:#6b7a8a;margin-top:8px' }, 'Select a row, then press Enter to open a folder. Files download from the arrow button in their row.'),
     );
   }
 
@@ -187,7 +233,8 @@
       .map((c) =>
         h(
           'div',
-          { class: 'chat-row' + (c.id === current.id ? ' active' : ''), onclick: () => ((chat.active = c.id), renderChat()) },
+          // A real interactive row (like Telegram's chat list items): read_page lists it as `listitem "<name> <last message>"`.
+          { class: 'chat-row' + (c.id === current.id ? ' active' : ''), role: 'listitem', tabindex: '0', 'aria-selected': c.id === current.id ? 'true' : 'false', onclick: () => ((chat.active = c.id), renderChat()) },
           h('div', { class: 'chat-name' }, c.name),
           h('div', { class: 'chat-last' }, c.messages.length ? c.messages[c.messages.length - 1].text : ''),
         ),

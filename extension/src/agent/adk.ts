@@ -56,6 +56,7 @@ export class AdkAdapter {
       if (part.text !== undefined) {
         if (ev.partial) {
           events.push({ kind: 'text', text: part.text, partial: true });
+          if (!this.streaming) this.lastText = ''; // a new message starts: the summary is the last message, not all of them
           this.streaming = true;
           this.lastText += part.text;
         } else if (this.streaming) {
@@ -72,6 +73,8 @@ export class AdkAdapter {
       const fc = part.functionCall;
       if (fc) {
         const id = fc.id ?? `${fc.name}-${now}`;
+        // ADK streams a function call twice (partial chunk + aggregate event): one panel row, one pending call.
+        if (this.started.has(id)) continue;
         const call: ToolCall = { id, name: fc.name, args: fc.args ?? {} };
         if (fc.name === CONFIRM_TOOL) {
           events.push({ kind: 'confirm', id, message: confirmMessage(fc.args ?? {}) });
