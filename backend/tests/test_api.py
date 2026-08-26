@@ -376,3 +376,13 @@ async def test_cron_rejects_user_token_and_accepts_scheduler_sa(
     oidc(monkeypatch, {"email": "cron@sa", "email_verified": True})
     r = await client.post("/cron", headers={"Authorization": "Bearer t"})
     assert r.status_code == 200 and "enqueued" in r.json()
+
+
+def test_public_url_not_learned_from_untrusted_host():
+    from dayflow.api.app import trusted_public_host
+
+    assert trusted_public_host("127.0.0.1")
+    assert trusted_public_host("dayflow-brain-226180967155.europe-west4.run.app")
+    assert not trusted_public_host("evil.example")
+    assert not trusted_public_host("run.app.evil.example")
+    assert not trusted_public_host(None)

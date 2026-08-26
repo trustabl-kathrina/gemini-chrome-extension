@@ -39,6 +39,14 @@ SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 SCREENSHOT_KEY = "screenshot_b64"
 MAX_SCREENSHOT_BYTES = 1_500_000  # decoded; the extension sends JPEG ≤1280px q≈55, typically 100–200 KB
 
+def trusted_public_host(host: str | None) -> bool:
+    """Hosts whose request base URL may seed public page links when DAYFLOW_PUBLIC_URL is unset."""
+    if not host:
+        return False
+    h = host.lower()
+    return h in {"localhost", "127.0.0.1", "::1"} or h.endswith(".run.app")
+
+
 
 class ChatRequest(BaseModel):
     session_id: str
@@ -182,9 +190,11 @@ def create_app(
 
     @app.middleware("http")
     async def learn_public_url(request: Request, call_next: Any) -> Any:
-        # Without DAYFLOW_PUBLIC_URL, page links use the base URL the first request came in on.
+        # Without DAYFLOW_PUBLIC_URL, page links use the base URL of the first request — but only from
+        # hosts we trust (loopback for local dev, *.run.app for Cloud Run); an arbitrary Host header
+        # must never become the base of links we hand to users (host-header poisoning).
         pages_store: PageStore = request.app.state.pages
-        if not pages_store.base_url:
+        if not pages_store.base_url and trusted_public_host(request.url.hostname):
             pages_store.base_url = str(request.base_url).rstrip("/")
         return await call_next(request)
 
