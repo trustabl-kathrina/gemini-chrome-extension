@@ -1,6 +1,7 @@
 import { liveRun } from '@/src/agent/live';
 import { mockRun } from '@/src/agent/mock';
 import { BrowserTools } from '@/src/agent/tools';
+import { notify, skillIdFromAlarm, syncAlarms } from '@/src/agent/scheduler';
 import { DEFAULT_SETTINGS, PANEL_PORT, type AgentEvent, type PanelMessage, type PanelRequest, type Settings } from '@/src/protocol';
 
 /** One in-flight run: cancellation + pending confirmations. */
@@ -10,13 +11,14 @@ interface Active {
 }
 
 const active = new Map<string, Active>();
+const panels = new Set<ReturnType<typeof browser.runtime.connect>>();
 
 async function loadSettings(): Promise<Settings> {
   const { settings } = await browser.storage.local.get('settings');
   return { ...DEFAULT_SETTINGS, ...(settings as Partial<Settings> | undefined) };
 }
 
-async function startRun(req: Extract<PanelRequest, { type: 'run.start' }>, post: (m: PanelMessage) => void) {
+async function startRun(req: Extract<PanelRequest, { type: 'run.start' }>, post: (m: PanelMessage) => void, background = false) {
   const abort = new AbortController();
   const confirms = new Map<string, (allow: boolean) => void>();
   active.set(req.runId, { abort, confirms });
@@ -29,7 +31,10 @@ async function startRun(req: Extract<PanelRequest, { type: 'run.start' }>, post:
       settings.mode === 'live'
         ? liveRun(settings, req, { signal: abort.signal, waitForConfirm, executeTool: (call) => new BrowserTools(settings.vaultFolder).execute(call) })
         : mockRun(req.skillId, req.text, { signal: abort.signal, waitForConfirm });
-    for await (const ev of stream) send(ev);
+    for await (const ev of stream) {
+      send(ev);
+      if (background && ev.kind === 'run.end') notify(ev.status === 'done' ? 'Dayflow finished a scheduled skill' : `Dayflow: ${ev.status}`, ev.summary);
+    }
   } catch (e) {
     send({ kind: 'run.end', status: 'error', summary: e instanceof Error ? e.message : String(e) });
   } finally {
@@ -42,6 +47,8 @@ export default defineBackground(() => {
 
   browser.runtime.onConnect.addListener((port) => {
     if (port.name !== PANEL_PORT) return;
+    panels.add(port);
+    port.onDisconnect.addListener(() => panels.delete(port));
     const post = (m: PanelMessage) => {
       try {
         port.postMessage(m);
@@ -68,8 +75,23 @@ export default defineBackground(() => {
     });
   });
 
-  // Scheduled skills land here once the scheduler is wired (chrome.alarms → run.start).
-  browser.alarms.onAlarm.addListener((alarm) => {
-    console.log('[dayflow] alarm', alarm.name);
+  // Scheduled skills: one alarm per skill, re-armed after each firing and whenever settings change.
+  const rearm = () => void loadSettings().then(syncAlarms);
+  browser.runtime.onInstalled.addListener(rearm);
+  browser.runtime.onStartup.addListener(rearm);
+  browser.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.settings) rearm();
+  });
+  browser.alarms.onAlarm.addListener(async (alarm) => {
+    const skillId = skillIdFromAlarm(alarm.name);
+    if (!skillId) return;
+    const settings = await loadSettings();
+    const skill = settings.skills.find((s) => s.id === skillId);
+    if (skill?.enabled) {
+      const runId = crypto.randomUUID();
+      const post = (m: PanelMessage) => panels.forEach((p) => { try { p.postMessage(m); } catch { /* closed */ } });
+      void startRun({ type: 'run.start', runId, skillId, text: skill.prompt }, post, true);
+    }
+    await syncAlarms(settings);
   });
 });

@@ -1,0 +1,6 @@
+# Role → model id. Swap models here, never in code.
+orchestrator: gemini-3.7-flash
+parser: gemini-3.5-flash-lite
+classifier: gemma-4-26b-a4b-it
+embed: gemini-embedding-2
+embed_dims: 768

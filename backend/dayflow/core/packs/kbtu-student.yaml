@@ -1,0 +1,88 @@
+# Default skill pack. Everything KBTU-specific lives here, not in code.
+name: kbtu-student
+skills:
+  - id: vault-sync
+    key: "1"
+    title: Sync WSP files to vault
+    blurb: Walk every course directory on WSP, pull new or changed files into Downloads/DayflowVault.
+    prompt: Sync all course files from WSP into my vault and tell me what changed.
+    sites: [wsp.kbtu.kz]
+    tools: [open_tab, read_page, click, download, wait, parse_document]
+    schedule: "0 8 * * *"
+    instructions: |
+      Goal: mirror every course's file directory from WSP into the vault, then index new files.
+      Procedure: open WSP in a pinned background tab; read the page; for each course open its Files
+      section; compare file names and dates with the vault index in state; download only new or
+      changed files into "<vault>/<Course>/<Week NN|Lab NN>/"; call parse_document for each new file.
+      Finish with a short changelog: files added, deadlines discovered.
+  - id: courseware
+    key: "2"
+    title: Build courseware from syllabus
+    blurb: Cheatsheet + quiz per topic, generated from the syllabus and opened as a page.
+    prompt: Build a cheatsheet and a quiz from the syllabus of the current course.
+    sites: []
+    tools: [read_page, open_tab, parse_document]
+    instructions: |
+      Read the course syllabus from the vault (or the current tab). Produce a compact cheatsheet and a
+      10-question quiz for the requested scope, as a single HTML page served by the brain, then open it.
+  - id: scaffold
+    key: "3"
+    title: Scaffold vault folders
+    blurb: Per course, per week, per lab — folder tree initialized from the syllabus schedule.
+    prompt: Create the vault folder structure for this semester from my syllabi.
+    sites: []
+    tools: [download, parse_document]
+    instructions: |
+      From each syllabus derive weeks and labs; create "<vault>/<Course>/Week NN/" and "Lab NN/" by
+      downloading an empty .keep file into each. Report the tree.
+  - id: bootstrap
+    key: "4"
+    title: Bootstrap coding project
+    blurb: GitHub repo or notebook with a working foundation and a TODO list, via GitHub MCP.
+    prompt: Bootstrap a GitHub repo for my course project with a notebook and a TODO list.
+    sites: [github.com]
+    tools: [create_repository, create_branch, push_files, open_tab, parse_document]
+    instructions: |
+      Read the lab/project requirements. Create a private repo, push README.md, TODO.md (7–10 concrete
+      tasks), a starter notebook or source tree, requirements and .gitignore in ONE push_files call,
+      then open the repo in a tab.
+  - id: team-ops
+    key: "5"
+    title: "Team ops: Telegram → Linear → GitHub"
+    blurb: Post an update to the diploma chat, file Linear issues, open a GitHub issue + PR.
+    prompt: Post this week's update to the diploma project chat, create Linear issues for the next milestone, and open the PR.
+    sites: [web.telegram.org, linear.app, github.com]
+    tools: [open_tab, read_page, click, type_text, list_teams, list_projects, create_issue, issue_write, create_pull_request, get_file_contents]
+    instructions: |
+      Draft the weekly update from recent repo activity. Open Telegram Web, find the team chat by name,
+      ask for confirmation before typing and sending. Then create Linear issues for the next milestone
+      and open a GitHub issue and PR. Summarise IDs and links.
+  - id: pitch-deck
+    key: "6"
+    title: Pitch deck from repo
+    blurb: A deck about the diploma project, generated from the repo and opened in Slides.
+    prompt: Build a pitch deck about my diploma project repo and open it.
+    sites: [drive.google.com, github.com]
+    tools: [get_file_contents, download, open_tab, click]
+    instructions: |
+      Read README and TODO from the repo, outline 8 slides (problem, users, solution, demo, architecture,
+      progress, plan, ask). Build the .pptx server-side, download it into "<vault>/Diploma/", then open
+      Google Drive and upload it so it opens in Slides.
+sites:
+  - domain: wsp.kbtu.kz
+    notes: |
+      KBTU student portal. Login is SSO; assume the user is signed in. Courses are listed under
+      "Registration Online" → current semester. Each course row has a "Files" link; files are grouped
+      by week and show upload dates. Attendance and scores are under "Transcript / Attendance".
+  - domain: teams.microsoft.com
+    notes: |
+      Microsoft Teams web. Course teams are in the left rail; announcements are in the General channel,
+      assignments under the Assignments tab. Heavy SPA — always take a fresh read_page after clicking.
+  - domain: web.telegram.org
+    notes: |
+      Telegram Web (K version). Search chats with the search field at the top-left; the message
+      composer is a contenteditable div; Enter sends. Never send without confirmation.
+permissions:
+  allowed_hosts: [wsp.kbtu.kz, teams.microsoft.com, web.telegram.org, github.com, linear.app, drive.google.com, docs.google.com, dayflow-brain.run.app]
+  ask_before: [type_text, create_pull_request, issue_write, create_issue]
+  mode: ask
