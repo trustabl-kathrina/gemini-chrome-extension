@@ -1,6 +1,10 @@
 import type { AgentEvent, Settings, ToolCall } from '../protocol';
 import { AdkAdapter, parseSse, type AdkEvent, type PendingCall } from './adk';
 
+export function uniqueById<T extends { id: string }>(items: T[]): T[] {
+  return [...new Map(items.map((i) => [i.id, i])).values()];
+}
+
 export interface LiveControls {
   signal: AbortSignal;
   executeTool: (call: ToolCall) => Promise<Record<string, unknown>>;
@@ -37,8 +41,9 @@ export async function* liveRun(
         for (const e of events) yield e;
         queued.push(...p);
       }
-      // A call the server already answered (guard error) is not ours to execute.
-      const pending = queued.filter((c) => !adapter.resolved.has(c.id));
+      // ADK streams each function call twice (partial + aggregate) → dedupe by id;
+      // a call the server already answered (guard error) is not ours to execute.
+      const pending = uniqueById(queued).filter((c) => !adapter.resolved.has(c.id));
       if (pending.length === 0) break;
 
       // Resolve every pending call, then resume with all results in one message.

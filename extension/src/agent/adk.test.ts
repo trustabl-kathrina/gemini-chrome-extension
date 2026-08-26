@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AdkAdapter, parseSse } from './adk';
+import { uniqueById } from './live';
 
 describe('AdkAdapter', () => {
   it('streams partial text and swallows the aggregated repeat', () => {
@@ -45,6 +46,17 @@ describe('AdkAdapter.resolved', () => {
     a.map({ longRunningToolIds: ['n1'], content: { parts: [{ functionCall: { id: 'n1', name: 'navigate', args: { url: 'https://evil.com' } } }] } });
     a.map({ content: { parts: [{ functionResponse: { id: 'n1', name: 'navigate', response: { status: 'error', message: 'blocked' } } }] } });
     expect(a.resolved.has('n1')).toBe(true);
+  });
+});
+
+describe('uniqueById', () => {
+  it('collapses the partial + aggregate copies of one function call', () => {
+    const a = new AdkAdapter();
+    const fc = { functionCall: { id: 'c1', name: 'read_page', args: {} } };
+    const p1 = a.map({ partial: true, longRunningToolIds: ['c1'], content: { parts: [fc] } }).pending;
+    const p2 = a.map({ partial: false, longRunningToolIds: ['c1'], content: { parts: [fc] } }).pending;
+    expect([...p1, ...p2]).toHaveLength(2);
+    expect(uniqueById([...p1, ...p2]).map((c) => c.id)).toEqual(['c1']);
   });
 });
 
