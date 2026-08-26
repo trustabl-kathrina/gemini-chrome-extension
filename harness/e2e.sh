@@ -20,9 +20,10 @@ export FAKE_DRIVE_URL="http://127.0.0.1:$DRIVE_PORT"
 export DAYFLOW_TOKEN=${DAYFLOW_TOKEN:-dev}
 REAL_FLAG=""
 [ "${E2E_REAL:-0}" = "1" ] && REAL_FLAG="--real"
-# Headed Chromium needs a display; default to the new headless mode when there is none (CI, ssh).
-if [ -z "${HARNESS_HEADLESS:-}" ] && [ -z "${DISPLAY:-}" ] && [ -z "${WAYLAND_DISPLAY:-}" ]; then
-  export HARNESS_HEADLESS=1
+# Automated runs are invisible by default (new headless Chromium loads the extension fine); set
+# HARNESS_HEADED=1 to watch a run on your desktop. --real always needs the headed signed-in profile.
+if [ -z "${HARNESS_HEADLESS:-}" ]; then
+  if [ "${HARNESS_HEADED:-0}" = "1" ] || [ "${E2E_REAL:-0}" = "1" ]; then export HARNESS_HEADLESS=0; else export HARNESS_HEADLESS=1; fi
 fi
 
 # Machine dependencies that fail late and confusingly otherwise: Vertex ADC + project, Node ≥ 22.18 (TypeScript
