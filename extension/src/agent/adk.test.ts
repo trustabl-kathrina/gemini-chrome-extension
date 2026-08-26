@@ -39,6 +39,15 @@ describe('AdkAdapter', () => {
   });
 });
 
+describe('AdkAdapter.resolved', () => {
+  it('records server-answered call ids so the browser can skip them', () => {
+    const a = new AdkAdapter();
+    a.map({ longRunningToolIds: ['n1'], content: { parts: [{ functionCall: { id: 'n1', name: 'navigate', args: { url: 'https://evil.com' } } }] } });
+    a.map({ content: { parts: [{ functionResponse: { id: 'n1', name: 'navigate', response: { status: 'error', message: 'blocked' } } }] } });
+    expect(a.resolved.has('n1')).toBe(true);
+  });
+});
+
 describe('parseSse', () => {
   it('splits events across chunk boundaries', async () => {
     const enc = new TextEncoder();

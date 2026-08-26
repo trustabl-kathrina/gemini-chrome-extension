@@ -35,6 +35,9 @@ export class AdkAdapter {
   /** Last non-empty model text; used as the run summary. */
   lastText = '';
 
+  /** Calls the brain answered itself in the same stream (e.g. a guard's error response) — the browser must NOT execute these. */
+  resolved = new Set<string>();
+
   map(ev: AdkEvent, now = Date.now()): { events: AgentEvent[]; pending: PendingCall[] } {
     const events: AgentEvent[] = [];
     const pending: PendingCall[] = [];
@@ -81,6 +84,7 @@ export class AdkAdapter {
       const fr = part.functionResponse;
       if (fr) {
         const id = fr.id ?? fr.name;
+        this.resolved.add(id);
         const t0 = this.started.get(id) ?? now;
         const r = fr.response ?? {};
         const ok = r.status !== 'error';

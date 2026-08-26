@@ -31,12 +31,14 @@ export async function* liveRun(
   try {
     let stream = exchange('/chat', { session_id: req.runId, skill_id: req.skillId, text: req.text });
     for (;;) {
-      const pending: PendingCall[] = [];
+      const queued: PendingCall[] = [];
       for await (const ev of stream) {
         const { events, pending: p } = adapter.map(ev);
         for (const e of events) yield e;
-        pending.push(...p);
+        queued.push(...p);
       }
+      // A call the server already answered (guard error) is not ours to execute.
+      const pending = queued.filter((c) => !adapter.resolved.has(c.id));
       if (pending.length === 0) break;
 
       // Resolve every pending call, then resume with all results in one message.
