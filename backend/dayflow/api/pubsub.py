@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import base64
 import json
-import os
-import secrets
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 
+from dayflow.api.oidc import verify_google_oidc
 from dayflow.workers.handlers import dispatch
 
 router = APIRouter()
@@ -30,11 +29,12 @@ def decode_envelope(body: dict[str, Any]) -> dict[str, Any]:
 
 
 @router.post("/pubsub", status_code=status.HTTP_204_NO_CONTENT)
-async def pubsub_push(request: Request, token: str = Query(default="")) -> Response:
-    # Push subscriptions carry ?token=... (see Cloud Run Pub/Sub tutorial). OIDC audience check: TODO(auth).
-    expected = os.getenv("PUBSUB_VERIFICATION_TOKEN", "")
-    if not expected or not secrets.compare_digest(token, expected):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "bad verification token")
+async def pubsub_push(request: Request) -> Response:
+    # Push subscriptions authenticate with an OIDC token from PUBSUB_PUSH_SA (audience = this URL).
+    verify_google_oidc(request, "PUBSUB_PUSH_SA")
     payload = decode_envelope(await request.json())
-    await dispatch(payload)
+    try:
+        await dispatch(payload, verified=True)
+    except (ValueError, PermissionError) as e:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
     return Response(status_code=status.HTTP_204_NO_CONTENT)

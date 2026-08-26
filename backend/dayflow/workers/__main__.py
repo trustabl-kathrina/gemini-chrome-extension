@@ -11,7 +11,7 @@ app = FastAPI(title="Dayflow worker")
 app.include_router(pubsub_router)
 
 
-@app.get("/healthz")
+@app.get("/health")
 async def healthz() -> dict[str, bool]:
     return {"ok": True}
 

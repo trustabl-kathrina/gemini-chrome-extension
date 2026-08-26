@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 
 from dayflow.agents.orchestrator import CONFIRMATIONS_KEY, DOMAINS_KEY, SKILL_KEY, build_root_agent
 from dayflow.api.auth import current_user
+from dayflow.api.oidc import verify_google_oidc
 from dayflow.api.pubsub import router as pubsub_router
 from dayflow.core.loader import ConfigStore, firestore_enabled, make_config_store
 from dayflow.core.models import Skill, UserConfig
@@ -37,11 +38,17 @@ class ChatRequest(BaseModel):
     domains: list[str] = Field(default_factory=list)
 
 
-class ToolResultRequest(BaseModel):
-    session_id: str
+class ToolResult(BaseModel):
     call_id: str
     name: str
     result: dict[str, Any] = Field(default_factory=dict)
+
+
+class ToolResultRequest(BaseModel):
+    """One message may resolve several pending long-running calls."""
+
+    session_id: str
+    results: list[ToolResult] = Field(min_length=1)
 
 
 def make_session_service() -> BaseSessionService:
@@ -90,7 +97,7 @@ def create_app(store: ConfigStore | None = None, runner: Runner | None = None) -
     )
     app.include_router(pubsub_router)
 
-    @app.get("/healthz")
+    @app.get("/health")
     async def healthz() -> dict[str, Any]:
         return {"ok": True, "firestore": firestore_enabled(), "service": os.getenv("K_SERVICE", "local")}
 
@@ -133,14 +140,18 @@ def create_app(store: ConfigStore | None = None, runner: Runner | None = None) -
     ) -> StreamingResponse:
         runner: Runner = request.app.state.runner
         state_delta: dict[str, Any] | None = None
-        if body.name == "request_confirmation" and body.result.get("confirmed"):
+        confirmed = sum(1 for r in body.results if r.name == "request_confirmation" and r.result.get("confirmed"))
+        if confirmed:
             session = await runner.session_service.get_session(
                 app_name=APP_NAME, user_id=user_id, session_id=body.session_id
             )
             credits = int((session.state.get(CONFIRMATIONS_KEY, 0) if session else 0) or 0)
-            state_delta = {CONFIRMATIONS_KEY: credits + 1}
-        fr = types.FunctionResponse(id=body.call_id, name=body.name, response=body.result)
-        content = types.Content(role="user", parts=[types.Part(function_response=fr)])
+            state_delta = {CONFIRMATIONS_KEY: credits + confirmed}
+        parts = [
+            types.Part(function_response=types.FunctionResponse(id=r.call_id, name=r.name, response=r.result))
+            for r in body.results
+        ]
+        content = types.Content(role="user", parts=parts)
         return StreamingResponse(
             sse(runner, user_id, body.session_id, content, state_delta),
             media_type="text/event-stream",
@@ -148,7 +159,9 @@ def create_app(store: ConfigStore | None = None, runner: Runner | None = None) -
         )
 
     @app.post("/cron")
-    async def cron(request: Request, _: str = Depends(current_user)) -> dict[str, Any]:
+    async def cron(request: Request) -> dict[str, Any]:
+        # Cloud Scheduler calls with an OIDC token from CRON_INVOKER_SA — never the extension's user token.
+        verify_google_oidc(request, "CRON_INVOKER_SA")
         jobs = await run_once(request.app.state.store)
         return {"enqueued": len(jobs), "jobs": jobs}
 
