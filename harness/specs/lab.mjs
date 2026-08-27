@@ -42,7 +42,7 @@ export default {
       if (!nbArtifact) f.push('no brain-served .ipynb artifact (build_notebook → download(url=ipynb_url))');
       const vaultNb = (r.vault || []).find((e) => /\.ipynb$/.test(e.path || ''));
       if (!vaultNb) f.push('no .ipynb in the vault');
-      const colab = (r.toolCalls || []).some((c) => c.name === 'open_tab' && /colab\.research\.google\.com/.test(c.args || ''));
+      const colab = (r.steps || []).some((c) => c.kind === 'tool' && c.name === 'open_tab' && /colab\.research\.google\.com/.test(c.args || ''));
       if (!colab) f.push('no open_tab to colab.research.google.com');
       if (nbArtifact) {
         try {

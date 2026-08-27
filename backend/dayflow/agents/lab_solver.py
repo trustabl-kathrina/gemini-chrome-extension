@@ -26,6 +26,7 @@ from google.genai import types
 from pydantic import BaseModel, Field
 
 from dayflow.models.registry import registry
+from dayflow.models.resilient import RETRY, ResilientGemini
 from dayflow.tools.lab import run_python
 
 log = logging.getLogger("dayflow.lab_solver")
@@ -60,9 +61,10 @@ Rules:
 
 
 def build_lab_solver(model: str | None = None) -> LlmAgent:
+    reg = registry()
     return LlmAgent(
         name=SOLVER_NAME,
-        model=model or registry().solver,
+        model=model or ResilientGemini(model=reg.solver, retry_options=RETRY, fallbacks=list(reg.fallbacks)),
         description=(
             "Solves ONE lab task with Python: writes a self-contained script, runs it (numpy available) and "
             "returns {code, stdout, notes}. Call it once per task with the task's full text and the lab's "

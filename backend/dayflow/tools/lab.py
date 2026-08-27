@@ -232,7 +232,7 @@ async def build_notebook(title: str, cells: list[dict[str, str]], execute: bool 
 
 
 def notebook_file_name(title: str) -> str:
-    """"CSCI3240 — Lab 01: …" → lab01.ipynb; "… Assignment 4 …" → lab04.ipynb; no number → lab.ipynb."""
+    """ "CSCI3240 — Lab 01: …" → lab01.ipynb; "… Assignment 4 …" → lab04.ipynb; no number → lab.ipynb."""
     m = re.search(r"(?:lab|assignment|practice|homework|hw)\s*#?\s*(\d{1,2})", title, flags=re.I)
     return f"lab{int(m.group(1)):02d}.ipynb" if m else "lab.ipynb"
 

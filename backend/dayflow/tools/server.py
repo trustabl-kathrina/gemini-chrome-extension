@@ -26,7 +26,11 @@ class ParsedDocument(BaseModel):
 @lru_cache(maxsize=1)
 def client() -> Client:
     # Reads GOOGLE_GENAI_USE_ENTERPRISE / GOOGLE_CLOUD_PROJECT / GOOGLE_CLOUD_LOCATION or GOOGLE_API_KEY.
-    return Client()
+    # Same retry policy as the agents' model (429/5xx with backoff): the parser, embedder and the solver's
+    # local-sandbox fallback all go through this client.
+    from dayflow.models.resilient import RETRY
+
+    return Client(http_options=types.HttpOptions(retry_options=RETRY))
 
 
 async def parse_document(file_name: str, pdf_base64: str) -> dict:
