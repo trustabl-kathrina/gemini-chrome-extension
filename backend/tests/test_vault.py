@@ -118,6 +118,13 @@ async def test_upload_parses_pdfs_and_lists(client: httpx.AsyncClient, monkeypat
     assert r.status_code == 200, r.text
     entry = r.json()
     assert entry["path"] == form["path"] and entry["drive_file_id"] == "drv-1" and entry["size"] == len(pdf)
+    # The upload answers before Gemini does: the summary arrives in the background.
+    assert entry["parse_pending"] is True and entry["summary"] == ""
+    from dayflow.api.vault import drain_enrichments
+
+    await drain_enrichments()
+    entry = (await client.get(f"/vault/{entry['id']}", headers=AUTH)).json()
+    assert entry["parse_pending"] is False
     assert entry["summary"] == PARSED["summary"] and entry["deadlines"] == PARSED["deadlines"]
     assert calls == ["Lab_01_Image_Basics.pdf"]
     # Same bytes again (a re-sync): stored, not re-parsed.
@@ -148,8 +155,13 @@ async def test_upload_survives_parser_failure_and_validates_input(
     r = await client.post(
         "/vault/upload", headers=AUTH, data={"path": "C/Materials/s.pdf"}, files={"file": ("s.pdf", make_pdf("x"))}
     )
-    assert r.status_code == 200 and r.json()["parse_error"] == "RuntimeError: Gemini unavailable"
-    assert r.json()["summary"] == "" and len((await client.get("/vault", headers=AUTH)).json()) == 1
+    assert r.status_code == 200 and r.json()["parse_pending"] is True
+    from dayflow.api.vault import drain_enrichments
+
+    await drain_enrichments()  # the parser fails in the background; the entry records it and stays listed
+    entry = (await client.get(f"/vault/{r.json()['id']}", headers=AUTH)).json()
+    assert entry["parse_error"] == "RuntimeError: Gemini unavailable" and entry["parse_pending"] is False
+    assert entry["summary"] == "" and len((await client.get("/vault", headers=AUTH)).json()) == 1
     assert (
         await client.post("/vault/upload", data={"path": "a/b.pdf"}, files={"file": ("b.pdf", b"x")})
     ).status_code == 401
@@ -189,6 +201,9 @@ async def test_upload_transcribes_scanned_pdfs_with_gemini(
         files={"file": ("syllabus.pdf", scanned, "application/pdf")},
     )
     assert r.status_code == 200, r.text
+    from dayflow.api.vault import drain_enrichments
+
+    await drain_enrichments()
     text = await client.get(f"/vault/{r.json()['id']}/text", headers=AUTH)
     assert text.status_code == 200 and "Week 01: Threat landscape" in text.text
     assert transcribed == ["syllabus.pdf"]
@@ -199,6 +214,7 @@ async def test_upload_transcribes_scanned_pdfs_with_gemini(
         data={"path": "CSF Cyber Security Fundamentals/Materials/syllabus.pdf"},
         files={"file": ("syllabus.pdf", scanned, "application/pdf")},
     )
+    await drain_enrichments()
     assert r2.status_code == 200 and r2.json()["id"] == r.json()["id"] and transcribed == ["syllabus.pdf"]
     again = await client.get(f"/vault/{r.json()['id']}/text", headers=AUTH)
     assert "Week 01: Threat landscape" in again.text
@@ -210,6 +226,7 @@ async def test_upload_transcribes_scanned_pdfs_with_gemini(
         data={"path": "CSF/Lab 01/2.1.7.pdf"},
         files={"file": ("2.1.7.pdf", make_pdf("lab"), "application/pdf")},
     )
+    await drain_enrichments()
     assert r3.status_code == 200 and transcribed == ["syllabus.pdf"]
 
 

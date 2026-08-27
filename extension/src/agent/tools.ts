@@ -535,12 +535,13 @@ export class BrowserTools {
     }
     let item: DownloadItem;
     if (ref) {
-      // Vaadin file browsers differ: some start the download when the row is clicked, others only from a
-      // download icon inside the row. Try the ref itself, then the controls inside it, then those in its row.
-      const attempts: Json[] = [{ name: 'click', ref }, { name: 'activate', ref }, { name: 'activate', ref, row: true }];
+      // Vaadin file browsers differ: some start the download from an icon inside the row, others when the row
+      // itself is clicked. The icon is the common case (WSP), so try the controls in the ref / its row first —
+      // a row click only selects, and each miss costs a wait.
+      const attempts: Json[] = [{ name: 'activate', ref }, { name: 'activate', ref, row: true }, { name: 'click', ref }];
       let got: DownloadItem | null = null;
       for (const [i, req] of attempts.entries()) {
-        const pending = nextDownload(i === attempts.length - 1 ? 12000 : 6000);
+        const pending = nextDownload(i === attempts.length - 1 ? 8000 : 4000);
         pending.catch(() => undefined);
         const r = await contentTool<{ activated?: string[] }>(id, req).catch((): { activated?: string[] } => ({}));
         if (req.name === 'activate' && !(r.activated?.length ?? 0)) continue; // nothing to click inside

@@ -67,6 +67,13 @@ cd extension && pnpm build          # writes .output/chrome-mv3 with the dev man
   architecture segment.
 - Mute the OS notifications, silence Telegram desktop, close every other window, set the display to 100 % scale.
 
+### 1.2b Settings for the recording layout
+
+- **Own window: off.** The layout below puts the site window and the panel side by side; with *Own window* on, the
+  agent would open a third window and the viewer could not see the panel and the page at once. Off = the "Dayflow"
+  tab group joins the site window (the extension activates its tab there for screenshots — that is the shot).
+- **Show work: on**, **Vision: on**.
+
 ### 1.3 Window layout — one command
 
 ```bash
@@ -89,7 +96,7 @@ Point OBS's *Screen Capture* at that rectangle (Filters → Crop/Pad, or a 1440�
 | `--panel-width 420` | 420 | panel width; the site window gets the rest (1020) |
 | `--pos 0,0` | 0,0 | top-left of the canvas; the window manager may push both windows down (it does here: `@0,69`) — the printed rectangle is the truth, record that |
 | `--panel window\|tab\|side` | `window` | `window` = docked extension window (recommended); `side` = one 1440×900 window and you click the toolbar icon to open Chrome's real side panel (Chrome only opens it on a user gesture, so the script can't); `tab` = panel as a second tab |
-| `--pin` | off | re-asserts the layout every 3 s — the agent's `set_viewport` tool resizes the window it works in |
+| `--pin` | off | re-asserts the layout every 3 s (the agent no longer resizes windows — `set_viewport` was removed — so this is only insurance) |
 
 `--panel side` is the most honest shot (it is the real side panel, in the real browser chrome) at the cost of one
 manual click on the toolbar icon before you hit record; `--panel window` needs no click and is what the shot list assumes.

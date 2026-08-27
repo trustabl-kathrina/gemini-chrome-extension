@@ -44,6 +44,7 @@ class VaultEntry(BaseModel):
     deadlines: list[str] = Field(default_factory=list)
     key_terms: list[str] = Field(default_factory=list)
     parse_error: str = Field(default="", description="Why parse_document failed on upload, if it did.")
+    parse_pending: bool = Field(default=False, description="Gemini is still summarising/transcribing this file.")
     updated_at: str = ""
 
     @property
@@ -329,6 +330,31 @@ class VaultStore:
         await self.blobs.put(self._key(user_id, entry.id, ".txt"), text.encode(), "text/plain")
         await self.index.upsert(user_id, entry)
         return entry
+
+    async def enrich(
+        self,
+        user_id: str,
+        entry: VaultEntry,
+        *,
+        parsed: dict[str, Any] | None,
+        parse_error: str = "",
+        text: str | None = None,
+    ) -> VaultEntry:
+        """Fills the summary fields (and the text, when a transcription replaced pypdf's) after a background parse."""
+        current = await self.index.get(user_id, entry.id) or entry
+        if current.sha256 != entry.sha256:
+            return current  # the file changed underneath the parse: its own upload owns the entry now
+        if parsed:
+            current.title = str(parsed.get("title") or current.title)
+            current.summary = str(parsed.get("summary") or "")
+            current.deadlines = [str(d) for d in parsed.get("deadlines") or []]
+            current.key_terms = [str(k) for k in parsed.get("key_terms") or []]
+        current.parse_error = parse_error
+        current.parse_pending = False
+        if text is not None:
+            await self.blobs.put(self._key(user_id, current.id, ".txt"), text.encode(), "text/plain")
+        await self.index.upsert(user_id, current)
+        return current
 
     async def list(self, user_id: str) -> list[VaultEntry]:
         return await self.index.list(user_id)

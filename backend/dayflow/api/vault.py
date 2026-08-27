@@ -3,6 +3,7 @@ and index it; the panel and the harness list the index; the model reads extracte
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import logging
@@ -73,30 +74,54 @@ async def upload(
     name = clean.rsplit("/", 1)[-1]
     ctype = guess_content_type(name, file.content_type or "")
     vault = vault_of(request)
-    parsed: dict[str, Any] | None = None
-    error = ""
     text: str | None = None
+    enrich = False
     if is_pdf(data, ctype):
         existing = await vault.find_by_path(user_id, clean)
         digest = hashlib.sha256(data).hexdigest()
         unchanged = existing is not None and bool(existing.summary) and existing.sha256 == digest
-        if not unchanged:
-            parsed, error = await parse_pdf(name, data)
-            text = await ocr_if_scanned(name, data, ctype)
-        elif existing is not None:
+        if unchanged and existing is not None:
             text = await vault.text(user_id, existing)  # keep the transcription made last time
-    entry = await vault.add(
-        user_id,
-        clean,
-        data,
-        content_type=ctype,
-        drive_file_id=drive_file_id or None,
-        parsed=parsed,
-        parse_error=error,
-        text=text,
-    )
-    log.info("vault upload user=%s path=%s bytes=%d parsed=%s", user_id, entry.path, entry.size, bool(parsed))
+        else:
+            enrich = True
+    entry = await vault.add(user_id, clean, data, content_type=ctype, drive_file_id=drive_file_id or None, text=text)
+    if enrich:
+        # Gemini's summary/deadlines (and the transcription of a scanned PDF) take 5–15 s: the agent's download
+        # returns now and the index entry is enriched in the background (vault_list shows "parsing…" meanwhile).
+        entry.parse_pending = True
+        await vault.index.upsert(user_id, entry)
+        schedule_enrichment(vault, user_id, entry, name, data, ctype)
+    log.info("vault upload user=%s path=%s bytes=%d enrich=%s", user_id, entry.path, entry.size, enrich)
     return entry
+
+
+_enrichments: set[asyncio.Task[None]] = set()
+
+
+def schedule_enrichment(vault: VaultStore, user_id: str, entry: VaultEntry, name: str, data: bytes, ctype: str) -> None:
+    task = asyncio.create_task(enrich_entry(vault, user_id, entry, name, data, ctype))
+    _enrichments.add(task)
+    task.add_done_callback(_enrichments.discard)
+
+
+async def drain_enrichments() -> None:
+    """Waits for the background parses (tests, graceful shutdown)."""
+    while _enrichments:
+        await asyncio.gather(*list(_enrichments), return_exceptions=True)
+
+
+async def enrich_entry(vault: VaultStore, user_id: str, entry: VaultEntry, name: str, data: bytes, ctype: str) -> None:
+    try:
+        parsed, error = await parse_pdf(name, data)
+        text = await ocr_if_scanned(name, data, ctype)
+        await vault.enrich(user_id, entry, parsed=parsed, parse_error=error, text=text)
+        log.info("vault enriched user=%s path=%s parsed=%s", user_id, entry.path, bool(parsed))
+    except Exception as e:  # noqa: BLE001 — the file is stored either way; the entry records what went wrong
+        log.exception("vault enrichment failed for %s", entry.path)
+        try:
+            await vault.enrich(user_id, entry, parsed=None, parse_error=f"{type(e).__name__}: {e}", text=None)
+        except Exception:  # noqa: BLE001
+            log.exception("could not record the enrichment failure for %s", entry.path)
 
 
 @router.get("", response_model=list[VaultEntry])

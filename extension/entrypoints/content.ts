@@ -191,9 +191,10 @@ function resolve(raw: string): Element {
   return again;
 }
 
-function mouseSequence(el: Element, x: number, y: number) {
+function mouseSequence(el: Element, x: number, y: number, hoverOnly = false) {
   const opts = { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, view: window };
-  for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup']) {
+  const types = hoverOnly ? ['pointerover', 'mouseover', 'pointerenter', 'mouseenter', 'pointermove', 'mousemove'] : ['pointerdown', 'mousedown', 'pointerup', 'mouseup'];
+  for (const type of types) {
     el.dispatchEvent(type.startsWith('pointer') ? new PointerEvent(type, { ...opts, pointerType: 'mouse', isPrimary: true }) : new MouseEvent(type, opts));
   }
 }
@@ -295,9 +296,19 @@ const ACTIVATABLE = '.v-button, button, a[href], [role="button"], input[type="bu
 function activate(ref: string, row = false): { activated: string[] } {
   const el = resolve(ref);
   const scope = row ? (el.closest('tr') ?? el) : el;
-  const targets = [...scope.querySelectorAll<HTMLElement>(ACTIVATABLE)].filter((t) => t !== el && isVisible(t, t.getBoundingClientRect()));
+  // Vaadin "quiet" icon buttons (a row's download icon) are invisible until the row is hovered, and a wide table
+  // may have scrolled them out of view: hover the row first, scroll each control into view, and accept controls
+  // that merely have a box (opacity/visibility are hover state, not absence).
+  const r0 = scope.getBoundingClientRect();
+  mouseSequence(scope as HTMLElement, r0.left + Math.min(r0.width / 2, 40), r0.top + r0.height / 2, true);
+  const targets = [...scope.querySelectorAll<HTMLElement>(ACTIVATABLE)].filter((t) => {
+    if (t === el) return false;
+    const r = t.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && getComputedStyle(t).display !== 'none';
+  });
   const activated: string[] = [];
   for (const t of targets.slice(0, 4)) {
+    t.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     highlight(t);
     t.focus?.();
     const r = t.getBoundingClientRect();

@@ -117,17 +117,6 @@ def scroll(dy: int = 600, ref: str = "") -> None:
     return None
 
 
-def set_viewport(width: int, height: int) -> None:
-    """Resizes the working tab's window so the viewport is about width×height pixels — use it when a
-    page cuts off tables or when screenshots need more room. Result includes a screenshot.
-
-    Args:
-        width: Viewport width in pixels (800–1920).
-        height: Viewport height in pixels (600–1200).
-    """
-    return None
-
-
 def run_js(expression: str) -> None:
     """Evaluates a JavaScript expression in the page (MAIN world) and returns its JSON-serialisable value
     as {value}. Only allowed on hosts in the user's allow-list; every call is logged and shown to the
@@ -194,7 +183,6 @@ BROWSER_FUNCTIONS = [
     type_text,
     press_key,
     scroll,
-    set_viewport,
     run_js,
     download,
     list_tabs,

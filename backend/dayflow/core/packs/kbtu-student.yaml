@@ -279,6 +279,9 @@ sites:
     mode: dom
     notes: |
       KBTU student portal (Vaadin app: no real links, navigate by clicking; take a fresh read_page after every click).
+      The UI may be in Russian: title "Офис регистратора" = Office of the Registrar, Back = "Назад", Enter = "Войти",
+      "Школа информационных технологий и инженерии" = School of Information Technology and Engineering, and instructor
+      names may be written in Cyrillic ("Келгенбаев Арнұр" = Kelgenbayev Arnur) — match by transliteration.
       Top-right flag icon (img src gb.png) switches the UI to English; the home icon (img src home.png) opens the Desktop,
       which lists modules as links: Student files, Student's schedule, Attendance mark, Student's Journal, Transcript,
       Student exam schedule, Registration for disciplines, News.
@@ -287,7 +290,9 @@ sites:
       3.Labs, …) > files. Select a row by clicking it, then click the Enter button (keyboard Enter does not open
       folders here; reuse the Back/Enter refs from the last read_page — they are re-found after re-renders);
       Back goes up. A file row does not download when clicked: its last cell holds an icon-only download button —
-      call download(ref=<that button's ref>) (or the row's ref) so the file goes to the vault.
+      call download(ref=<the row's ref>) and the extension presses that icon itself (it is hidden until hovered and
+      may sit outside the visible columns; the extension scrolls to it — never resize the window, never click_at
+      the scrollbar, never use run_js to find it).
       Student's schedule (/StudentSchedule) is a weekly grid; cells read "CODE Course name Instructor room (hh:mm-hh:mm)";
       it has Year and Term selectors - use them to see past semesters. Read the schedule first to learn each course's instructor.
       Module URLs (after sign-in): /StudentFiles (files), /StudentSchedule (schedule), /Attendance, /StudentJournal

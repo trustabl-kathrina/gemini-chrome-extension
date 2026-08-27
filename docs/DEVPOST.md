@@ -221,3 +221,22 @@ course, instructor or student names may appear outside `harness/fake-wsp` (whose
 - [ ] Screenshots: the panel mid-run with a screenshot thumbnail, the Allow card, the Drive vault tree, the notebook
       with outputs, the Cloud Run logs.
 - [ ] Bonus links pasted (social post, blog post) if those boxes were ticked.
+
+## What a task costs — and why Gemini Flash
+
+Every run logs its own bill (`usage session=… ≈$`), so these are measured, not estimated. Two real runs on the KBTU
+portal on 2026-08-27, Gemini 3.7 Flash on Vertex AI (list price $0.75 / $3.75 per 1M input / output tokens):
+
+| Run | model calls | prompt tokens (cached) | output+thinking | cost |
+|---|---|---|---|---|
+| Sync a course from WSP (syllabus + 15 lecture files, 40 browser actions) | 44 | 614k (374k cached) | 4.1k | **$0.22** |
+| Fetch the assignments zip, solve 14 tasks with executed code, notebook → Drive → Colab | 40 | 807k (461k cached) | 13k | **$0.34** |
+
+The same token traffic at Claude's list prices (Anthropic API, 2026): Sonnet 5 ($2 / $10) ≈ **$1.3 – 1.7**, Opus 5
+($5 / $25) ≈ **$3.2 – 4.3** per run — 6–13× more. Claude in Chrome is not billed per task at all: it is gated behind a
+Claude Pro ($20/mo, Haiku 4.5 only) or Max ($100–200/mo, Sonnet/Opus) subscription. Dayflow runs on the user's own
+Google Cloud project at cents per chore, with the per-run cost visible in the Cloud Run log.
+
+What keeps it that cheap (all in the repo): only the last two screenshots reach the model, at low resolution unless
+the site is in vision mode; old tool results are pruned from the request; only the active skill's tool declarations
+are sent; routine steps think at "low", planning and recovery at "medium"; a 429 falls back to Gemini 3.5 Flash.

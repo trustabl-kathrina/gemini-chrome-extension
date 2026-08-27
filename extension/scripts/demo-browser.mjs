@@ -12,7 +12,7 @@
 //   side             no second window: the site window is sized to the full --total and you click the Dayflow
 //                    toolbar icon once — Chrome's side panel needs a user gesture, it cannot be opened from here.
 //   tab              the panel as a second tab in the same window (what the harness does).
-// --pin re-asserts the bounds every 3 s (the agent's set_viewport tool resizes the window its tab lives in).
+// --pin re-asserts the bounds every 3 s (insurance: the agent no longer has a set_viewport tool).
 import { chromium } from 'playwright';
 import { writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

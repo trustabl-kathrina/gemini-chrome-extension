@@ -104,7 +104,7 @@ async def vault_list(tool_context: ToolContext) -> dict:
             "size": e.size,
             "drive_file_id": e.drive_file_id,
             "title": e.title,
-            "summary": e.summary,
+            "summary": e.summary or ("(parsing… call vault_list again in a few seconds)" if e.parse_pending else ""),
             "deadlines": e.deadlines,
             **({"parse_error": e.parse_error} if e.parse_error else {}),
         }
