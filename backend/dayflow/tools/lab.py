@@ -218,7 +218,7 @@ async def build_notebook(title: str, cells: list[dict[str, str]], execute: bool 
     page_id = await save_notebook(ipynb.encode(), pages)
     return {
         "status": "success",
-        "file_name": "lab01.ipynb",
+        "file_name": notebook_file_name(title),
         "code_cells": len(code_cells),
         "ipynb_json": ipynb,
         "ipynb_url": notebook_url(page_id, pages),
@@ -229,6 +229,12 @@ async def build_notebook(title: str, cells: list[dict[str, str]], execute: bool 
         "ipynb_json VERBATIM as the content of the .ipynb entry in push_files (do not reformat it), together with "
         "README.md, TODO.md, REPORT.md, requirements.txt (numpy, jupyter) and .gitignore in ONE call.",
     }
+
+
+def notebook_file_name(title: str) -> str:
+    """"CSCI3240 — Lab 01: …" → lab01.ipynb; "… Assignment 4 …" → lab04.ipynb; no number → lab.ipynb."""
+    m = re.search(r"(?:lab|assignment|practice|homework|hw)\s*#?\s*(\d{1,2})", title, flags=re.I)
+    return f"lab{int(m.group(1)):02d}.ipynb" if m else "lab.ipynb"
 
 
 def notebook_key(page_id: str) -> str:

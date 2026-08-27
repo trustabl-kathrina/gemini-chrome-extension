@@ -34,6 +34,37 @@ export default {
     const f = [];
     if (r.status !== 'done') f.push(`status is "${r.status}", expected "done" (${r.summary || 'no summary'})`);
     if (r.actions > 60) f.push(`${r.actions} browser actions, cap is 60`);
+    // Two deliveries: a GitHub repo (prompt says repo/GitHub/push) or — the default — the notebook saved to the vault
+    // and opened in Colab. The Colab path is judged on the brain-served .ipynb + the vault entry + the Colab tab.
+    const wantsRepo = /github|repo\b|push/i.test(r.prompt || '');
+    if (!wantsRepo) {
+      const nbArtifact = (r.artifacts || []).find((a) => /\.ipynb \(page\)$/.test(a.label || '') && /\/pages\/notebook\//.test(a.href || ''));
+      if (!nbArtifact) f.push('no brain-served .ipynb artifact (build_notebook → download(url=ipynb_url))');
+      const vaultNb = (r.vault || []).find((e) => /\.ipynb$/.test(e.path || ''));
+      if (!vaultNb) f.push('no .ipynb in the vault');
+      const colab = (r.toolCalls || []).some((c) => c.name === 'open_tab' && /colab\.research\.google\.com/.test(c.args || ''));
+      if (!colab) f.push('no open_tab to colab.research.google.com');
+      if (nbArtifact) {
+        try {
+          const res = await fetch(nbArtifact.href);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const doc = await res.json();
+          fs.mkdirSync(ctx.sceneOut, { recursive: true });
+          const file = path.join(ctx.sceneOut, 'notebook.ipynb');
+          fs.writeFileSync(file, JSON.stringify(doc, null, 1));
+          const check = checkNotebook(file);
+          r.notebook = { path: vaultNb?.path ?? nbArtifact.label, saved: path.relative(ROOT, file), ...check };
+          if (!check.valid) f.push(`notebook: ${check.errors.join('; ')}`);
+          else if (check.code_cells < 3) f.push(`notebook has ${check.code_cells} code cells, expected ≥3`);
+          if (check.executed === false) f.push(`notebook failed to execute with nbclient: ${check.exec_error}`);
+        } catch (e) {
+          f.push(`could not fetch/check the notebook: ${e.message}`);
+        }
+      }
+      const reportOnBrain = (r.artifacts || []).some((a) => /\/pages\/report\//.test(a.href || ''));
+      if (!reportOnBrain) f.push('no report page artifact on the brain');
+      return f;
+    }
     const calls = ctx.connectorCalls;
     const names = calls.map((c) => c.tool);
     if (!names.includes('create_repository')) f.push(`no create_repository in the fake-connector log (calls: [${names.join(', ') || 'none'}])`);

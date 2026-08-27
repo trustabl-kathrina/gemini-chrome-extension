@@ -290,3 +290,11 @@ async def test_build_notebook_serves_the_ipynb_for_drive_and_colab(pages: PageSt
         assert res.status_code == 200 and res.headers["content-type"].startswith(IPYNB_MIME)
         assert json.loads(res.content)["nbformat"] == 4
         assert (await c.get("/pages/notebook/nope.ipynb")).status_code == 404
+
+
+def test_notebook_file_name_follows_the_title() -> None:
+    from dayflow.tools.lab import notebook_file_name
+
+    assert notebook_file_name("CSCI3240 — Lab 01: Image basics") == "lab01.ipynb"
+    assert notebook_file_name("Programming Principles II — Assignment 4") == "lab04.ipynb"
+    assert notebook_file_name("Practice #12") == "lab12.ipynb" and notebook_file_name("Notes") == "lab.ipynb"
