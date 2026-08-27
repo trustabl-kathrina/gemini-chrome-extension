@@ -76,6 +76,8 @@ export interface Settings {
   vision: boolean;
   /** Keep the agent's tab in the foreground and flash the elements it acts on (demo-friendly). */
   showWork: boolean;
+  /** The Dayflow tab group lives in a window of its own (screenshots never flip the user's visible tab). */
+  ownWindow: boolean;
   /** Google Drive API base; the harness points it at the fake Drive. */
   driveApiBase: string;
   /** Explicit OAuth token; when unset the extension asks chrome.identity. */
@@ -130,6 +132,7 @@ export const DEFAULT_SETTINGS: Settings = {
   token: '',
   vision: true,
   showWork: true,
+  ownWindow: true,
   driveApiBase: 'https://www.googleapis.com',
   vaultMode: 'drive',
   vaultFolder: 'Dayflow',

@@ -133,9 +133,18 @@ export function SettingsView({ settings, update }: { settings: Settings; update:
           <div className="hairline-t flex items-center gap-2 px-3 py-2">
             <div className="min-w-0 flex-1">
               <div>Show work</div>
-              <div className="text-[11px] text-fg-3">Keep the agent's tab in front and flash what it clicks. Off = pinned background tab.</div>
+              <div className="text-[11px] text-fg-3">Keep the agent's tab in front of its group and flash what it clicks.</div>
             </div>
             <Toggle checked={settings.showWork} onChange={(v) => set('showWork', v)} label="Show work" />
+          </div>
+          <div className="hairline-t flex items-center gap-2 px-3 py-2">
+            <div className="min-w-0 flex-1">
+              <div>Own window</div>
+              <div className="text-[11px] text-fg-3">
+                The agent's tabs form a "Dayflow" tab group. On: the group opens in its own window, so screenshots never switch the tab you are looking at. Off: the group joins your current window.
+              </div>
+            </div>
+            <Toggle checked={settings.ownWindow} onChange={(v) => set('ownWindow', v)} label="Own window" />
           </div>
         </div>
       </Field>

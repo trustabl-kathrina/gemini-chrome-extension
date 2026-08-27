@@ -85,6 +85,8 @@ One field per permission in the dashboard.
   settings/config screens live there.
 - **tabs** — A task names a page ("open the portal"); the extension must create that tab, focus it, and know its
   URL and title to report progress and to enforce the domain allow-list before acting.
+- **tabGroups** — Every tab the agent opens is collected in a "Dayflow" tab group (in a window of its own by
+  default), so the user's own tabs and their active tab are never touched or switched while a task runs.
 - **scripting** — The agent acts instead of the user: it injects the content script that lists the page's visible
   elements and performs the click/type/scroll the model asked for on the tab of the current task.
 - **downloads** — Course files and other documents are obtained by triggering the page's own download and then

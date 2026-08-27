@@ -6,6 +6,7 @@ import { driveConfigured, getGoogleToken, refreshGoogleToken } from './identity'
 import { shrinkJpeg, toDataUrl, type Jpeg } from './image';
 import { SHOT_MAX_PX, SHOT_QUALITY, UNCHANGED_NOTE, shotPolicy } from './shots';
 import { brainAuthHeader, brainAuthToken } from './sync';
+import { Workspace } from './workspace';
 
 type Json = Record<string, unknown>;
 type DownloadItem = { id: number; url: string; finalUrl?: string; filename?: string; state?: string; mime?: string };
@@ -126,7 +127,7 @@ export interface ToolGuards {
 
 /**
  * Executes browser tool calls for one run (PLAN v2 §The loop). Keeps a "job tab" so the brain can work in
- * a pinned background tab without stealing the user's focus. Enforces the user's permissions client-side:
+ * the Dayflow tab group (its own window by default) without stealing the user's focus. Enforces the user's permissions client-side:
  * URL scheme + navigation allow-list on every URL the model passes AND on the tab every action targets
  * (active-tab fallback, redirects, clicked links), vault-confined paths, ask-before gates, run_js only on
  * allow-listed hosts and only after an Allow card when the expression can move data.
@@ -134,9 +135,12 @@ export interface ToolGuards {
  */
 export class BrowserTools {
   private jobTabId: number | null = null;
+  /** The Dayflow tab group (own window by default): where open_tab puts tabs and where tab() looks first. */
+  private readonly workspace: Workspace;
   private drive: DriveClient | null = null;
 
-  constructor(private guards: ToolGuards) {}
+  constructor(private guards: ToolGuards) {
+    this.workspace = new Workspace(browser as unknown as ConstructorParameters<typeof Workspace>[0], this.settings.ownWindow);}
 
   private get settings() {
     return this.guards.settings;
@@ -185,6 +189,9 @@ export class BrowserTools {
         this.jobTabId = null;
       }
     }
+    // No job tab yet: the Dayflow group's active tab when the workspace exists; the user's own active tab only
+    // when it does not ("do this in this tab" on a fresh start) — never a tab of theirs once the agent has its own.
+    if (id === undefined) id = await this.workspace.activeTab();
     if (id === undefined) {
       let [active] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
       if (!active?.id) {
@@ -279,13 +286,12 @@ export class BrowserTools {
     const num = (k: string, d: number) => (typeof a[k] === 'number' ? (a[k] as number) : typeof a[k] === 'string' && a[k] !== '' && !Number.isNaN(Number(a[k])) ? Number(a[k]) : d);
     switch (call.name) {
       case 'open_tab': {
-        const show = this.settings.showWork;
-        const t = await browser.tabs.create({ url: this.navigable(str('url')), pinned: !show && a.pinned === true, active: show || a.active === true });
-        if (!t.id) throw new Error('tab has no id');
-        this.jobTabId = t.id;
-        await waitForLoad(t.id);
-        await this.guardTab(t.id); // the page may have redirected off the allow-list
-        return this.withShot(t.id, await this.tabInfo(t.id));
+        // Inside the Dayflow group (own window by default): active there when showing work, never in the user's window.
+        const id = await this.workspace.createTab(this.navigable(str('url')), this.settings.showWork || a.active === true);
+        this.jobTabId = id;
+        await waitForLoad(id);
+        await this.guardTab(id); // the page may have redirected off the allow-list
+        return this.withShot(id, await this.tabInfo(id));
       }
       case 'navigate': {
         const id = await this.tab();

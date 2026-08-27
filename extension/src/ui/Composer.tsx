@@ -11,7 +11,7 @@ import { Kbd } from './primitives';
  */
 export function Composer({
   skills,
-  placeholder = 'Ask Dayflow to do something in this tab…',
+  placeholder = 'Ask Dayflow to do something…',
   busy,
   activeRun,
   onSubmit,

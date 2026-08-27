@@ -155,7 +155,7 @@ Drive leg is skipped and only `POST /vault/upload` runs. The harness points `dri
 Skills carry a cron expression. Two paths exist and both end in the same loop:
 
 - **Chrome side** — `chrome.alarms` (`src/agent/scheduler.ts`) fires, the service worker runs the skill's
-  prompt with no panel open (`open_tab(pinned=true)` keeps the tab out of the way) and raises a
+  prompt with no panel open (the tab opens in the "Dayflow" tab group in the agent's own window, out of the way) and raises a
   `chrome.notifications` when it ends.
 - **Cloud side** — Cloud Scheduler → `POST /cron` (Google OIDC verified against `CRON_INVOKER_SA`) →
   `dayflow/scheduler.py` enqueues jobs; `POST /pubsub` (verified against `PUBSUB_PUSH_SA`) delivers them to
