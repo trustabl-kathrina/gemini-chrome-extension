@@ -8,3 +8,6 @@ embed_dims: 768
 # Orchestrator thinking level (minimal|low|medium|high): browsing steps are small — LOW keeps turns fast.
 thinking: low
 solver_thinking: medium
+# Screenshot detail the model gets (Gemini 3: low ≈ 280 tokens/image, medium ≈ 560, high ≈ 1120). Sites in vision
+# mode (act by coordinates) always get high; dom-mode sites verify with the picture and read text via read_page.
+image_resolution: low

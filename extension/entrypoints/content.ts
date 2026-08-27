@@ -13,6 +13,7 @@ type ToolRequest =
   | { channel: typeof TOOL_CHANNEL; name: 'press_key'; key: string }
   | { channel: typeof TOOL_CHANNEL; name: 'scroll'; ref?: string; dy?: number }
   | { channel: typeof TOOL_CHANNEL; name: 'viewport' }
+  | { channel: typeof TOOL_CHANNEL; name: 'fingerprint' }
   | { channel: typeof TOOL_CHANNEL; name: 'href'; ref: string }
   | { channel: typeof TOOL_CHANNEL; name: 'activate'; ref: string; row?: boolean };
 
@@ -87,7 +88,7 @@ function labelOf(el: Element, own: string): string {
 
 /**
  * Element list: one line per visible element that has its own text or is interactive —
- * `[eN] role "label" @x,y` (x,y = viewport centre in CSS px). Capped at `maxNodes` lines.
+ * `[eN] role "label" @x,y` (x,y = viewport centre in CSS px, interactive elements only). Capped at `maxNodes` lines.
  */
 function snapshot(maxNodes = 400): { text: string; nodes: number; truncated: boolean } {
   const cap = Math.min(Math.max(1, maxNodes), 500);
@@ -117,7 +118,9 @@ function snapshot(maxNodes = 400): { text: string; nodes: number; truncated: boo
     const state = el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio') ? (el.checked ? ' checked' : '') : el.classList.contains('v-selected') || el.getAttribute('aria-selected') === 'true' ? ' selected' : '';
     const ref = refFor(el);
     signatures.set(ref, { tag: el.tagName, role: el.getAttribute('role'), label, x, y });
-    const line = `[${ref}] ${role} ${JSON.stringify(label)} @${x},${y}${value}${href}${state}`;
+    // Coordinates only where the model may click_at: plain text lines keep their ref but drop the "@x,y".
+    const at = interactive ? ` @${x},${y}` : '';
+    const line = `[${ref}] ${role} ${JSON.stringify(label)}${at}${value}${href}${state}`;
     // Nested wrappers repeat the same label at the same spot: keep the outermost only.
     const key = `${role}|${label}|${x}|${y}`;
     if (seen.has(key)) continue;
@@ -125,6 +128,20 @@ function snapshot(maxNodes = 400): { text: string; nodes: number; truncated: boo
     lines.push(line);
   }
   return { text: [head, ...lines, ...(truncated ? ['… more nodes omitted (raise max_nodes or scroll)'] : [])].join('\n'), nodes: lines.length, truncated };
+}
+
+/**
+ * Cheap page fingerprint: URL, scroll position, visible text and the DOM size. Two equal fingerprints mean the
+ * screenshot would look the same as the previous one, so the background skips the capture. A Vaadin row
+ * selection changes a class attribute, which moves the DOM size — it is not missed.
+ */
+function fingerprint(): string {
+  const text = (document.body?.innerText ?? '').replace(/\s+/g, ' ');
+  let h = 0;
+  for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) | 0;
+  const active = document.activeElement;
+  const focus = active ? `${active.tagName}:${refs.get(active) ?? ''}` : '';
+  return `${location.href}|${Math.round(scrollY)}|${Math.round(scrollX)}|${text.length}|${h}|${document.body?.outerHTML.length ?? 0}|${focus}`;
 }
 
 /** Flash an outline on the element the agent is acting on, so a human can follow along. */
@@ -314,6 +331,8 @@ function handle(req: ToolRequest): ToolResponse {
         return { ok: true, data: scroll(req.ref, req.dy) };
       case 'viewport':
         return { ok: true, data: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio, title: document.title, url: location.href } };
+      case 'fingerprint':
+        return { ok: true, data: fingerprint() };
       case 'href':
         return { ok: true, data: hrefOf(req.ref) };
       case 'activate':

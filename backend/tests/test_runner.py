@@ -190,3 +190,33 @@ async def test_active_skill_restricts_the_declared_tools() -> None:
     names = {d.name for t in tools if isinstance(t, types.Tool) for d in (t.function_declarations or [])}
     assert {"build_deck", "download", "open_tab", "vault_list", "remember"} <= names  # GitHub toolset needs env
     assert "create_pull_request" not in names and "solve_lab_task" not in names and len(names) < 15
+
+
+async def test_model_request_carries_the_screenshot_resolution_for_the_sites_in_scope() -> None:
+    from dayflow.agents.orchestrator import DOMAINS_KEY
+
+    runner, llm = make_runner([[txt("a")], [txt("b")]])
+    for domains in (["wsp.kbtu.kz"], ["drive.google.com"]):
+        async for _ in runner.run_async(
+            user_id="u",
+            session_id="s",
+            new_message=types.Content(role="user", parts=[txt("go")]),
+            state_delta={DOMAINS_KEY: domains},
+        ):
+            pass
+    res = [str(r.config.media_resolution) for r in llm.requests]
+    assert res[0].endswith("LOW") and res[1].endswith("HIGH")
+
+
+async def test_screenshot_resolution_follows_the_page_on_screen() -> None:
+    runner, llm = make_runner([[fc("c1", "click", ref="e1")], [fc("c2", "click", ref="e2")], [txt("done")]])
+    await collect(runner, [txt("go")])  # free prompt: every site in scope, drive.google.com is vision → high
+    assert str(llm.requests[-1].config.media_resolution).endswith("HIGH")
+    on_wsp = types.FunctionResponse(id="c1", name="click", response={"clicked": True, "url": "https://wsp.kbtu.kz/x"})
+    await collect(runner, [types.Part(function_response=on_wsp)])
+    assert str(llm.requests[-1].config.media_resolution).endswith("LOW")
+    on_drive = types.FunctionResponse(
+        id="c2", name="click", response={"clicked": True, "url": "https://drive.google.com/"}
+    )
+    await collect(runner, [types.Part(function_response=on_drive)])
+    assert str(llm.requests[-1].config.media_resolution).endswith("HIGH")

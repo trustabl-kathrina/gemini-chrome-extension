@@ -39,7 +39,7 @@ def test_instruction_includes_skill_and_site_notes() -> None:
 def test_base_prompt_states_the_loop_rules() -> None:
     text = compose_instruction(default_config(), None, [])
     assert "Before EVERY tool call write exactly one sentence" in text
-    assert "screenshot taken after the action" in text
+    assert "returns a screenshot when the page changed" in text
     assert "mode dom" in text and "mode vision" in text and "click_at" in text
     assert 'press_key("Enter")' in text  # Vaadin hint
     assert f"at most {MAX_ACTIONS} browser actions per run" in text
@@ -347,3 +347,33 @@ def test_restrict_tools_keeps_the_skills_tools_plus_the_always_set() -> None:
     left = {d.name for d in req.config.tools[0].function_declarations or []}  # type: ignore[union-attr]
     assert removed == 3 and left == {"open_tab", "type", "download", "remember", "read_page"}
     assert "request_confirmation" in ALWAYS_TOOLS
+
+
+def test_screenshot_resolution_is_low_unless_a_vision_site_is_in_scope() -> None:
+    from google.genai import types
+
+    from dayflow.agents.orchestrator import BASE_PROMPT, media_resolution
+
+    assert media_resolution(False) == types.MediaResolution.MEDIA_RESOLUTION_LOW
+    assert media_resolution(True) == types.MediaResolution.MEDIA_RESOLUTION_HIGH
+    assert (
+        'screenshot "unchanged"' in BASE_PROMPT
+        and "read_page returns the element list without a screenshot" in BASE_PROMPT
+    )
+
+
+def test_current_host_is_the_newest_tool_results_url() -> None:
+    from google.genai import types
+
+    from dayflow.agents.orchestrator import current_host
+
+    def result(url: str | None) -> types.Content:
+        r = {"clicked": True, **({"url": url} if url else {})}
+        return types.Content(
+            role="user", parts=[types.Part(function_response=types.FunctionResponse(name="click", response=r))]
+        )
+
+    assert current_host([]) == ""
+    contents = [result("https://wsp.kbtu.kz/StudentFiles"), result(None), result("https://drive.google.com/drive/u/0")]
+    assert current_host(contents) == "drive.google.com"
+    assert current_host(contents[:2]) == "wsp.kbtu.kz"

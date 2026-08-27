@@ -22,6 +22,7 @@ class ModelRegistry(BaseModel):
     embed_dims: int = 768
     thinking: str = "low"  # orchestrator thinking level: minimal | low | medium | high
     solver_thinking: str = "medium"  # the lab solver writes code: one notch up
+    image_resolution: str = "low"  # Gemini media_resolution for screenshots on dom-mode sites: low | medium | high
 
 
 @lru_cache(maxsize=1)
@@ -34,6 +35,8 @@ def registry() -> ModelRegistry:
         data["thinking"] = override
     if override := os.getenv("DAYFLOW_SOLVER_THINKING"):
         data["solver_thinking"] = override
+    if override := os.getenv("DAYFLOW_IMAGE_RESOLUTION"):
+        data["image_resolution"] = override
     reg = ModelRegistry.model_validate(data)
     if not reg.solver:
         reg.solver = reg.orchestrator

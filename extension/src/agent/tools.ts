@@ -4,6 +4,7 @@ import { DriveClient, fileNameFromHeaders, mimeFor, splitDrivePath } from './dri
 import { checkNavigable, effectiveAllowlist, isRiskyExpression, safeVaultPath } from './guard';
 import { driveConfigured, getGoogleToken, refreshGoogleToken } from './identity';
 import { shrinkJpeg, toDataUrl, type Jpeg } from './image';
+import { SHOT_MAX_PX, SHOT_QUALITY, UNCHANGED_NOTE, shotPolicy } from './shots';
 import { brainAuthHeader, brainAuthToken } from './sync';
 
 type Json = Record<string, unknown>;
@@ -204,7 +205,11 @@ export class BrowserTools {
     return { tabId, title: t.title, url: t.url };
   }
 
-  /** JPEG of the tab's viewport, ≤1280px, q≈0.55. Null when the page cannot be captured (chrome://, closed). */
+  /** The tool being dispatched (screenshot policy) and each tab's fingerprint at its last capture. */
+  private currentTool = '';
+  private readonly lastShot = new Map<number, string>();
+
+  /** JPEG of the tab's viewport, ≤SHOT_MAX_PX, q≈SHOT_QUALITY. Null when the page cannot be captured (chrome://, closed). */
   private async capture(tabId: number): Promise<Jpeg | null> {
     // Chrome allows 2 captureVisibleTab calls per second: space them out and retry once more on the quota error.
     for (let attempt = 0; ; attempt++) {
@@ -218,7 +223,7 @@ export class BrowserTools {
           await sleep(120);
         }
         const dataUrl = await browser.tabs.captureVisibleTab(t.windowId, { format: 'jpeg', quality: 55 });
-        return await shrinkJpeg(dataUrl, 1280, 0.55);
+        return await shrinkJpeg(dataUrl, SHOT_MAX_PX, SHOT_QUALITY);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         if (/MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND/.test(msg) && attempt < 3) {
@@ -231,11 +236,24 @@ export class BrowserTools {
     }
   }
 
-  /** Attaches the screenshot (brain: `screenshot_b64`; panel: ≤320px thumbnail) when vision is on or forced. */
+  /**
+   * Attaches the screenshot (brain: `screenshot_b64`; panel: ≤320px thumbnail) when vision is on or forced —
+   * subject to the tool's policy (shots.ts): never for read_page/list_tabs/download, and for actions only when
+   * the page fingerprint moved since the tab's last capture (else `screenshot: "unchanged…"`).
+   */
   private async withShot(tabId: number | null, data: Json, force = false): Promise<ToolOutcome> {
     if (tabId === null || (!force && !this.settings.vision)) return { result: data };
+    const policy = force ? 'always' : shotPolicy(this.currentTool);
+    if (policy === 'never') return { result: data };
+    let print: string | null = null;
+    if (policy === 'if-changed') {
+      print = await contentTool<string>(tabId, { name: 'fingerprint' }).catch(() => null);
+      if (print !== null && print === this.lastShot.get(tabId)) return { result: { ...data, screenshot: UNCHANGED_NOTE } };
+    }
     const shot = await this.capture(tabId);
     if (!shot) return { result: data };
+    if (print !== null) this.lastShot.set(tabId, print);
+    else this.lastShot.delete(tabId);
     const thumb = await shrinkJpeg(toDataUrl(shot), 320, 0.6).catch(() => null);
     return {
       result: { ...data, screenshot_b64: shot.b64, screenshot_size: [shot.width, shot.height] },
@@ -255,6 +273,7 @@ export class BrowserTools {
   }
 
   private async dispatch(call: ToolCall): Promise<ToolOutcome> {
+    this.currentTool = call.name;
     const a = call.args;
     const str = (k: string, d = '') => (typeof a[k] === 'string' ? (a[k] as string) : typeof a[k] === 'number' ? String(a[k]) : d);
     const num = (k: string, d: number) => (typeof a[k] === 'number' ? (a[k] as number) : typeof a[k] === 'string' && a[k] !== '' && !Number.isNaN(Number(a[k])) ? Number(a[k]) : d);

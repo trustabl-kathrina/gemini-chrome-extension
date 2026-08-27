@@ -147,7 +147,7 @@ def make_runner(store: ConfigStore) -> Runner:
     )
 
 
-USAGE_FIELDS = ("prompt", "cached", "thoughts", "output")
+USAGE_FIELDS = ("prompt", "cached", "thoughts", "output", "image")  # image ⊂ prompt (Gemini's per-modality detail)
 # Gemini 3.7 Flash list prices per 1M tokens (ai.google.dev/gemini-api/docs/pricing, valid through 2026-12-31);
 # only used for the estimate in the usage log line — billing is the source of truth.
 PRICE_PER_M = {"prompt": 0.75, "cached": 0.075, "thoughts": 3.75, "output": 3.75}
@@ -159,11 +159,13 @@ def usage_of(ev: Event) -> dict[str, int]:
     u = ev.usage_metadata
     if u is None:
         return {}
+    image = sum(int(d.token_count or 0) for d in (u.prompt_tokens_details or []) if str(d.modality).endswith("IMAGE"))
     return {
         "prompt": int(u.prompt_token_count or 0),
         "cached": int(u.cached_content_token_count or 0),
         "thoughts": int(u.thoughts_token_count or 0),
         "output": int(u.candidates_token_count or 0),
+        "image": image,
     }
 
 
@@ -214,8 +216,8 @@ def sse(
                 total = book_usage(session_id, calls)
                 turn = {k: sum(c.get(k, 0) for c in calls) for k in USAGE_FIELDS}
                 log.info(
-                    "usage session=%s turn: calls=%d prompt=%d cached=%d thoughts=%d output=%d ≈$%.4f | session: "
-                    "calls=%d prompt=%d cached=%d thoughts=%d output=%d ≈$%.4f",
+                    "usage session=%s turn: calls=%d prompt=%d cached=%d thoughts=%d output=%d image=%d ≈$%.4f | "
+                    "session: calls=%d prompt=%d cached=%d thoughts=%d output=%d image=%d ≈$%.4f",
                     session_id,
                     len(calls),
                     *(turn[k] for k in USAGE_FIELDS),
@@ -423,6 +425,16 @@ def create_app(
                 granted.append(match.args)
         if len({pending[r.call_id].event_id for r in body.results}) > 1:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "results must answer calls from the same model turn")
+        for r in body.results:  # what each tool result costs the next model call: text chars + screenshot bytes
+            shot = r.result.get(SCREENSHOT_KEY)
+            chars = sum(len(v) for k, v in r.result.items() if isinstance(v, str) and k != SCREENSHOT_KEY)
+            log.info(
+                "tool_result session=%s %s: chars=%d screenshot_b64=%d",
+                body.session_id,
+                r.name,
+                chars,
+                len(shot) if isinstance(shot, str) else 0,
+            )
         cfg: UserConfig = await request.app.state.store.get(user_id)
         calls = [(r.name, pending[r.call_id].args) for r in body.results]
         state_delta = result_state_delta(calls, session.state, cfg.permissions, granted) or None

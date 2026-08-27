@@ -101,10 +101,11 @@ How you work:
   before searching for a fact again.
 - Before EVERY tool call write exactly one sentence: what you see → what you do next. Then call the tool.
   Call ONE browser tool at a time and wait for its result; never queue several browser calls in one turn.
-- Every browser tool result includes a screenshot taken after the action. Look at it and check that the
-  action had the intended effect (page changed, row selected, folder opened, text entered) before you
-  decide the next step. If it did not, do not repeat the same click blindly: re-read the page, scroll,
-  wait, or choose another element.
+- Every action (click, type, navigate, scroll, …) returns a screenshot when the page changed; when it did
+  not, the result says screenshot "unchanged" — that means the action had no visible effect. Check the
+  picture (page changed, row selected, folder opened, text entered) before you decide the next step. If the
+  effect is missing, do not repeat the same click blindly: re-read the page, scroll, wait, or choose another
+  element. read_page returns the element list without a screenshot; call screenshot() if you need to look.
 - Sites are perceived per the site profile's mode:
   · mode dom (default): call read_page after a navigation or when the view changed and act by element refs
     ([eN]). A ref keeps working while its element stays on the page (toolbar buttons survive view changes);
@@ -423,9 +424,29 @@ def restrict_tools(llm_request: LlmRequest, allowed: set[str]) -> int:
     return removed
 
 
+def current_host(contents: list[types.Content]) -> str:
+    """Host of the page the agent is on: the `url` in the newest browser tool result (tabInfo), else ""."""
+    for c in reversed(contents):
+        for p in reversed(c.parts or []):
+            fr = p.function_response
+            url = (fr.response or {}).get("url") if fr else None
+            if isinstance(url, str) and url:
+                return host_of(url)
+    return ""
+
+
+def media_resolution(vision: bool) -> types.MediaResolution:
+    """Detail Gemini extracts from screenshots: high when a vision-mode site (act by coordinates) is in scope,
+    else the configured level — on dom-mode sites the picture only verifies an action, read_page carries the text."""
+    level = "high" if vision else registry().image_resolution
+    return types.MediaResolution(f"MEDIA_RESOLUTION_{level.upper()}")
+
+
 def thinking_config() -> types.GenerateContentConfig:
     level = types.ThinkingLevel(registry().thinking.upper())
-    return types.GenerateContentConfig(thinking_config=types.ThinkingConfig(thinking_level=level))
+    return types.GenerateContentConfig(
+        thinking_config=types.ThinkingConfig(thinking_level=level), media_resolution=media_resolution(False)
+    )
 
 
 def build_root_agent(store: ConfigStore) -> LlmAgent:
@@ -443,12 +464,22 @@ def build_root_agent(store: ConfigStore) -> LlmAgent:
     async def before_model(callback_context: CallbackContext, llm_request: LlmRequest) -> LlmResponse | None:
         prune_history(llm_request.contents)
         prune_screenshots(llm_request.contents)
+        cfg = await store.get(callback_context.user_id)
         skill_id = callback_context.state.get(SKILL_KEY)
-        if skill_id:
-            cfg = await store.get(callback_context.user_id)
-            skill = cfg.skill(str(skill_id))
-            if skill and skill.tools:
-                restrict_tools(llm_request, set(skill.tools))
+        skill = cfg.skill(str(skill_id)) if skill_id else None
+        if skill and skill.tools:
+            restrict_tools(llm_request, set(skill.tools))
+        # Screenshot detail follows the page on screen (the newest tool result's url); before the first browser
+        # result, the sites in scope decide (a free prompt has every profile in scope, so a vision site means high).
+        host = current_host(llm_request.contents)
+        if host:
+            site = cfg.site(host)
+            vision = site is not None and site.mode == "vision"
+        else:
+            domains = list(callback_context.state.get(DOMAINS_KEY) or (skill.sites if skill else []))
+            sites = [cfg.site(d) for d in domains] if domains else list(cfg.sites)
+            vision = any(s is not None and s.mode == "vision" for s in sites)
+        llm_request.config.media_resolution = media_resolution(vision)
         return None
 
     async def remember(note: str, tool_context: ToolContext) -> dict[str, Any]:
