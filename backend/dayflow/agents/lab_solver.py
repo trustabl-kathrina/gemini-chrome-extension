@@ -47,8 +47,9 @@ SOLVER_INSTRUCTION = """You solve ONE task of a university programming lab in Py
 
 Rules:
 - Write a single self-contained script: include the setup from the context at the top (imports, sample
-  data), then the solution. Only numpy and the standard library; no files, no network, no plots — print
-  numbers and text instead of drawing.
+  data), then the solution. Only the standard library and numpy; no network, no plots — print numbers and
+  text instead of drawing. Never call input(): use a fixed sample value from the context (or a sensible one)
+  and print it. File-handling tasks may create files under the current directory only.
 - Print every result the task asks for, with short labels (e.g. "shape: (64, 64, 3)").
 - Execute the script with the code execution tool. Read the output and compare it with what the task
   expects; if something is off or an exception occurs, fix the script and run it again. The last run must

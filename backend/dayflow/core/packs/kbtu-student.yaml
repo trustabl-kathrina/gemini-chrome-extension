@@ -117,8 +117,8 @@ skills:
     key: "4"
     title: Solve a lab from the vault
     blurb: Read the lab PDF (or the syllabus), solve every task with code that is actually run, deliver a notebook to Colab/Drive or a private repo.
-    prompt: Solve Lab 1 of my Computer Vision course as a notebook and open it in Google Colab.
-    keywords: [lab, labs, notebook, ipynb, colab, jupyter, solve, assignment, homework]
+    prompt: Solve Assignment 4 of my Programming Principles II course as a notebook and open it in Google Colab.
+    keywords: [lab, labs, notebook, ipynb, colab, jupyter, solve, assignment, assignments, homework, exercise, exercises]
     sites: [github.com, colab.research.google.com]
     tools: [vault_list, vault_read, solve_lab_task, build_notebook, build_report, create_repository, push_files, download, open_tab, read_page, click, press_key, wait, screenshot, remember]
     instructions: |
@@ -126,9 +126,14 @@ skills:
       Google Colab (default: the .ipynb saved to the Drive vault and opened in Colab) or a private GitHub repo
       (when the user says "repo", "GitHub" or "push") — plus a report saved to the vault.
       Plan first, then:
-      1. vault_list(). Look for the lab file (e.g. "Lab_01_Image_Basics.pdf") and, failing that, the course's
-         syllabus (path contains the course, file name contains "syllabus"). vault_read the best one.
+      1. vault_list(). Look for the lab file (e.g. "Lab_01_Image_Basics.pdf", "Assignment 4", a course repo
+         bundle like "programming-principles-2-main.zip") and, failing that, the course's syllabus (path contains
+         the course, file name contains "syllabus"). vault_read the best one.
          · Lab file found → its numbered tasks are the tasks.
+         · A .zip bundle → vault_read returns a "[zip] …" listing followed by "[file <path>]" sections; the
+           requested assignment is the section(s) under "Assignment NN/" (README.md plus its topic files such as
+           generators.md, math.md). Use every numbered item of those files as the tasks, in file order; skip
+           items that are not programs (install git, register on a site, read an article) and say so.
          · Only the syllabus found → build Lab NN from it: the topics of week NN (and the lab list if it has one)
            become 4-5 concrete tasks with sample data described in the task text (numpy only). Tell the user
            the tasks are derived from the syllabus, not from an official lab sheet.
@@ -139,8 +144,9 @@ skills:
            do not build tasks from nothing.
       2. Split the text into the shared setup (imports, sample data, constraints) and the numbered tasks.
       3. For EACH task call solve_lab_task(task_text=<the task verbatim>, context=<setup + course and lab name
-         + constraints such as "numpy only">). Keep its code, stdout and notes. On an error call it again with
-         the error appended to the context (at most twice per task).
+         + constraints such as "standard library only" or "numpy only"; for tasks that read input from the
+         console say "use a fixed sample value instead of input() and print it">). Keep its code, stdout and
+         notes. On an error call it again with the error appended to the context (at most twice per task).
       4. build_notebook(title, cells): per task a short markdown cell (task title) then a code cell
          {source: code, stdout: stdout}. The brain re-runs the notebook; on an error fix that task and rebuild.
          It returns ipynb_json, ipynb_url and file_name.

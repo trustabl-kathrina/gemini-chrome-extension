@@ -211,3 +211,37 @@ async def test_upload_transcribes_scanned_pdfs_with_gemini(
         files={"file": ("2.1.7.pdf", make_pdf("lab"), "application/pdf")},
     )
     assert r3.status_code == 200 and transcribed == ["syllabus.pdf"]
+
+
+def test_extract_text_docx_and_zip() -> None:
+    import io
+    import zipfile
+
+    from dayflow.core.vault import extract_text
+
+    doc_xml = (
+        '<?xml version="1.0"?><w:document xmlns:w="x"><w:body>'
+        "<w:p><w:r><w:t>Practice 1: Hashing</w:t></w:r></w:p>"
+        '<w:p><w:r><w:t xml:space="preserve">Implement </w:t></w:r><w:r><w:t>SHA-256</w:t></w:r>'
+        "<w:tab/><w:r><w:t>in Python &amp; test</w:t></w:r></w:p>"
+        "<w:p/></w:body></w:document>"
+    )
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("word/document.xml", doc_xml)
+    text = extract_text(buf.getvalue(), "", "Practice №1.docx")
+    assert text == "Practice 1: Hashing\nImplement SHA-256\tin Python & test"
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("repo-main/README.md", "# PP2 labs\nLab 1: variables")
+        z.writestr("repo-main/lab1/task.py", "print('hi')")
+        z.writestr("repo-main/img/logo.png", b"\x89PNG....")
+    text = extract_text(buf.getvalue(), "application/zip", "programming-principles-2-main.zip")
+    assert text.startswith("[zip] repo-main/README.md, repo-main/lab1/task.py, repo-main/img/logo.png")
+    assert (
+        "[file repo-main/README.md]\n# PP2 labs" in text
+        and "print('hi')" in text
+        and "PNG" not in text.split("\n", 1)[1]
+    )
+    assert extract_text(b"not a zip", "", "x.docx") == "" and extract_text(b"nope", "application/zip", "x.zip") == ""

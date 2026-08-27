@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import html
 import io
 import logging
 import os
@@ -195,7 +196,78 @@ def extract_text(data: bytes, content_type: str, name: str = "") -> str:
             return ""
     if content_type.startswith(TEXT_TYPES) or name.lower().endswith(TEXT_SUFFIXES):
         return data.decode("utf-8", errors="replace")[:MAX_TEXT_CHARS]
+    if name.lower().endswith(".docx") or content_type == DOCX_TYPE:
+        return docx_text(data, name)[:MAX_TEXT_CHARS]
+    if name.lower().endswith(".zip") or content_type == "application/zip":
+        return zip_text(data, name)[:MAX_TEXT_CHARS]
     return ""
+
+
+DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+ZIP_TEXT_SUFFIXES = TEXT_SUFFIXES + (
+    ".py",
+    ".ipynb",
+    ".java",
+    ".c",
+    ".cpp",
+    ".h",
+    ".js",
+    ".ts",
+    ".sql",
+    ".sh",
+    ".cfg",
+    ".ini",
+)
+ZIP_MAX_MEMBER = 200_000
+
+
+def docx_text(data: bytes, name: str = "") -> str:
+    """Paragraph text of a .docx (word/document.xml): lab sheets at KBTU are often Word files. No python-docx —
+    the XML is read directly: <w:p> = paragraph, <w:t> = text run, <w:tab/> = tab, <w:br/> = line break."""
+    import re as _re
+    import zipfile
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            xml = z.read("word/document.xml").decode("utf-8", errors="replace")
+    except (zipfile.BadZipFile, KeyError, OSError) as e:
+        log.warning("docx unreadable %s: %s", name or "<docx>", e)
+        return ""
+    paragraphs: list[str] = []
+    for para in _re.findall(r"<w:p[ >].*?</w:p>", xml, flags=_re.S):
+        para = _re.sub(r"<w:tab/>", "<w:t>\t</w:t>", para)  # keep tabs/breaks: only <w:t> text survives below
+        para = _re.sub(r"<w:br/>", "<w:t>\n</w:t>", para)
+        text = "".join(_re.findall(r"<w:t(?:\s[^>]*)?>(.*?)</w:t>", para, flags=_re.S))
+        text = html.unescape(text).strip()
+        if text:
+            paragraphs.append(text)
+    return "\n".join(paragraphs)
+
+
+def zip_text(data: bytes, name: str = "") -> str:
+    """A listing of a .zip plus the text of its readable members (markdown, code, notebooks): assignment bundles
+    arrive as repo zips. Members over ZIP_MAX_MEMBER bytes and binaries are listed by name only."""
+    import zipfile
+
+    try:
+        z = zipfile.ZipFile(io.BytesIO(data))
+    except (zipfile.BadZipFile, OSError) as e:
+        log.warning("zip unreadable %s: %s", name or "<zip>", e)
+        return ""
+    with z:
+        members = [m for m in z.infolist() if not m.is_dir()]
+        out = ["[zip] " + ", ".join(m.filename for m in members[:200])]
+        for m in members:
+            if not m.filename.lower().endswith(ZIP_TEXT_SUFFIXES) or m.file_size > ZIP_MAX_MEMBER:
+                continue
+            try:
+                body = z.read(m).decode("utf-8", errors="replace")
+            except (zipfile.BadZipFile, OSError, RuntimeError):
+                continue
+            out.append(f"[file {m.filename}]\n{body}")
+            if sum(len(o) for o in out) > MAX_TEXT_CHARS:
+                break
+    return "\n\n".join(out)
 
 
 # ---------- store ----------
