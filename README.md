@@ -3,7 +3,9 @@
 [![verify](../../actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Dayflow is a Chrome side-panel agent with a Gemini brain (Google ADK on Cloud Run). It works where you already work — signed in to your university portal, your team chat, GitHub — and runs multi-step chores end to end: syncing course files into your Google Drive vault, **solving** a lab into a runnable notebook and a private repo, posting the weekly update to the team chat and filing the issues and the PR.
+Dayflow is a Chrome side-panel agent with a Gemini brain (Google ADK on Cloud Run). It works where you already work — signed in to your university portal, your team chat, GitHub — and runs multi-step chores end to end: syncing course files into your Google Drive vault, **scaffolding** a lab into a runnable notebook with the tasks laid out and self-checks to run your own solution against, posting the weekly update to the team chat and filing the issues and the PR.
+
+It does everything *about* the work except the work: fetch, diff, organise, schedule, brief and scaffold are automatic; anything that would author graded content is outside the tool allow-lists. The permission architecture that stops the agent clicking *delete* is the same one that stops it doing your homework.
 
 It is built like a coding agent, but for the browser: a generic loop plus **user-owned configuration** — *skills* (playbooks), *site profiles* (notes per domain, with a perception mode), *permissions* (navigation allow-list, ask-before gates), *connections* and *schedules*. Everything university-specific ships as a default **skill pack** (`backend/dayflow/core/packs/kbtu-student.yaml`); nothing in the code knows what a specific portal is. Delete the pack and you still have the agent.
 
@@ -24,10 +26,33 @@ It is built like a coding agent, but for the browser: a generic loop plus **user
 | **Code provenance** | No pre-existing code incorporated; AI coding assistants were used as permitted by the hackathon rules |
 
 ```bash
-git clone <repo> && cd <repo>
+git clone git@github.com:altairzhambyl/gemini-chrome-extension.git && cd gemini-chrome-extension
 make verify                       # ruff + pyright + pytest · tsc + vitest · node --test — no credentials needed
 make e2e SCENE=vault-sync         # watch Gemini drive a real Chromium against a synthetic portal
 ```
+
+## Proof it did the work
+
+Every run is recorded in a ledger (`users/{uid}/runs/{id}` in Firestore) and rendered at **`GET /ledger`**:
+actions, artifacts, duration, cost in dollars, time avoided against measured human baselines — and a visible
+**failures column**, because what the agent could not do is part of the record.
+
+Each artifact gets a **"Did & Didn't" receipt** (`GET /receipt/{run_id}/{n}`): a sha256 hash-chained excerpt of the
+action log stating what the agent did *and what it verifiably did not do*. Negative claims are derived from the
+recorded tool calls only — if a tool cannot be classified, every negative claim is suppressed rather than weakened.
+It is a machine-generated AI-use disclosure a student can hand to a professor.
+
+Runs also export OpenTelemetry spans to **Cloud Trace**, so a run is a reasoning-chain waterfall in the console.
+
+## Judges: run it without our credentials
+
+The real portal is behind a university login we cannot share. The harness ships an anonymised replica of it:
+
+```bash
+make replica                      # the fake portal, seeded demo account, no credentials of ours
+```
+
+See **[docs/JUDGES.md](docs/JUDGES.md)** for the five-minute path, and for what is real versus replicated.
 
 ## Screenshots
 
@@ -50,7 +75,7 @@ unzipped and its slides counted, the Drive copy is compared byte-for-byte with t
 | # | Skill | What Gemini does | Verdict | Actions | Wall |
 |---|---|---|---|---|---|
 | 1 | **Vault sync** | Opens the portal, walks School → Instructor → course folder, downloads every file into Drive `Dayflow/<course>/<Materials\|Week NN\|Lab NN>/`; the brain parses each (title, summary, deadlines) and indexes it. Also runs on a schedule. | ✅ pass | 14 | 2m38s |
-| 2 | **Lab** | Reads the lab PDF from the vault and **solves** it: a sub-agent with Gemini code execution writes and runs the code per task, assembles a notebook with real outputs, writes a report, creates a private GitHub repo and pushes README/TODO/notebook/report. | ✅ pass | 14 | 5m21s |
+| 2 | **Lab** | Reads the lab spec from the vault and **sets the work up**: a notebook with the dataset loaded and summarised, one section per task with its heading cited to the spec, `#TODO`s and a failing self-check per task. Gemini code execution runs the notebook so it is green on a fresh kernel before you start; the same runner then checks *your* solution against the spec. Pushed to a private GitHub repo with README/TODO/report. | ✅ pass | 14 | 5m21s |
 | 3 | **Team ops** | Summarises the week from the repo, opens the messenger, finds the team chat, asks you to approve the exact text, sends it; files Linear issues; opens a GitHub issue **and** a pull request. | ✅ pass | 4 | 2m42s |
 | 4 | **Courseware** | Cheatsheet + 10-question quiz page built from the syllabus, opened in a tab and saved to the vault. | ✅ pass | 17 | 2m59s |
 | 5 | **Scaffold** | Week/lab folder tree in Drive derived from the syllabus' 15-week schedule. | ✅ pass | 13 | 3m06s |
