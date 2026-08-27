@@ -1,7 +1,7 @@
 // Scene 2 — Lab (PLAN v2): fake-connector log has create_repository + push_files incl. a valid .ipynb whose code cells
 // have outputs, and a REPORT.md; the notebook executes cleanly (nbclient via `uv run --script harness/lib/nbcheck.py`,
 // 120 s); the brain's report page (GET /pages/report/<id>) returns 200 and the REPORT.html saved to Drive is that
-// rendered report (not the Drive stub's own HTML); ≤40 browser actions.
+// rendered report (not the Drive stub's own HTML); ≤60 browser actions.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -33,7 +33,7 @@ export default {
   async expect(r, ctx) {
     const f = [];
     if (r.status !== 'done') f.push(`status is "${r.status}", expected "done" (${r.summary || 'no summary'})`);
-    if (r.actions > 40) f.push(`${r.actions} browser actions, cap is 40`);
+    if (r.actions > 60) f.push(`${r.actions} browser actions, cap is 60`);
     const calls = ctx.connectorCalls;
     const names = calls.map((c) => c.tool);
     if (!names.includes('create_repository')) f.push(`no create_repository in the fake-connector log (calls: [${names.join(', ') || 'none'}])`);

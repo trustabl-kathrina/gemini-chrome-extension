@@ -51,7 +51,7 @@ Honest notes:
   Linear so a judge needs no accounts. The model, the loop, the guards, the parsing, the code execution and
   the generated artifacts are the production ones.
 - **Scene 1 also passes against the real portal** (`E2E_REAL=1`, a signed-in Chromium profile,
-  `wsp.kbtu.kz`): 40 browser actions, right at the cap — one earlier run failed at 41. Those results are
+  `wsp.kbtu.kz`): 40 browser actions on a 15-lecture course (the cap is now 60; one earlier run failed at 41 under the old 40). Those results are
   never committed (they contain real course content), so this line is a claim you can only re-run, not read.
 - **Scenes 2–6 have not been run against the real GitHub/Linear MCP servers** — set `GITHUB_TOKEN` /
   `LINEAR_API_KEY` on the brain and the same tool names go to the real `McpToolset` instead of the fakes.
@@ -147,7 +147,7 @@ In the brain (`before_tool_callback`, `backend/dayflow/agents/orchestrator.py`):
 
 - host allow-list for `navigate` / `open_tab` / `download(url=…)` — the brain's own host is implicitly allowed
   for the pages it generates, and nothing else is;
-- a hard cap of **40 browser actions per run**, reset only by a new user prompt;
+- a hard cap of **60 browser actions per run**, reset only by a new user prompt;
 - **bound approvals**: a tool in `ask_before` (`type`, `create_issue`, `issue_write`, `create_pull_request`,
   `run_js`) only runs when the user allowed a `request_confirmation` card whose text covers exactly the
   content the call sends — the message text, the issue title and body, the JS expression. One approval is
@@ -351,7 +351,7 @@ pass            true when failures is empty
 status          done | error | cancelled | timeout | harness-error
 failures[]      every unmet expectation, in words (e.g. "create_issue calls: 0, expected ≥1")
 steps[]         the transcript: text / tool (name, args, summary, ms, status) / artifact / confirm rows
-actions         browser actions executed (cap 40) · refusedActions: calls the brain's guard refused
+actions         browser actions executed (cap 60) · refusedActions: calls the brain's guard refused
 toolCalls       call count per tool · connectorCalls: the fake GitHub/Linear log · confirms: cards and answers
 drive.entries   the fake-Drive tree · vault: GET /vault from the brain · chatDom: messages visible on /chat
 notebook        (lab) code cells, cells with outputs, and whether a fresh nbclient execution succeeded

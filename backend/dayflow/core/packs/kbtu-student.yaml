@@ -38,7 +38,7 @@ skills:
          run_js or plain click — try the other ref once, then move on to the next file.
       5. After the last file call vault_list() and confirm every downloaded file is present with a summary.
       Finish with a changelog: files added (with their vault paths), deadlines discovered, parse errors if any.
-      Budget: about 10 actions to reach the course folder, ~4 per subfolder plus one per file — stay under 40;
+      Budget: about 10 actions to reach the course folder, ~4 per subfolder plus one per file — stay under 60;
       if the budget runs out, stop and report what was synced and what remains.
   - id: courseware
     key: "2"
@@ -137,11 +137,13 @@ skills:
          · Only the syllabus found → build Lab NN from it: the topics of week NN (and the lab list if it has one)
            become 4-5 concrete tasks with sample data described in the task text (numpy only). Tell the user
            the tasks are derived from the syllabus, not from an official lab sheet.
-         · Neither found → sync ONLY the syllabus from WSP per the vault-sync playbook (schedule page for the
-           instructor → Student files → School → Instructor → course folder → "1.Syllabus for the student";
-           about 12 browser actions). If the instructor or the course folder is not on WSP after 3 checks, stop
-           browsing, remember("<course>: no files on WSP"), and ask the user for the syllabus or the lab sheet —
-           do not build tasks from nothing.
+         · Neither found → sync ONLY what this lab needs from WSP per the vault-sync playbook: Student files →
+           School → Instructor → course folder → the assignments/labs subfolder ("4. Assignments", "3.Labs",
+           "Practice") → download the lab sheet or the bundle (e.g. programming-principles-2-main.zip) to
+           "<course code> <course name>/Lab NN/<file>"; if there is no such folder, download the syllabus from
+           "1.Syllabus for the student" instead. About 12 browser actions; do not download lectures. If the
+           instructor or the course folder is not on WSP after 3 checks, stop browsing, remember("<course>: no
+           files on WSP"), and ask the user for the lab sheet — do not build tasks from nothing.
       2. Split the text into the shared setup (imports, sample data, constraints) and the numbered tasks.
       3. For EACH task call solve_lab_task(task_text=<the task verbatim>, context=<setup + course and lab name
          + constraints such as "standard library only" or "numpy only"; for tasks that read input from the

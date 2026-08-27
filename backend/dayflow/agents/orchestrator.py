@@ -63,7 +63,7 @@ CONFIRMATIONS_KEY = "approvals"  # list of {"action", "details"} the user allowe
 SKILL_KEY = "skill_id"
 DOMAINS_KEY = "domains"
 ACTIONS_KEY = "actions"
-MAX_ACTIONS = 40
+MAX_ACTIONS = 60  # a real course: ~10 actions to its folder, ~4 per subfolder, 1 per file — PP2 needed 42+
 # Screenshots stay in the session, but only the last KEEP_SCREENSHOTS tool results reach the model as images:
 # older pages are history the model already acted on, and every extra image slows the next turn down.
 KEEP_SCREENSHOTS = 2

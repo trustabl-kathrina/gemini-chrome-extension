@@ -78,7 +78,7 @@ export function pendingConfirm(run: Run): Extract<Step, { kind: 'confirm' }> | u
   return run.steps.find((s): s is Extract<Step, { kind: 'confirm' }> => s.kind === 'confirm' && s.answer === 'pending');
 }
 
-/** Browser actions so far (the brain caps a run at 40). */
+/** Browser actions so far (the brain caps a run at 60). */
 export function browserActions(run: Run): number {
   return run.steps.filter((s) => s.kind === 'tool' && s.target === 'browser').length;
 }

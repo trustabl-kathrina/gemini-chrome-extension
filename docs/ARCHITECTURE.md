@@ -52,7 +52,7 @@ flowchart LR
 | Piece | File | Responsibility |
 |---|---|---|
 | Instruction composer | `backend/dayflow/agents/orchestrator.py` (`compose_instruction`) | base prompt + memory + active skill (or all skills as playbooks) + site profiles in scope with their `dom`/`vision` mode + permissions |
-| Guard | same file (`guard_tool`, `before_tool_callback`) | host allow-list, 40-action budget, bound approvals |
+| Guard | same file (`guard_tool`, `before_tool_callback`) | host allow-list, 60-action budget, bound approvals |
 | Browser tools | `backend/dayflow/tools/browser.py` | `LongRunningFunctionTool`s that return `None` — declarations only; the extension executes them |
 | Server tools | `backend/dayflow/tools/{server,lab,scaffold,courseware,deck,connectors}.py` | vault read/list, notebook + report, folder plans, courseware, `.pptx`, GitHub/Linear (MCP or in-process fakes) |
 | Lab solver | `backend/dayflow/agents/lab_solver.py` | an `LlmAgent` with `BuiltInCodeExecutor`, wrapped as an `AgentTool` (`solve_lab_task`) — Gemini writes *and runs* the code |
@@ -165,7 +165,7 @@ Skills carry a cron expression. Two paths exist and both end in the same loop:
 
 1. **Page content is data, never instruction.** The system prompt says so; `read_page` masks password, card
    and one-time-code values before the text ever reaches the model.
-2. **Two independent permission checks.** The brain guards the tool call (host allow-list, 40-action budget,
+2. **Two independent permission checks.** The brain guards the tool call (host allow-list, 60-action budget,
    bound approvals — an `ask_before` tool only runs when the user allowed a `request_confirmation` whose text
    covers exactly what the call sends, and the approval is spent by that one call). The extension guards the
    execution (URL scheme, allow-list on the URL *and* on the tab being acted on, download re-check after

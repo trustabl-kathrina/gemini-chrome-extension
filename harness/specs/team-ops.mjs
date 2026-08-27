@@ -1,6 +1,6 @@
 // Scene 3 — Team ops (PLAN v2): a confirmation card answered (harness auto-allows) whose text is the message that
 // was then sent; the message is present on the fake chat page ("Diploma · Team", read from the DOM); fake log has
-// create_issue ≥1 and create_pull_request exactly 1; ≤40 browser actions.
+// create_issue ≥1 and create_pull_request exactly 1; ≤60 browser actions.
 const norm = (s) => String(s || '').replace(/[“”"'`]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
 
 export default {
@@ -33,7 +33,7 @@ export default {
       const dupes = ctx.real ? 0 : ctx.chatMessages.filter((m) => /Diploma/i.test(m.chatName || '')).length;
       if (dupes > 1) f.push(`the update was sent ${dupes} times to the Diploma chat, expected once`);
     }
-    if (r.actions > 40) f.push(`${r.actions} browser actions, cap is 40`);
+    if (r.actions > 60) f.push(`${r.actions} browser actions, cap is 60`);
     return f;
   },
 };

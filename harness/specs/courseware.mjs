@@ -22,7 +22,7 @@ export default {
   async expect(r, ctx) {
     const f = [];
     if (r.status !== 'done') f.push(`status is "${r.status}", expected "done" (${r.summary || 'no summary'})`);
-    if (r.actions > 40) f.push(`${r.actions} browser actions, cap is 40`);
+    if (r.actions > 60) f.push(`${r.actions} browser actions, cap is 60`);
 
     // 1. An artifact href that serves the page: 200, HTML, "Quiz".
     const links = r.artifacts.filter((a) => /^https?:\/\//.test(a.href || ''));

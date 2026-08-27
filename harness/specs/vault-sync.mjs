@@ -1,5 +1,5 @@
 // Scene 1 — Vault sync (PLAN v2): status done; fake-Drive has the 3 CV files under Dayflow/CSCI3240*/…;
-// the brain's vault index (GET /vault) has 3 entries for them; ≤40 browser actions.
+// the brain's vault index (GET /vault) has 3 entries for them; ≤60 browser actions.
 const COURSE_FILES = ['syllabus.pdf', 'Lecture_01_Introduction.pdf', 'Lab_01_Image_Basics.pdf'];
 
 export default {
@@ -18,7 +18,7 @@ export default {
       else if (entries.length === 0 && !/missing|not found|no such|could not find|couldn't find|does not exist|not present|absent/i.test(r.summary)) {
         f.push(`vault is empty and the summary does not say the folder is missing: ${r.summary.slice(0, 200)}`);
       }
-      if (r.actions > 40) f.push(`${r.actions} browser actions, cap is 40`);
+      if (r.actions > 60) f.push(`${r.actions} browser actions, cap is 60`);
       return f;
     }
     const pdfs = ctx.driveFiles.filter((p) => /^Dayflow\/CSCI3240[^/]*\/.+\.pdf$/i.test(p));
@@ -35,7 +35,7 @@ export default {
       const cv = entries.filter((e) => /CSCI3240/.test(JSON.stringify(e)));
       if (cv.length < 3) f.push(`vault index has ${cv.length} CSCI3240 entries, expected 3 (total ${entries.length})`);
     }
-    if (r.actions > 40) f.push(`${r.actions} browser actions, cap is 40`);
+    if (r.actions > 60) f.push(`${r.actions} browser actions, cap is 60`);
     return f;
   },
 };
