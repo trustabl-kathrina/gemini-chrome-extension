@@ -20,7 +20,9 @@ class ModelRegistry(BaseModel):
     classifier: str
     embed: str
     embed_dims: int = 768
-    thinking: str = "low"  # orchestrator thinking level: minimal | low | medium | high
+    thinking: str = "low"  # routine browser steps: minimal | low | medium | high
+    thinking_plan: str = "medium"  # the first call of a run and recovery after a failed action
+    executor: str = ""  # optional cheaper model for routine steps (empty = the orchestrator model)
     solver_thinking: str = "medium"  # the lab solver writes code: one notch up
     image_resolution: str = "low"  # Gemini media_resolution for screenshots on dom-mode sites: low | medium | high
     fallbacks: list[str] = []  # tried in order when the orchestrator model answers 429/5xx: "model@location" | "model"
@@ -34,6 +36,10 @@ def registry() -> ModelRegistry:
             data[role] = override
     if override := os.getenv("DAYFLOW_THINKING"):
         data["thinking"] = override
+    if override := os.getenv("DAYFLOW_THINKING_PLAN"):
+        data["thinking_plan"] = override
+    if (override := os.getenv("DAYFLOW_EXECUTOR")) is not None:
+        data["executor"] = override
     if override := os.getenv("DAYFLOW_SOLVER_THINKING"):
         data["solver_thinking"] = override
     if override := os.getenv("DAYFLOW_IMAGE_RESOLUTION"):

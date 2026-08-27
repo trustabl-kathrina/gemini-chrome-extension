@@ -282,6 +282,8 @@ sites:
       call download(ref=<that button's ref>) (or the row's ref) so the file goes to the vault.
       Student's schedule (/StudentSchedule) is a weekly grid; cells read "CODE Course name Instructor room (hh:mm-hh:mm)";
       it has Year and Term selectors - use them to see past semesters. Read the schedule first to learn each course's instructor.
+      Module URLs (after sign-in): /StudentFiles (files), /StudentSchedule (schedule), /Attendance, /StudentJournal
+      (grades), /Transcript, /News — open_tab the URL directly instead of clicking through the Desktop.
       Not every course has files here: an instructor who publishes on Teams or by e-mail has no folder under their
       school. If the instructor is not in the school's list (or the course is not in the instructor's folder), that is
       the answer — go Back once to double-check the school, then stop, remember it, and report; never scan other
@@ -289,8 +291,21 @@ sites:
   - domain: teams.microsoft.com
     mode: dom
     notes: |
-      Microsoft Teams web. Course teams are in the left rail; announcements are in the General channel,
-      assignments under the Assignments tab. Heavy SPA — always take a fresh read_page after clicking.
+      Microsoft Teams web (new "v2" UI, https://teams.microsoft.com/v2/; labels shown EN / RU as the account may be in
+      Russian). Left rail buttons: Activity/Действия, Chat/Чат, Teams/Команды, Assignments/Задания, Calendar, Calls,
+      OneDrive, Apps. Top search box (placeholder "Press Ctrl+Alt+G…"): typing a course name lists matching FILES with
+      their team and channel ("Syllabus ….docx — Computer vision spring'26 > General") — the fastest way to locate a
+      course document; Enter shows all results with Files / Channels / Messages filters.
+      Teams page: class teams are usually under a collapsed "Hidden"/"Скрытые" group — click it to expand, then the
+      team. A team's left tree: Home page, Class Notebook, Classwork, Assignments/Задания, Grades, Reflect, then the
+      channels ("General"/"Общий" under "Hidden channels"). A channel has tabs Posts/Публикации and
+      Shared/Общий доступ (= the channel's files).
+      LIMIT: the Shared file list and the Assignments view are cross-origin iframes (SharePoint filebrowser.aspx,
+      assignments.edu.cloud.microsoft) — read_page does NOT list their rows. Do not click_at blindly on rows; use
+      the screenshot to confirm what is on screen, and prefer the search box, which names the file and its channel.
+      To fetch a file, open it from search or the file row, then download from the viewer's Download button
+      (download(ref=…) if read_page shows it, else say what you see and ask). If the file cannot be obtained in ≤5
+      actions, stop, remember which channel holds it, and ask the user to drop it into the vault.
   - domain: web.telegram.org
     mode: dom
     notes: |

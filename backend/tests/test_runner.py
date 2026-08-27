@@ -3,6 +3,7 @@
 from collections.abc import AsyncGenerator
 from typing import Any
 
+import pytest
 from google.adk.apps import App
 from google.adk.events import Event
 from google.adk.models.base_llm import BaseLlm
@@ -220,3 +221,25 @@ async def test_screenshot_resolution_follows_the_page_on_screen() -> None:
     )
     await collect(runner, [types.Part(function_response=on_drive)])
     assert str(llm.requests[-1].config.media_resolution).endswith("HIGH")
+
+
+async def test_plan_turn_thinks_harder_than_a_step_and_executor_model_is_optional(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from dayflow.models.registry import registry
+
+    registry.cache_clear()
+    monkeypatch.setenv("DAYFLOW_EXECUTOR", "gemini-3.5-flash")
+    try:
+        runner, llm = make_runner([[fc("c1", "click", ref="e1")], [txt("done")]])
+        await collect(runner, [txt("go")])
+        ok = types.FunctionResponse(
+            id="c1", name="click", response={"status": "success", "url": "https://wsp.kbtu.kz/x"}
+        )
+        await collect(runner, [types.Part(function_response=ok)])
+        plan, step = llm.requests[0], llm.requests[1]
+        assert str(plan.config.thinking_config.thinking_level).endswith("MEDIUM")  # type: ignore[union-attr]
+        assert str(step.config.thinking_config.thinking_level).endswith("LOW")  # type: ignore[union-attr]
+        assert plan.model != "gemini-3.5-flash" and step.model == "gemini-3.5-flash"
+    finally:
+        registry.cache_clear()

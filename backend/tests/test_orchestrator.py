@@ -377,3 +377,25 @@ def test_current_host_is_the_newest_tool_results_url() -> None:
     contents = [result("https://wsp.kbtu.kz/StudentFiles"), result(None), result("https://drive.google.com/drive/u/0")]
     assert current_host(contents) == "drive.google.com"
     assert current_host(contents[:2]) == "wsp.kbtu.kz"
+
+
+def test_turn_kind_plan_step_recover() -> None:
+    from google.genai import types
+
+    from dayflow.agents.orchestrator import thinking_for, turn_kind
+
+    def fr(response: dict[str, object]) -> types.Content:
+        return types.Content(
+            role="user", parts=[types.Part(function_response=types.FunctionResponse(name="click", response=response))]
+        )
+
+    prompt = types.Content(role="user", parts=[types.Part(text="go")])
+    assert turn_kind([prompt]) == "plan"
+    assert turn_kind([prompt, fr({"status": "success"})]) == "step"
+    assert turn_kind([prompt, fr({"status": "error", "message": "x"})]) == "recover"
+    assert turn_kind([prompt, fr({"status": "success", "screenshot": "unchanged: …"})]) == "recover"
+    assert turn_kind([fr({"status": "error"}), prompt]) == "plan", (
+        "an old run's error does not make the new prompt a recovery"
+    )
+    assert thinking_for("plan").thinking_level == types.ThinkingLevel.MEDIUM
+    assert thinking_for("step").thinking_level == types.ThinkingLevel.LOW

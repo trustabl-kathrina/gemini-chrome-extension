@@ -97,9 +97,10 @@ How you work:
 - When something does not exist (a course folder, a file, an instructor on WSP), conclude after at most 3
   checks, say what is missing, and continue with the next best option from the playbook — never spend the
   budget searching. If the task cannot be finished without the user, finish everything else and ask once.
-- Learn: when you discover a durable fact (an instructor's name, a URL, that a course has no WSP folder, a
-  preference the user states), call remember(note) once with one short line. Check "What you remember"
-  before searching for a fact again.
+- Learn: when you discover a durable fact (an instructor's name, a URL, that a course has no WSP folder, which
+  Teams channel holds a course's files, a preference the user states), call remember(note) once with one short
+  line. Never remember transient state (signed out, page loading, a temporary error, what you are about to
+  do). Check "What you remember" before searching for a fact again.
 - Before EVERY tool call write exactly one sentence: what you see → what you do next. Then call the tool.
   Call ONE browser tool at a time and wait for its result; never queue several browser calls in one turn.
 - Every action (click, type, navigate, scroll, …) returns a screenshot when the page changed; when it did
@@ -443,11 +444,31 @@ def media_resolution(vision: bool) -> types.MediaResolution:
     return types.MediaResolution(f"MEDIA_RESOLUTION_{level.upper()}")
 
 
+def turn_kind(contents: list[types.Content]) -> str:
+    """What the next model call is for, from the current run's history: "plan" (no tool result yet after the
+    prompt), "recover" (the newest tool result reports an error or an unchanged page), else "step"."""
+    last_prompt = 0
+    for i, c in enumerate(contents):
+        if c.role == "user" and any(p.text for p in (c.parts or [])):
+            last_prompt = i
+    results = [p.function_response for c in contents[last_prompt:] for p in (c.parts or []) if p.function_response]
+    if not results:
+        return "plan"
+    newest = results[-1].response or {}
+    if newest.get("status") == "error" or str(newest.get("screenshot", "")).startswith("unchanged"):
+        return "recover"
+    return "step"
+
+
+def thinking_for(kind: str) -> types.ThinkingConfig:
+    """Cheap routine steps, more thought where it pays: planning a run and recovering from a failed action."""
+    reg = registry()
+    level = reg.thinking_plan if kind in ("plan", "recover") else reg.thinking
+    return types.ThinkingConfig(thinking_level=types.ThinkingLevel(level.upper()))
+
+
 def thinking_config() -> types.GenerateContentConfig:
-    level = types.ThinkingLevel(registry().thinking.upper())
-    return types.GenerateContentConfig(
-        thinking_config=types.ThinkingConfig(thinking_level=level), media_resolution=media_resolution(False)
-    )
+    return types.GenerateContentConfig(thinking_config=thinking_for("step"), media_resolution=media_resolution(False))
 
 
 def build_root_agent(store: ConfigStore) -> LlmAgent:
@@ -465,6 +486,10 @@ def build_root_agent(store: ConfigStore) -> LlmAgent:
     async def before_model(callback_context: CallbackContext, llm_request: LlmRequest) -> LlmResponse | None:
         prune_history(llm_request.contents)
         prune_screenshots(llm_request.contents)
+        kind = turn_kind(llm_request.contents)
+        llm_request.config.thinking_config = thinking_for(kind)
+        if kind == "step" and registry().executor:
+            llm_request.model = registry().executor  # the cheap model executes; the orchestrator plans and recovers
         cfg = await store.get(callback_context.user_id)
         skill_id = callback_context.state.get(SKILL_KEY)
         skill = cfg.skill(str(skill_id)) if skill_id else None

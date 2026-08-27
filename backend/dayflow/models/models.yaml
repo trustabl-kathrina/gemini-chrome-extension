@@ -7,6 +7,10 @@ embed: gemini-embedding-2
 embed_dims: 768
 # Orchestrator thinking level (minimal|low|medium|high): browsing steps are small — LOW keeps turns fast.
 thinking: low
+# The first call of a run (the plan) and recovery after an error / unchanged page think harder.
+thinking_plan: medium
+# Optional cheaper model for routine browser steps (e.g. gemini-3.5-flash); planning/recovery stay on the orchestrator.
+executor: ""
 solver_thinking: medium
 # Screenshot detail the model gets (Gemini 3: low ≈ 280 tokens/image, medium ≈ 560, high ≈ 1120). Sites in vision
 # mode (act by coordinates) always get high; dom-mode sites verify with the picture and read text via read_page.
