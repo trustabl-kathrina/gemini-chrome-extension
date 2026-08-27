@@ -1,4 +1,4 @@
-"""ResilientGemini: 429 on the primary → same request replayed on the fallbacks; mid-stream failures re-raise."""
+"""ResilientGemini: the primary is retried on 429, then the request replays on the fallbacks — even mid-stream."""
 
 from __future__ import annotations
 
@@ -12,7 +12,11 @@ from google.adk.models.llm_response import LlmResponse
 from google.genai import types
 from google.genai.errors import ClientError
 
-from dayflow.models.resilient import ResilientGemini, exhausted, parse_fallback
+from dayflow.models.resilient import ATTEMPTS, ResilientGemini, exhausted, parse_fallback
+
+
+async def _no_sleep(_: float) -> None:
+    return None
 
 
 def err(code: int) -> ClientError:
@@ -26,6 +30,7 @@ def resp(text: str) -> LlmResponse:
 def scripted(monkeypatch: pytest.MonkeyPatch, plan: dict[str, list[Any]]) -> list[str]:
     """Fake Gemini.generate_content_async: per model id a list of items — str = streamed chunk, exception = raised."""
     calls: list[str] = []
+    monkeypatch.setattr("dayflow.models.resilient.asyncio.sleep", _no_sleep)
 
     async def fake(self: Gemini, llm_request: LlmRequest, stream: bool = False) -> AsyncGenerator[LlmResponse, None]:
         calls.append(f"{self.model}:{llm_request.model}")
@@ -45,16 +50,12 @@ async def collect(llm: ResilientGemini, req: LlmRequest) -> list[str]:
     return out
 
 
-async def test_primary_429_falls_through_the_chain_in_order(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_primary_429_is_retried_then_falls_through_the_chain(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = scripted(monkeypatch, {"gemini-3.7-flash": [err(429)], "gemini-3.5-flash": ["fallback answer"]})
     llm = ResilientGemini(model="gemini-3.7-flash", fallbacks=["gemini-3.7-flash@europe-west4", "gemini-3.5-flash"])
     assert await collect(llm, LlmRequest(model="gemini-3.7-flash")) == ["fallback answer"]
-    # the regional alternate shares the primary's model id, so the scripted 429 hits it too; then 3.5-flash answers
-    assert calls == [
-        "gemini-3.7-flash:gemini-3.7-flash",
-        "gemini-3.7-flash:gemini-3.7-flash",
-        "gemini-3.5-flash:gemini-3.5-flash",
-    ]
+    # ATTEMPTS tries on the primary, then the regional alternate (same model id → same scripted 429), then 3.5-flash
+    assert calls == ["gemini-3.7-flash:gemini-3.7-flash"] * (ATTEMPTS + 1) + ["gemini-3.5-flash:gemini-3.5-flash"]
     alt = llm.alternate("gemini-3.7-flash@europe-west4")
     assert alt.client_kwargs == {"location": "europe-west4"} and llm.alternate("gemini-3.5-flash").client_kwargs == {}
 
@@ -65,19 +66,20 @@ async def test_primary_success_never_touches_a_fallback(monkeypatch: pytest.Monk
     assert await collect(llm, LlmRequest(model="gemini-3.7-flash")) == ["a", "b"] and len(calls) == 1
 
 
-async def test_failure_after_streamed_chunks_is_not_replayed(monkeypatch: pytest.MonkeyPatch) -> None:
-    scripted(monkeypatch, {"gemini-3.7-flash": ["partial", err(429)], "gemini-3.5-flash": ["never"]})
+async def test_failure_after_streamed_chunks_is_still_replayed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A 429 mid-stream (the common Vertex shape) retries and falls back; the client sees the partial chunk again."""
+    scripted(monkeypatch, {"gemini-3.7-flash": ["partial", err(429)], "gemini-3.5-flash": ["whole answer"]})
     llm = ResilientGemini(model="gemini-3.7-flash", fallbacks=["gemini-3.5-flash"])
-    with pytest.raises(ClientError):
-        await collect(llm, LlmRequest(model="gemini-3.7-flash"))
+    out = await collect(llm, LlmRequest(model="gemini-3.7-flash"))
+    assert out[-1] == "whole answer" and out.count("partial") == ATTEMPTS
 
 
 async def test_non_quota_errors_and_exhausted_chain_re_raise(monkeypatch: pytest.MonkeyPatch) -> None:
-    scripted(monkeypatch, {"gemini-3.7-flash": [err(400)], "gemini-3.5-flash": ["never"]})
+    calls = scripted(monkeypatch, {"gemini-3.7-flash": [err(400)], "gemini-3.5-flash": ["never"]})
     llm = ResilientGemini(model="gemini-3.7-flash", fallbacks=["gemini-3.5-flash"])
     with pytest.raises(ClientError) as e:
         await collect(llm, LlmRequest(model="gemini-3.7-flash"))
-    assert e.value.code == 400
+    assert e.value.code == 400 and len(calls) == 1, "a 400 is not retried or replayed"
     scripted(monkeypatch, {"gemini-3.7-flash": [err(429)], "gemini-3.5-flash": [err(429)]})
     with pytest.raises(ClientError) as e2:
         await collect(llm, LlmRequest(model="gemini-3.7-flash"))

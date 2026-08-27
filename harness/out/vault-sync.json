@@ -1,29 +1,29 @@
 {
   "scene": "vault-sync",
-  "real": true,
+  "real": false,
   "spec": "harness/specs/vault-sync.mjs",
-  "specSha256": "c537cf24dd11",
+  "specSha256": "61f96d9d937d",
   "runnerSha256": "27dccec99c48",
-  "prompt": "Sync all files of my Programming Principles II course (instructor Kelgenbayev, spring 2025-2026) from WSP into my vault and tell me what changed.",
-  "status": "done",
-  "summary": "### Synced Files for Programming Principles II (Kelgenbayev Arnur)\n\nAll available syllabus and lecture files have been downloaded and indexed into your vault under structured directories:\n\n#### **Mate",
-  "title": "Sync all files of my Programming Principles II course (instructor Kelgenbayev, spring 2025-2026) from WSP into my vault and tell me what changed.",
-  "startedAt": "2026-08-27T08:54:45.266Z",
-  "endedAt": "2026-08-27T09:00:49.226Z",
-  "durationMs": 363960,
+  "prompt": "Sync the CSCI3240 Introduction to Computer Vision course files from WSP (http://127.0.0.1:8099) into my vault and tell me what changed.",
+  "status": "error",
+  "summary": "Gemini is out of capacity right now (429) — the brain retried and fell back; press Retry to continue this chat.",
+  "title": "Sync the CSCI3240 Introduction to Computer Vision course files from WSP (http://127.0.0.1:8099) into my vault and tell me what changed.",
+  "startedAt": "2026-08-27T09:47:32.951Z",
+  "endedAt": "2026-08-27T09:48:42.634Z",
+  "durationMs": 69683,
   "steps": [
     {
       "kind": "text",
-      "text": "I will sync the Programming Principles II files from WSP to your vault.\n\n**Plan:**\n1. Open WSP Student Files and navigate to the relevant School.\n2. Open instructor Kelgenbayev's folder.\n3. Open the \"Programming Principles II\" course folder.\n4. Download all syllabus, lecture, and lab files into their structured vault paths.\n5. Verify downloaded files with `vault_list` and report newly added files and deadlines.\n\nOpening the WSP Student Files page to start browsing the course folders."
+      "text": "Plan:\n1. Open Student's Schedule on WSP to identify the instructor for CSCI3240 Introduction to Computer Vision.\n2. Navigate to Student Files and browse into the appropriate School and Instructor folder.\n3. Open the CSCI3240 course folder and its subfolders (Syllabus, Lectures, Labs).\n4. Download each file to its respective vault path (`CSCI3240 Introduction to Computer Vision/<Materials|Week NN|Lab NN>/<filename>`).\n5. Verify the synced files with `vault_list` and report what changed and any parsed deadlines.\n\nOpening the student schedule page to check the instructor for CSCI3240."
     },
     {
       "kind": "tool",
       "name": "open_tab",
-      "args": "url=https://wsp.kbtu.kz/StudentFiles",
-      "summary": "wsp.kbtu.kz/StudentFiles",
+      "args": "url=http://127.0.0.1:8099/StudentSchedule",
+      "summary": "WSP",
       "target": "browser",
       "status": "ok",
-      "ms": 312
+      "ms": 20066
     },
     {
       "kind": "text",
@@ -31,16 +31,16 @@
     },
     {
       "kind": "text",
-      "text": "Waiting for the WSP Student Files page to finish loading."
+      "text": "Navigating to Student Files to browse course materials."
     },
     {
       "kind": "tool",
-      "name": "wait",
-      "args": "ms=3000",
-      "summary": "ok",
+      "name": "navigate",
+      "args": "url=http://127.0.0.1:8099/StudentFiles",
+      "summary": "WSP",
       "target": "browser",
       "status": "ok",
-      "ms": 3040
+      "ms": 58
     },
     {
       "kind": "text",
@@ -48,13 +48,13 @@
     },
     {
       "kind": "text",
-      "text": "Reading the page to get the element references for navigation."
+      "text": "Reading the student files page to select School of Information Technology and Engineering."
     },
     {
       "kind": "tool",
       "name": "read_page",
       "args": "",
-      "summary": "34 elements",
+      "summary": "30 elements",
       "target": "browser",
       "status": "ok",
       "ms": 4
@@ -65,16 +65,16 @@
     },
     {
       "kind": "text",
-      "text": "I see the school list; clicking on \"School of Information Technology and Engineering\" to select it."
+      "text": "Selecting School of Information Technology and Engineering."
     },
     {
       "kind": "tool",
       "name": "click",
-      "args": "ref=e20",
-      "summary": "Office of the Registrar",
+      "args": "ref=e13",
+      "summary": "WSP",
       "target": "browser",
       "status": "ok",
-      "ms": 447
+      "ms": 432
     },
     {
       "kind": "text",
@@ -82,16 +82,16 @@
     },
     {
       "kind": "text",
-      "text": "I see the school selected; clicking the Enter button to open it."
+      "text": "Opening School of Information Technology and Engineering folder."
     },
     {
       "kind": "tool",
       "name": "click",
-      "args": "ref=e5",
-      "summary": "Office of the Registrar",
+      "args": "ref=e6",
+      "summary": "WSP",
       "target": "browser",
       "status": "ok",
-      "ms": 444
+      "ms": 431
     },
     {
       "kind": "text",
@@ -99,16 +99,16 @@
     },
     {
       "kind": "text",
-      "text": "Reading the instructor list to find the element reference for Kelgenbayev Artur."
+      "text": "Reading the instructor list for School of Information Technology and Engineering."
     },
     {
       "kind": "tool",
       "name": "read_page",
       "args": "",
-      "summary": "84 elements",
+      "summary": "38 elements",
       "target": "browser",
       "status": "ok",
-      "ms": 4
+      "ms": 2
     },
     {
       "kind": "text",
@@ -116,33 +116,16 @@
     },
     {
       "kind": "text",
-      "text": "I see instructor Kelgenbayev Arnur; selecting his row."
-    },
-    {
-      "kind": "tool",
-      "name": "click",
-      "args": "ref=e67",
-      "summary": "Office of the Registrar",
-      "target": "browser",
-      "status": "ok",
-      "ms": 453
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "text",
-      "text": "I see Kelgenbayev Arnur selected; clicking Enter to open his folder."
+      "text": "Selecting instructor Abenova Saule."
     },
     {
       "kind": "tool",
       "name": "click",
       "args": "ref=e36",
-      "summary": "Office of the Registrar",
+      "summary": "WSP",
       "target": "browser",
       "status": "ok",
-      "ms": 445
+      "ms": 430
     },
     {
       "kind": "text",
@@ -150,33 +133,16 @@
     },
     {
       "kind": "text",
-      "text": "Reading the page to inspect the course folder row and Enter button."
-    },
-    {
-      "kind": "tool",
-      "name": "read_page",
-      "args": "",
-      "summary": "14 elements",
-      "target": "browser",
-      "status": "ok",
-      "ms": 3
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "text",
-      "text": "I see the \"Programming Principles II, spring 2025-2026\" folder selected; clicking Enter to open it."
+      "text": "Opening Abenova Saule's folder."
     },
     {
       "kind": "tool",
       "name": "click",
-      "args": "ref=e113",
-      "summary": "Office of the Registrar",
+      "args": "ref=e6",
+      "summary": "WSP",
       "target": "browser",
       "status": "ok",
-      "ms": 443
+      "ms": 436
     },
     {
       "kind": "text",
@@ -184,638 +150,16 @@
     },
     {
       "kind": "text",
-      "text": "Reading the page to inspect subfolders inside the course folder."
-    },
-    {
-      "kind": "tool",
-      "name": "read_page",
-      "args": "",
-      "summary": "39 elements",
-      "target": "browser",
-      "status": "ok",
-      "ms": 3
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "text",
-      "text": "I see \"1. Syllabus for the student\" selected; clicking Enter to open it."
-    },
-    {
-      "kind": "tool",
-      "name": "click",
-      "args": "ref=e120",
-      "summary": "Office of the Registrar",
-      "target": "browser",
-      "status": "ok",
-      "ms": 449
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "text",
-      "text": "Reading the page to inspect syllabus files and their download buttons."
-    },
-    {
-      "kind": "tool",
-      "name": "read_page",
-      "args": "",
-      "summary": "19 elements",
-      "target": "browser",
-      "status": "ok",
-      "ms": 2
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "text",
-      "text": "I see the first syllabus file; downloading \"Programming Principles II - Келгенбаев А.pdf\" to Materials."
-    },
-    {
-      "kind": "tool",
-      "name": "download",
-      "args": "ref=e157 path=Programming Principles II/Materials/Programming Principle…",
-      "summary": "Programming Principles II - Келгенбаев А.pdf · 1302 KB → indexed",
-      "target": "browser",
-      "status": "ok",
-      "ms": 21348
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "artifact",
-      "type": "file",
-      "label": "Programming Principles II/Materials/Programming Principles II - Келгенбаев А.pdf",
-      "href": null
-    },
-    {
-      "kind": "text",
-      "text": "I see the second syllabus file; downloading \"Programming Principles II syllabus - spring 2023:24.pdf\" to Materials."
-    },
-    {
-      "kind": "tool",
-      "name": "download",
-      "args": "path=Programming Principles II/Materials/Programming Principle… ref=e162",
-      "summary": "Programming Principles II syllabus - spring 202324.pdf · 627 KB → indexed",
-      "target": "browser",
-      "status": "ok",
-      "ms": 9116
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "artifact",
-      "type": "file",
-      "label": "Programming Principles II/Materials/Programming Principles II syllabus - spring 202324.pdf",
-      "href": null
-    },
-    {
-      "kind": "text",
-      "text": "I have downloaded the syllabus files; clicking Back to return to the course subfolders list."
-    },
-    {
-      "kind": "tool",
-      "name": "click",
-      "args": "ref=e151",
-      "summary": "Office of the Registrar",
-      "target": "browser",
-      "status": "ok",
-      "ms": 441
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "text",
-      "text": "Reading the page to inspect subfolder rows and Enter button refs."
-    },
-    {
-      "kind": "tool",
-      "name": "read_page",
-      "args": "",
-      "summary": "39 elements",
-      "target": "browser",
-      "status": "ok",
-      "ms": 4
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "text",
-      "text": "I see \"2. Lecture support materials\"; selecting it."
-    },
-    {
-      "kind": "tool",
-      "name": "click",
-      "args": "ref=e170",
-      "summary": "Office of the Registrar",
-      "target": "browser",
-      "status": "ok",
-      "ms": 449
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "text",
-      "text": "I see \"2. Lecture support materials\" selected; clicking Enter to open it."
-    },
-    {
-      "kind": "tool",
-      "name": "click",
-      "args": "ref=e164",
-      "summary": "Office of the Registrar",
-      "target": "browser",
-      "status": "ok",
-      "ms": 442
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "text",
-      "text": "I see \"2. Lecture support materials\" is empty; clicking Back to return to subfolders."
-    },
-    {
-      "kind": "tool",
-      "name": "click",
-      "args": "ref=e163",
-      "summary": "Office of the Registrar",
-      "target": "browser",
-      "status": "ok",
-      "ms": 450
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "text",
-      "text": "Reading the page to inspect subfolder rows."
-    },
-    {
-      "kind": "tool",
-      "name": "read_page",
-      "args": "",
-      "summary": "39 elements",
-      "target": "browser",
-      "status": "ok",
-      "ms": 2
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "text",
-      "text": "I see \"3. Learning resources\"; selecting it."
-    },
-    {
-      "kind": "tool",
-      "name": "click",
-      "args": "ref=e210",
-      "summary": "Office of the Registrar",
-      "target": "browser",
-      "status": "ok",
-      "ms": 438
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "text",
-      "text": "I see \"3. Learning resources\" selected; clicking Enter to open it."
-    },
-    {
-      "kind": "tool",
-      "name": "click",
-      "args": "ref=e196",
-      "summary": "Office of the Registrar",
-      "target": "browser",
-      "status": "ok",
-      "ms": 444
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "text",
-      "text": "Reading the page to inspect all lecture files and download buttons."
-    },
-    {
-      "kind": "tool",
-      "name": "read_page",
-      "args": "",
-      "summary": "64 elements",
-      "target": "browser",
-      "status": "ok",
-      "ms": 3
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "text",
-      "text": "I see Lecture 1.pdf; downloading it to Week 01."
-    },
-    {
-      "kind": "tool",
-      "name": "download",
-      "args": "path=Programming Principles II/Week 01/Lecture 1.pdf ref=e236",
-      "summary": "Lecture 1.pdf · 529 KB → indexed",
-      "target": "browser",
-      "status": "ok",
-      "ms": 11169
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "artifact",
-      "type": "file",
-      "label": "Programming Principles II/Week 01/Lecture 1.pdf",
-      "href": null
-    },
-    {
-      "kind": "text",
-      "text": "I see Lecture 2.pdf; downloading it to Week 02."
-    },
-    {
-      "kind": "tool",
-      "name": "download",
-      "args": "path=Programming Principles II/Week 02/Lecture 2.pdf ref=e241",
-      "summary": "Lecture 2.pdf · 937 KB → indexed",
-      "target": "browser",
-      "status": "ok",
-      "ms": 10594
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "artifact",
-      "type": "file",
-      "label": "Programming Principles II/Week 02/Lecture 2.pdf",
-      "href": null
-    },
-    {
-      "kind": "text",
-      "text": "I see Lecture 3, pt 1.pdf; downloading it to Week 03."
-    },
-    {
-      "kind": "tool",
-      "name": "download",
-      "args": "ref=e246 path=Programming Principles II/Week 03/Lecture 3, pt 1.pdf",
-      "summary": "Lecture 3, pt 1.pdf · 394 KB → indexed",
-      "target": "browser",
-      "status": "ok",
-      "ms": 9798
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "artifact",
-      "type": "file",
-      "label": "Programming Principles II/Week 03/Lecture 3, pt 1.pdf",
-      "href": null
-    },
-    {
-      "kind": "text",
-      "text": "I see Lecture 3, pt 2.pdf; downloading it to Week 03."
-    },
-    {
-      "kind": "tool",
-      "name": "download",
-      "args": "path=Programming Principles II/Week 03/Lecture 3, pt 2.pdf ref=e251",
-      "summary": "Lecture 3, pt 2.pdf · 388 KB → indexed",
-      "target": "browser",
-      "status": "ok",
-      "ms": 10894
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "artifact",
-      "type": "file",
-      "label": "Programming Principles II/Week 03/Lecture 3, pt 2.pdf",
-      "href": null
-    },
-    {
-      "kind": "text",
-      "text": "I see Lecture 3, pt 3.pdf; downloading it to Week 03."
-    },
-    {
-      "kind": "tool",
-      "name": "download",
-      "args": "path=Programming Principles II/Week 03/Lecture 3, pt 3.pdf ref=e256",
-      "summary": "Lecture 3, pt 3.pdf · 391 KB → indexed",
-      "target": "browser",
-      "status": "ok",
-      "ms": 10351
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "artifact",
-      "type": "file",
-      "label": "Programming Principles II/Week 03/Lecture 3, pt 3.pdf",
-      "href": null
-    },
-    {
-      "kind": "text",
-      "text": "I see Lecture 4, pt 1.pdf; downloading it to Week 04."
-    },
-    {
-      "kind": "tool",
-      "name": "download",
-      "args": "path=Programming Principles II/Week 04/Lecture 4, pt 1.pdf ref=e261",
-      "summary": "Lecture 4, pt 1.pdf · 331 KB → indexed",
-      "target": "browser",
-      "status": "ok",
-      "ms": 9090
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "artifact",
-      "type": "file",
-      "label": "Programming Principles II/Week 04/Lecture 4, pt 1.pdf",
-      "href": null
-    },
-    {
-      "kind": "text",
-      "text": "I see Lecture 4, pt 2.pdf; downloading it to Week 04."
-    },
-    {
-      "kind": "tool",
-      "name": "download",
-      "args": "ref=e266 path=Programming Principles II/Week 04/Lecture 4, pt 2.pdf",
-      "summary": "Lecture 4, pt 2.pdf · 345 KB → indexed",
-      "target": "browser",
-      "status": "ok",
-      "ms": 9335
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "artifact",
-      "type": "file",
-      "label": "Programming Principles II/Week 04/Lecture 4, pt 2.pdf",
-      "href": null
-    },
-    {
-      "kind": "text",
-      "text": "I see Lecture 4, pt 3.pdf; downloading it to Week 04."
-    },
-    {
-      "kind": "tool",
-      "name": "download",
-      "args": "path=Programming Principles II/Week 04/Lecture 4, pt 3.pdf ref=e271",
-      "summary": "Lecture 4, pt 3.pdf · 352 KB → indexed",
-      "target": "browser",
-      "status": "ok",
-      "ms": 9548
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "artifact",
-      "type": "file",
-      "label": "Programming Principles II/Week 04/Lecture 4, pt 3.pdf",
-      "href": null
-    },
-    {
-      "kind": "text",
-      "text": "I see Lecture 5.pdf; downloading it to Week 05."
-    },
-    {
-      "kind": "tool",
-      "name": "download",
-      "args": "ref=e276 path=Programming Principles II/Week 05/Lecture 5.pdf",
-      "summary": "Lecture 5.pdf · 386 KB → indexed",
-      "target": "browser",
-      "status": "ok",
-      "ms": 11053
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "artifact",
-      "type": "file",
-      "label": "Programming Principles II/Week 05/Lecture 5.pdf",
-      "href": null
-    },
-    {
-      "kind": "text",
-      "text": "I see Lecture 6 Pygame, pt 1.pdf; downloading it to Week 06."
-    },
-    {
-      "kind": "tool",
-      "name": "download",
-      "args": "ref=e281 path=Programming Principles II/Week 06/Lecture 6 Pygame, pt 1.pdf",
-      "summary": "Lecture 6 Pygame, pt 1.pdf · 1167 KB → indexed",
-      "target": "browser",
-      "status": "ok",
-      "ms": 10485
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "artifact",
-      "type": "file",
-      "label": "Programming Principles II/Week 06/Lecture 6 Pygame, pt 1.pdf",
-      "href": null
-    },
-    {
-      "kind": "text",
-      "text": "I see Lecture 7 Pygame, pt 2.pdf; downloading it to Week 07."
-    },
-    {
-      "kind": "tool",
-      "name": "download",
-      "args": "ref=e286 path=Programming Principles II/Week 07/Lecture 7 Pygame, pt 2.pdf",
-      "summary": "Lecture 7 Pygame, pt 2.pdf · 1100 KB → indexed",
-      "target": "browser",
-      "status": "ok",
-      "ms": 9441
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "artifact",
-      "type": "file",
-      "label": "Programming Principles II/Week 07/Lecture 7 Pygame, pt 2.pdf",
-      "href": null
-    },
-    {
-      "kind": "text",
-      "text": "I have downloaded all files in Learning resources; clicking Back to return to subfolders."
-    },
-    {
-      "kind": "tool",
-      "name": "click",
-      "args": "ref=e230",
-      "summary": "Office of the Registrar",
-      "target": "browser",
-      "status": "ok",
-      "ms": 444
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "text",
-      "text": "Reading the page to inspect subfolder rows."
-    },
-    {
-      "kind": "tool",
-      "name": "read_page",
-      "args": "",
-      "summary": "39 elements",
-      "target": "browser",
-      "status": "ok",
-      "ms": 3
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "text",
-      "text": "I see \"4. Assignments\"; selecting it."
-    },
-    {
-      "kind": "tool",
-      "name": "click",
-      "args": "ref=e304",
-      "summary": "Office of the Registrar",
-      "target": "browser",
-      "status": "ok",
-      "ms": 449
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "text",
-      "text": "I see \"4. Assignments\" selected; clicking Enter to open it."
-    },
-    {
-      "kind": "tool",
-      "name": "click",
-      "args": "ref=e288",
-      "summary": "Office of the Registrar",
-      "target": "browser",
-      "status": "ok",
-      "ms": 452
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "text",
-      "text": "Reading the page to get the download ref for the assignments file."
-    },
-    {
-      "kind": "tool",
-      "name": "read_page",
-      "args": "",
-      "summary": "14 elements",
-      "target": "browser",
-      "status": "ok",
-      "ms": 2
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "text",
-      "text": "I see programming-principles-2-main.zip; downloading it to Materials."
-    },
-    {
-      "kind": "tool",
-      "name": "download",
-      "args": "ref=e325 path=Programming Principles II/Materials/programming-principle…",
-      "summary": "{\"status\":\"error\",\"error\":\"Browser action budget exhausted (40 actions per run). Stop acting and report what was done…",
-      "target": "browser",
-      "status": "error",
-      "ms": 174
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "text",
-      "text": "Checking the vault contents to see all files synced during this session."
-    },
-    {
-      "kind": "tool",
-      "name": "vault_list",
-      "args": "",
-      "summary": "{\"status\":\"success\",\"count\":13,\"files\":[{\"id\":\"f2785b440a815585\",\"path\":\"Programming Principles II/Materials/Programm…",
-      "target": "server",
-      "status": "ok",
-      "ms": 223
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "text",
-      "text": "Remembering the instructor and course location on WSP for future operations."
+      "text": "Saving note that Abenova Saule teaches CSCI3240 Introduction to Computer Vision."
     },
     {
       "kind": "tool",
       "name": "remember",
-      "args": "note=Programming Principles II (Kelgenbayev Arnur) is under Sc…",
+      "args": "note=CSCI3240 Introduction to Computer Vision instructor is Ab…",
       "summary": "{\"status\":\"success\",\"memory_lines\":2}",
       "target": "server",
       "status": "ok",
-      "ms": 60
+      "ms": 37
     },
     {
       "kind": "text",
@@ -823,437 +167,76 @@
     },
     {
       "kind": "text",
-      "text": "### Synced Files for Programming Principles II (Kelgenbayev Arnur)\n\nAll available syllabus and lecture files have been downloaded and indexed into your vault under structured directories:\n\n#### **Materials**\n- `Programming Principles II/Materials/Programming Principles II - Келгенбаев А.pdf` (1.3 MB)\n- `Programming Principles II/Materials/Programming Principles II syllabus - spring 202324.pdf` (627 KB)\n\n#### **Weekly Lectures**\n- **Week 01:** `Programming Principles II/Week 01/Lecture 1.pdf` (Introduction to Python Basics, Syntax, Data Types, Control Flow)\n- **Week 02:** `Programming Principles II/Week 02/Lecture 2.pdf` (Lists, Tuples, Dictionaries, Sets)\n- **Week 03:**\n  - `Programming Principles II/Week 03/Lecture 3, pt 1.pdf` (Functions, Scopes, Closures)\n  - `Programming Principles II/Week 03/Lecture 3, pt 2.pdf` (Function Parameters, Lambda Expressions, Returns)\n  - `Programming Principles II/Week 03/Lecture 3, pt 3.pdf` (Classes, Inheritance, OOP)\n- **Week 04:**\n  - `Programming Principles II/Week 04/Lecture 4, pt 1.pdf` (Iterators, `__iter__`, `__next__`)\n  - `Programming Principles II/Week 04/Lecture 4, pt 2.pdf` (Generator Functions, `yield`)\n  - `Programming Principles II/Week 04/Lecture 4, pt 3.pdf` (Module Imports and Namespaces)\n- **Week 05:** `Programming Principles II/Week 05/Lecture 5.pdf` (File I/O, Context Managers)\n- **Week 06:** `Programming Principles II/Week 06/Lecture 6 Pygame, pt 1.pdf` (Pygame Intro, Game Loops, Double Buffering)\n- **Week 07:** `Programming Principles II/Week 07/Lecture 7 Pygame, pt 2.pdf` (Pygame Event Handling, Key Presses, Drawing)\n\n---\n\n### Status & Remaining\n- **Total Files Synced & Indexed:** 13 files.\n- **Empty Subfolders:** `2. Lecture support materials` contained no files.\n- **Remaining Item:** `4. Assignments/programming-principles-2-main.zip` and any files in `5. Exams` / `Glossary` can be synced in a follow-up run."
+      "text": "Reading the page to select the CSCI3240 course folder."
+    },
+    {
+      "kind": "tool",
+      "name": "read_page",
+      "args": "",
+      "summary": "22 elements",
+      "target": "browser",
+      "status": "ok",
+      "ms": 2
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "text": "Selecting the CSCI3240 course folder."
+    },
+    {
+      "kind": "tool",
+      "name": "click",
+      "args": "ref=e66",
+      "summary": "WSP",
+      "target": "browser",
+      "status": "ok",
+      "ms": 430
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "text": "OpeningError: \nOn how to mitigate this issue, please refer to:\n\nhttps://google.github.io/adk-docs/agents/models/google-gemini/#error-code-429-resource_exhausted\n\n\n429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'Resource exhausted. Please try again later. Please refer to https://cloud.google.com/vertex-ai/generative-ai/docs/error-code-429 for more details.', 'status': 'RESOURCE_EXHAUSTED'}}"
+    },
+    {
+      "kind": "text",
+      "text": "Error: _ResourceExhaustedError: \nOn how to mitigate this issue, please refer to:\n\nhttps://google.github.io/adk-docs/agents/models/google-gemini/#error-code-429-resource_exhausted\n\n\n429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'Resource exhausted. Please try again later. Please refer to https://cloud.google.com/vertex-ai/generative-ai/docs/error-code-429 for more details.', 'status': 'RESOURCE_EXHAUSTED'}}"
     }
   ],
-  "actions": 40,
-  "refusedActions": 1,
+  "actions": 10,
+  "refusedActions": 0,
   "toolCalls": {
     "open_tab": 1,
-    "wait": 1,
-    "read_page": 10,
-    "click": 15,
-    "download": 14,
-    "vault_list": 1,
+    "navigate": 1,
+    "read_page": 3,
+    "click": 5,
     "remember": 1
   },
-  "artifacts": [
-    {
-      "kind": "artifact",
-      "type": "file",
-      "label": "Programming Principles II/Materials/Programming Principles II - Келгенбаев А.pdf",
-      "href": null
-    },
-    {
-      "kind": "artifact",
-      "type": "file",
-      "label": "Programming Principles II/Materials/Programming Principles II syllabus - spring 202324.pdf",
-      "href": null
-    },
-    {
-      "kind": "artifact",
-      "type": "file",
-      "label": "Programming Principles II/Week 01/Lecture 1.pdf",
-      "href": null
-    },
-    {
-      "kind": "artifact",
-      "type": "file",
-      "label": "Programming Principles II/Week 02/Lecture 2.pdf",
-      "href": null
-    },
-    {
-      "kind": "artifact",
-      "type": "file",
-      "label": "Programming Principles II/Week 03/Lecture 3, pt 1.pdf",
-      "href": null
-    },
-    {
-      "kind": "artifact",
-      "type": "file",
-      "label": "Programming Principles II/Week 03/Lecture 3, pt 2.pdf",
-      "href": null
-    },
-    {
-      "kind": "artifact",
-      "type": "file",
-      "label": "Programming Principles II/Week 03/Lecture 3, pt 3.pdf",
-      "href": null
-    },
-    {
-      "kind": "artifact",
-      "type": "file",
-      "label": "Programming Principles II/Week 04/Lecture 4, pt 1.pdf",
-      "href": null
-    },
-    {
-      "kind": "artifact",
-      "type": "file",
-      "label": "Programming Principles II/Week 04/Lecture 4, pt 2.pdf",
-      "href": null
-    },
-    {
-      "kind": "artifact",
-      "type": "file",
-      "label": "Programming Principles II/Week 04/Lecture 4, pt 3.pdf",
-      "href": null
-    },
-    {
-      "kind": "artifact",
-      "type": "file",
-      "label": "Programming Principles II/Week 05/Lecture 5.pdf",
-      "href": null
-    },
-    {
-      "kind": "artifact",
-      "type": "file",
-      "label": "Programming Principles II/Week 06/Lecture 6 Pygame, pt 1.pdf",
-      "href": null
-    },
-    {
-      "kind": "artifact",
-      "type": "file",
-      "label": "Programming Principles II/Week 07/Lecture 7 Pygame, pt 2.pdf",
-      "href": null
-    }
-  ],
+  "artifacts": [],
   "confirms": [],
   "drive": {
     "root": "harness/out/drive/vault-sync",
     "entries": []
   },
-  "vault": [
-    {
-      "id": "f2785b440a815585",
-      "path": "Programming Principles II/Materials/Programming Principles II - Келгенбаев А.pdf",
-      "sha256": "bf16cac08f855f9101b283f042243aec3be3a001229d4cffca9a5a0b1f646a89",
-      "size": 1333633,
-      "content_type": "application/pdf",
-      "drive_file_id": null,
-      "title": "Programming Principles II Syllabus",
-      "summary": "This document is the official course syllabus for Programming Principles II, taught in Fall 2023 at Kazakh-British Technical University. The course focuses on Python programming, covering fundamentals, file handling, databases, and Pygame development across 15 weeks. Student performance is assessed through GitHub submissions (11%), practice defenses (49%), and a final exam (40%).",
-      "deadlines": [],
-      "key_terms": [
-        "Python: The main programming language used in the course.",
-        "Pygame: A set of Python modules designed for writing video games.",
-        "TSIS: Practical classes and defenses used for continuous assessment.",
-        "Regex: Regular expressions used for searching and matching string patterns in text.",
-        "Git: A version control system used for code management and submissions."
-      ],
-      "parse_error": "",
-      "updated_at": "2026-08-27T08:56:28+00:00"
-    },
-    {
-      "id": "065d1044cd030b9d",
-      "path": "Programming Principles II/Materials/Programming Principles II syllabus - spring 202324.pdf",
-      "sha256": "e30e56055ffccfe6f117d4be36a8b2d3dc53b63cc2bb0a2852fd1996a7ef2905",
-      "size": 642275,
-      "content_type": "application/pdf",
-      "drive_file_id": null,
-      "title": "Programming Principles 2 Syllabus",
-      "summary": "This document is the official syllabus for Programming Principles 2 at Kazakh-British Technical University for Spring 2024. The course uses Python to teach fundamental programming concepts, console and desktop applications, file handling, databases, and Pygame development. Students are evaluated based on GitHub submissions, practice defenses, midterms, and a final exam.",
-      "deadlines": [],
-      "key_terms": [
-        "Python: The main programming language used in the course.",
-        "Pygame: A set of Python modules designed for writing games.",
-        "TSIS: Regular practical assignments and tasks.",
-        "Regex: Regular expressions used for searching and matching string patterns."
-      ],
-      "parse_error": "",
-      "updated_at": "2026-08-27T08:56:41+00:00"
-    },
-    {
-      "id": "9c93830cd209982c",
-      "path": "Programming Principles II/Week 01/Lecture 1.pdf",
-      "sha256": "fa4a462559dd31f0f6cba1562946af8fdf41553be504cee19f96eee743041a16",
-      "size": 542137,
-      "content_type": "application/pdf",
-      "drive_file_id": null,
-      "title": "Lecture 1: Introduction to Python Basics",
-      "summary": "This introductory lecture covers Python installation on Windows, script execution options, and core syntax including indentation and commenting rules. It also details variable assignment, dynamic typing, and fundamental data types like numbers, strings, lists, and dictionaries. Finally, students learn about control flow structures such as if/else statements, while loops, and for loops.",
-      "deadlines": [],
-      "key_terms": [
-        "Dynamic typing: A feature where variable types are inferred automatically and can change during execution.",
-        "Indentation: The use of spaces or tabs to define code blocks in Python, which is a mandatory part of the syntax.",
-        "Immutable: An object whose state cannot be modified after it is created, such as strings and tuples.",
-        "Mutable: An object that can be changed after creation, such as lists and dictionaries.",
-        "Docstring: A special type of comment used to document functions, classes, and modules.",
-        "Type promotion: Automatic conversion of a smaller numeric operand to a larger one during arithmetic operations."
-      ],
-      "parse_error": "",
-      "updated_at": "2026-08-27T08:57:39+00:00"
-    },
-    {
-      "id": "46786b0825ae32fb",
-      "path": "Programming Principles II/Week 02/Lecture 2.pdf",
-      "sha256": "8c0b32166c5a3bebb478f54b33221b7c9cdcad6fa0957c67961db2c057d2b7b3",
-      "size": 959657,
-      "content_type": "application/pdf",
-      "drive_file_id": null,
-      "title": "Lecture 2: Lists, Tuples, Dictionaries, and Sets",
-      "summary": "This lecture covers Python's core data structures, focusing on lists, tuples, dictionaries, and sets. Students learn how to create, index, slice, and modify mutable lists, handle immutable tuples, manage key-value pairs in dictionaries, and perform mathematical operations on sets. Essential built-in methods and operations for each data type are demonstrated with examples.",
-      "deadlines": [],
-      "key_terms": [
-        "List: A mutable, comma-separated sequence of elements enclosed in square brackets.",
-        "Tuple: An immutable sequence commonly used to store heterogeneous data.",
-        "Dictionary: An associative array indexed by unique immutable keys rather than numbers.",
-        "Set: An unordered collection with no repeating elements used to eliminate duplicates and perform mathematical set operations.",
-        "Mutable: Objects that can be changed in place after creation.",
-        "Immutable: Objects whose value cannot be changed once created.",
-        "Slicing: Accessing a sub-sequence of elements from a sequence.",
-        "Iterable: Any object that supports returning its elements one at a time."
-      ],
-      "parse_error": "",
-      "updated_at": "2026-08-27T08:57:52+00:00"
-    },
-    {
-      "id": "78283cd8790a705c",
-      "path": "Programming Principles II/Week 03/Lecture 3, pt 1.pdf",
-      "sha256": "e7d04fb40bae5267dba5fdc4df8ce7ebdf096be7475dde73da847435b3ba480e",
-      "size": 403308,
-      "content_type": "application/pdf",
-      "drive_file_id": null,
-      "title": "Lecture 3, pt. 1: Functions in Python",
-      "summary": "This lecture covers Python functions, explaining how they are defined using the def statement and treated as first-class objects. It details function attributes, nested functions, and passing functions as arguments to higher-order functions. Additionally, it explores variable scopes and how to use the global and nonlocal keywords to modify variables outside local blocks.",
-      "deadlines": [],
-      "key_terms": [
-        "def statement: Used to introduce and define a function in Python.",
-        "docstring: The first statement of a function body used for documentation.",
-        "First-class objects: Functions can be assigned to variables, stored in data structures, and passed as arguments.",
-        "Higher-order functions: Functions that take other functions as arguments, such as map().",
-        "Scope: The visibility area of a variable name within a block of code (global vs local).",
-        "Global statement: Allows modification or creation of global variables from a function's local scope.",
-        "Nonlocal statement: Allows modification of variables in an enclosing parent scope from a nested function."
-      ],
-      "parse_error": "",
-      "updated_at": "2026-08-27T08:58:05+00:00"
-    },
-    {
-      "id": "6cc273a62c0a8146",
-      "path": "Programming Principles II/Week 03/Lecture 3, pt 2.pdf",
-      "sha256": "75755c58071e35936d5e48ee2dac2ddc6d9a99d72db04183fa3323f570ae682a",
-      "size": 396864,
-      "content_type": "application/pdf",
-      "drive_file_id": null,
-      "title": "Lecture 3, pt. 2: Function Parameters, Lambda Expressions, and Return Statements",
-      "summary": "This lecture covers Python function parameters, detailing positional versus keyword arguments and the usage of *args and **kwargs. It explains default arguments, highlighting common pitfalls with mutable default values. Additionally, it introduces anonymous lambda expressions and best practices for the return statement.",
-      "deadlines": [],
-      "key_terms": [
-        "parameter: A variable listed inside the parentheses in the function definition.",
-        "argument: The actual value passed to a function when it is called.",
-        "positional argument: An argument that is not a key argument, matched by its position.",
-        "keyword argument: An argument preceded by an identifier in a function call.",
-        "lambda expression: A small anonymous function syntactically limited to a single expression.",
-        "return statement: Terminates a function execution and optionally passes back a result value."
-      ],
-      "parse_error": "",
-      "updated_at": "2026-08-27T08:58:21+00:00"
-    },
-    {
-      "id": "7321fbb6f88bd774",
-      "path": "Programming Principles II/Week 03/Lecture 3, pt 3.pdf",
-      "sha256": "76d09a0b2be59166bfb8067f92811c0e0ac12c4b55b5abac8202bd725773d27c",
-      "size": 400776,
-      "content_type": "application/pdf",
-      "drive_file_id": null,
-      "title": "Lecture 3, pt. 3: Classes and Inheritance in Python",
-      "summary": "This lecture covers Python object-oriented programming concepts, focusing on class definitions, attributes, and constructors. It explains instantiation steps using __new__ and __init__, handling dynamic attributes with __dict__, and implementing class inheritance and multiple inheritance. Students learn how to create subclasses, override methods, and utilize built-in functions like isinstance and issubclass.",
-      "deadlines": [],
-      "key_terms": [
-        "Class object: The name of a class created in code supporting attribute references and instantiation.",
-        "Constructor (__init__): A special method executed when a class instance is created to initialize its state.",
-        "Instantiation: The two-step process of creating a new instance via __new__ and initializing it via __init__.",
-        "Inheritance: A mechanism allowing a new class (subclass) to extend or modify the functionality of a base class.",
-        "Method overriding: Redefining a base class method within a derived class to provide specific behavior.",
-        "Multiple inheritance: A feature where a class can inherit from more than one base class.",
-        "Namespace: A mapping from names to objects created during class definition and used as local scope."
-      ],
-      "parse_error": "",
-      "updated_at": "2026-08-27T08:58:44+00:00"
-    },
-    {
-      "id": "a3a5e72baee13b40",
-      "path": "Programming Principles II/Week 04/Lecture 4, pt 1.pdf",
-      "sha256": "ba9615b4957aa1dbf02765dcf79bf39f07d350d80d0a8d7b2992fe44800fbc73",
-      "size": 339010,
-      "content_type": "application/pdf",
-      "drive_file_id": null,
-      "title": "Lecture 4, pt. 1: Iterators in Python",
-      "summary": "This lecture introduces iterators in Python, explaining how the for-in statement works behind the scenes using iter() and __next__() methods. It details how iterators raise StopIteration exceptions when exhausted and lack support for indexing or slicing. Finally, it demonstrates how to implement custom iterator behavior in user-defined classes.",
-      "deadlines": [],
-      "key_terms": [
-        "Iterator: An object that enables traversal through a container, one element at a time.",
-        "iter(): Built-in function used to get an iterator from a iterable object.",
-        "__next__(): Method that returns the next item from the iterator.",
-        "StopIteration: Exception raised to signal that there are no further items in the iterator.",
-        "Iterator protocol: The agreement or mechanism Python uses to make objects iterable."
-      ],
-      "parse_error": "",
-      "updated_at": "2026-08-27T08:58:55+00:00"
-    },
-    {
-      "id": "d76c613bb45d6325",
-      "path": "Programming Principles II/Week 04/Lecture 4, pt 2.pdf",
-      "sha256": "eed303c458da7dd538aaf69db07052224306c0e325b5f000d033bfc6c0bf0d7a",
-      "size": 353079,
-      "content_type": "application/pdf",
-      "drive_file_id": null,
-      "title": "Lecture 4, pt. 2: Generator Functions in Python",
-      "summary": "This lecture covers Python generator functions, explaining how the yield keyword is used to create resumable functions that return iterator objects. It details the differences between return and yield, discusses limitations of generator expressions, and demonstrates how to convert regular functions into generators. Finally, it explains how to pass values back into generators using the send() method.",
-      "deadlines": [],
-      "key_terms": [
-        "Generator: A function containing a yield statement that returns an iterator object and can resume execution.",
-        "Yield: A statement/expression used to produce a value from a generator and suspend its state.",
-        "Iterator protocol: The underlying mechanism that allows objects to be iterated over using next().",
-        "StopIteration: An exception raised when a generator has no further values to produce.",
-        "Lazy iteration: Processing elements on-the-fly rather than loading an entire sequence into RAM."
-      ],
-      "parse_error": "",
-      "updated_at": "2026-08-27T08:59:08+00:00"
-    },
-    {
-      "id": "1463f4f612d0cbe5",
-      "path": "Programming Principles II/Week 04/Lecture 4, pt 3.pdf",
-      "sha256": "35d933bf87a428c9850acfd92ab0165564f954bc0119c950ed5e4395ed86969f",
-      "size": 360816,
-      "content_type": "application/pdf",
-      "drive_file_id": null,
-      "title": "Lecture 4, pt. 3: Import Statement in Python",
-      "summary": "This lecture covers Python import statements and how modules are loaded, searched, and bound to local namespaces. It explains various import constructs including basic imports, aliasing with the 'as' keyword, and selective imports using the 'from' statement. Students will also learn how to handle missing modules or attributes using try-except blocks with ImportError.",
-      "deadlines": [],
-      "key_terms": [
-        "module: A file containing Python definitions and statements with a .py extension.",
-        "namespace: A system that has a unique name for each object in Python.",
-        "import: A statement used to include code from other modules into the current program.",
-        "as: A keyword used to assign an alternative name to an imported module or object.",
-        "ImportError: An exception raised when an imported module or object cannot be found."
-      ],
-      "parse_error": "",
-      "updated_at": "2026-08-27T08:59:21+00:00"
-    },
-    {
-      "id": "e0e27c5ca38ae1cc",
-      "path": "Programming Principles II/Week 05/Lecture 5.pdf",
-      "sha256": "5eb72e085cb94f28176fb60153f397b36c7461edd5613ef25b49e76bcde721bc",
-      "size": 395063,
-      "content_type": "application/pdf",
-      "drive_file_id": null,
-      "title": "Lecture 5: Working with Files in Python",
-      "summary": "This lecture covers opening, closing, reading, and writing files in Python. It explains how to use the built-in open() function with different modes like read, write, append, and binary, alongside context managers such as the with statement for safe file handling. Students will also learn methods for reading and writing data line by line or all at once, as well as managing multiple files simultaneously.",
-      "deadlines": [],
-      "key_terms": [
-        "open() function: Built-in Python function used to open a file and return a file object.",
-        "context manager: A construct using the with statement that ensures resources are properly cleaned up, such as closing a file.",
-        "TextIOWrapper: File object type returned when opening standard text files.",
-        "BufferedReader: File object type used for reading buffered binary files.",
-        "BufferedWriter: File object type used for writing buffered binary files.",
-        "FileIO: Low-level file object representing raw byte streams.",
-        "fp.read(): Method to read a specified number of characters or bytes from a file.",
-        "fp.readline(): Method to read a single line from a file."
-      ],
-      "parse_error": "",
-      "updated_at": "2026-08-27T08:59:35+00:00"
-    },
-    {
-      "id": "d6d1ab88a4efb2f5",
-      "path": "Programming Principles II/Week 06/Lecture 6 Pygame, pt 1.pdf",
-      "sha256": "fcf504c1ccd6f69e1dc27ab97d60597cea2f3fd2fe81892467ded2104ae93f8f",
-      "size": 1195024,
-      "content_type": "application/pdf",
-      "drive_file_id": null,
-      "title": "Lecture 6. Pygame, pt. 1",
-      "summary": "This lecture introduces Pygame, a set of Python modules designed for writing video games using the SDL library. It walks through a basic bouncing ball animation example to demonstrate window creation, image loading, event loops, screen clearing, and double buffering. A second example covers customizing window titles, setting icons, and limiting frame rates with a clock.",
-      "deadlines": [],
-      "key_terms": [
-        "Pygame: A set of Python modules designed for writing video games.",
-        "SDL: A cross-platform development library designed to provide low level access to audio, keyboard, mouse, joystick, and graphics hardware.",
-        "Surface: A Pygame object that represents a rectangular area and holds image data for display.",
-        "Rect: A Pygame utility object type representing a rectangular area used for positioning and collision.",
-        "Blit: The process of copying pixel colors from one image Surface to another.",
-        "Double buffer: A display management technique that ensures only completely drawn frames are rendered on the screen."
-      ],
-      "parse_error": "",
-      "updated_at": "2026-08-27T08:59:48+00:00"
-    },
-    {
-      "id": "c5f6eb1cd4b8023f",
-      "path": "Programming Principles II/Week 07/Lecture 7 Pygame, pt 2.pdf",
-      "sha256": "15073d5a1d5d55fdc8951d71c61c2e3edce60f1c77ff7ffb39670b84f4bdaffc",
-      "size": 1126250,
-      "content_type": "application/pdf",
-      "drive_file_id": null,
-      "title": "Lecture 7. Pygame, pt.2",
-      "summary": "This document introduces advanced Pygame concepts, focusing on event handling and keyboard inputs to move objects on the screen. It breaks down a complete Python script into manageable pieces, explaining initialization, constant variables, and display settings. Students will learn how to set up a game window, handle events like quitting or key presses, and draw shapes inside the game loop.",
-      "deadlines": [],
-      "key_terms": [
-        "Pygame",
-        "pygame.init()",
-        "pygame.display.set_mode()",
-        "pygame.time.Clock()",
-        "FPS",
-        "pygame.KEYDOWN",
-        "pygame.KEYUP",
-        "pygame.draw.rect()"
-      ],
-      "parse_error": "",
-      "updated_at": "2026-08-27T09:00:00+00:00"
-    }
-  ],
-  "downloads": [
-    {
-      "url": "https://wsp.kbtu.kz/StudentFiles/APP/connector/14/4383/dl/Practice+5.docx",
-      "path": "/tmp/playwright-artifacts-Sr7eXJ/324f5842-0e0d-4540-a117-9a0c201c516a",
-      "state": "complete",
-      "bytes": 277762
-    },
-    {
-      "url": "https://wsp.kbtu.kz/StudentFiles/APP/connector/15/4553/dl/programming-principles-2-main.zip",
-      "path": "/tmp/playwright-artifacts-Sr7eXJ/6f31539c-81d3-40b0-b703-602cab8e992f",
-      "state": "complete",
-      "bytes": 146921
-    },
-    {
-      "url": "https://wsp.kbtu.kz/StudentFiles/APP/connector/14/4392/dl/lab+3.docx",
-      "path": "/tmp/playwright-artifacts-Sr7eXJ/47385888-c1bf-4d73-bbbd-a22f714f2ba9",
-      "state": "complete",
-      "bytes": 17324
-    },
-    {
-      "url": "https://wsp.kbtu.kz/StudentFiles/APP/connector/1/319/dl/CSF_Mukasheva+A.pdf",
-      "path": "/home/altairzhambyl/Downloads/CSF_Mukasheva A (1).pdf",
-      "state": "complete",
-      "bytes": 2713584
-    },
-    {
-      "url": "https://wsp.kbtu.kz/StudentFiles/APP/connector/3/501/dl/CSF_Mukasheva+A.pdf",
-      "path": "/tmp/playwright-artifacts-O0G9rK/3e7b29aa-3e03-4005-80ec-457864c198f5",
-      "state": "complete",
-      "bytes": 2713584
-    },
-    {
-      "url": "https://wsp.kbtu.kz/StudentFiles/APP/connector/14/4386/dl/Practice+%E2%84%961.docx",
-      "path": "/tmp/playwright-artifacts-Sr7eXJ/02189877-a994-4a18-9a6d-2c0d8037ca9d",
-      "state": "complete",
-      "bytes": 15207
-    },
-    {
-      "url": "https://wsp.kbtu.kz/StudentFiles/APP/connector/3/618/dl/5.3.10.pdf",
-      "path": "/tmp/playwright-artifacts-O0G9rK/12e9d7f4-f8c6-48f4-8211-5a1bc7d08dfc",
-      "state": "complete",
-      "bytes": 71069
-    },
-    {
-      "url": "https://wsp.kbtu.kz/StudentFiles/APP/connector/3/615/dl/2.1.7.pdf",
-      "path": "/tmp/playwright-artifacts-O0G9rK/477c9a60-0b54-4d3a-8b43-56f7b469a532",
-      "state": "complete",
-      "bytes": 102898
-    }
-  ],
+  "vault": [],
+  "downloads": [],
   "connectorCalls": [],
   "chatMessages": [],
   "chatDom": [],
-  "brainConfigSynced": true,
+  "brainConfigSynced": false,
   "screenshotsDir": "harness/out/vault-sync/shots",
-  "pass": true,
-  "failures": []
+  "pass": false,
+  "failures": [
+    "status is \"error\", expected \"done\" (Gemini is out of capacity right now (429) — the brain retried and fell back; press Retry to continue this chat.)",
+    "expected 3 PDFs under Dayflow/CSCI3240*/ in fake-Drive, found 0: [empty]",
+    "syllabus.pdf missing from fake-Drive (Dayflow/CSCI3240*/…)",
+    "Lecture_01_Introduction.pdf missing from fake-Drive (Dayflow/CSCI3240*/…)",
+    "Lab_01_Image_Basics.pdf missing from fake-Drive (Dayflow/CSCI3240*/…)",
+    "vault index has 0 CSCI3240 entries, expected 3 (total 0)"
+  ]
 }
