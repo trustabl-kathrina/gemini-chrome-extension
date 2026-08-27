@@ -113,31 +113,49 @@ skills:
   - id: lab
     key: "4"
     title: Solve a lab from the vault
-    blurb: Read the lab PDF, solve every task with code that is actually run, push notebook + report to a private repo.
-    prompt: Solve Lab 1 of my Computer Vision course and push the solution to a new private GitHub repo.
-    sites: [github.com]
-    tools: [vault_list, vault_read, solve_lab_task, build_notebook, build_report, create_repository, push_files, download, open_tab, read_page, click, press_key, wait, screenshot]
+    blurb: Read the lab PDF (or the syllabus), solve every task with code that is actually run, deliver a notebook to Colab/Drive or a private repo.
+    prompt: Solve Lab 1 of my Computer Vision course as a notebook and open it in Google Colab.
+    sites: [github.com, colab.research.google.com]
+    tools: [vault_list, vault_read, solve_lab_task, build_notebook, build_report, create_repository, push_files, download, open_tab, read_page, click, press_key, wait, screenshot, remember]
     instructions: |
-      Goal: a private GitHub repo with a runnable notebook (outputs included) and a report for the requested
-      lab, and the report saved to the vault.
-      Steps:
-      1. vault_list; find the lab PDF (e.g. "Lab_01_Image_Basics.pdf") and vault_read it. If the vault has no
-         such file, sync it first: follow the vault-sync playbook on WSP but download ONLY the lab file to
-         "<course code> <course name>/Lab NN/<file name>" (about 12 browser actions), then vault_read it.
+      Goal: a runnable notebook (outputs included) for the requested lab, delivered where the user asked —
+      Google Colab (default: the .ipynb saved to the Drive vault and opened in Colab) or a private GitHub repo
+      (when the user says "repo", "GitHub" or "push") — plus a report saved to the vault.
+      Plan first, then:
+      1. vault_list(). Look for the lab file (e.g. "Lab_01_Image_Basics.pdf") and, failing that, the course's
+         syllabus (path contains the course, file name contains "syllabus"). vault_read the best one.
+         · Lab file found → its numbered tasks are the tasks.
+         · Only the syllabus found → build Lab NN from it: the topics of week NN (and the lab list if it has one)
+           become 4-5 concrete tasks with sample data described in the task text (numpy only). Tell the user
+           the tasks are derived from the syllabus, not from an official lab sheet.
+         · Neither found → sync ONLY the syllabus from WSP per the vault-sync playbook (schedule page for the
+           instructor → Student files → School → Instructor → course folder → "1.Syllabus for the student";
+           about 12 browser actions). If the instructor or the course folder is not on WSP after 3 checks, stop
+           browsing, remember("<course>: no files on WSP"), and ask the user for the syllabus or the lab sheet —
+           do not build tasks from nothing.
       2. Split the text into the shared setup (imports, sample data, constraints) and the numbered tasks.
       3. For EACH task call solve_lab_task(task_text=<the task verbatim>, context=<setup + course and lab name
          + constraints such as "numpy only">). Keep its code, stdout and notes. On an error call it again with
          the error appended to the context (at most twice per task).
       4. build_notebook(title, cells): per task a short markdown cell (task title) then a code cell
          {source: code, stdout: stdout}. The brain re-runs the notebook; on an error fix that task and rebuild.
+         It returns ipynb_json, ipynb_url and file_name.
       5. build_report(course, lab, tasks=[{title, approach, result, code}], summary) → markdown + page_url.
-      6. create_repository(name like "csci3240-lab01", private=true), then ONE push_files(owner, repo,
-         branch="main", message, files=[README.md (course, lab, how to run), TODO.md (5+ remaining
-         improvements), lab01.ipynb (ipynb_json verbatim), REPORT.md (markdown verbatim),
-         requirements.txt ("numpy" and "jupyter"), .gitignore]).
+      6. Deliver:
+         · Colab/Drive (default): download(url=<ipynb_url>, path="<course code> <course name>/Lab NN/lab<NN>.ipynb")
+           — check bytes > 0 and note drive_file_id; then open_tab("https://colab.research.google.com/drive/
+           <drive_file_id>") so the notebook is open in Colab (Colab reads it from the user's Drive; no clicking
+           needed on that page). If drive_file_id is null (no Drive sign-in), say so and give the ipynb_url instead.
+         · GitHub: create_repository(name like "csci3240-lab01", private=true), then ONE push_files(owner, repo,
+           branch="main", message, files=[README.md (course, lab, how to run), TODO.md (5+ remaining
+           improvements), lab01.ipynb (ipynb_json verbatim), REPORT.md (markdown verbatim),
+           requirements.txt ("numpy" and "jupyter"), .gitignore]).
       7. download(url=page_url, path="<course code> <course name>/Lab NN/REPORT.html") saves the report to the
-         vault; then open_tab(page_url) so the user sees it (the brain's own pages are always navigable).
-      Finish with: repo URL, report page URL, notebook path, tasks solved / failed.
+         vault (the brain's own pages are always navigable).
+      Finish with: where the notebook is (Colab link or repo URL), the report page URL, the vault paths, tasks
+      solved / failed, and whether the tasks came from a lab sheet or the syllabus.
+      Budget: about 3 browser actions when the lab or syllabus is already in the vault; up to ~15 when the
+      syllabus must be synced first.
   - id: team-ops
     key: "5"
     title: "Team ops: Telegram → Linear → GitHub"
@@ -258,6 +276,10 @@ sites:
       call download(ref=<that button's ref>) (or the row's ref) so the file goes to the vault.
       Student's schedule (/StudentSchedule) is a weekly grid; cells read "CODE Course name Instructor room (hh:mm-hh:mm)";
       it has Year and Term selectors - use them to see past semesters. Read the schedule first to learn each course's instructor.
+      Not every course has files here: an instructor who publishes on Teams or by e-mail has no folder under their
+      school. If the instructor is not in the school's list (or the course is not in the instructor's folder), that is
+      the answer — go Back once to double-check the school, then stop, remember it, and report; never scan other
+      schools or instructors hoping to find it.
   - domain: teams.microsoft.com
     mode: dom
     notes: |
@@ -291,7 +313,7 @@ sites:
 permissions:
   # The brain's own host (DAYFLOW_PUBLIC_URL) is always navigable for its report/courseware pages; this entry only
   # matters when the pack is used against a brain whose public URL is not configured.
-  allowed_hosts: [wsp.kbtu.kz, teams.microsoft.com, web.telegram.org, github.com, linear.app, drive.google.com, docs.google.com, dayflow-brain-lrqhed2z5a-ez.a.run.app]
+  allowed_hosts: [wsp.kbtu.kz, teams.microsoft.com, web.telegram.org, github.com, linear.app, drive.google.com, docs.google.com, colab.research.google.com, dayflow-brain-lrqhed2z5a-ez.a.run.app]
   # run_js evaluates arbitrary JavaScript on an allow-listed page with the user's session: the full expression is
   # shown on the confirmation card before it runs.
   ask_before: [type, create_pull_request, issue_write, create_issue, run_js]

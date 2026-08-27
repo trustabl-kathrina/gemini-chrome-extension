@@ -46,6 +46,18 @@ async function contentTool<T = Json>(tabId: number, req: Json, attempts = 3): Pr
     try {
       res = (await browser.tabs.sendMessage(tabId, { channel: TOOL_CHANNEL, ...req }, { frameId: 0 })) as typeof res;
     } catch (e) {
+      if (i === 0) {
+        try {
+          await browser.scripting.executeScript({
+            target: { tabId, frameIds: [0] },
+            files: ['/content-scripts/content.js'],
+          });
+          await sleep(150);
+          continue;
+        } catch {
+          /* ignore - restricted page or permissions */
+        }
+      }
       // The content script is injected at document_idle: right after a navigation it may not be listening yet.
       if (i < attempts - 1) {
         await sleep(400);
@@ -158,7 +170,7 @@ export class BrowserTools {
     const r = checkNavigable(t.url ?? '', this.allowlist);
     if (!r.ok) {
       if (this.jobTabId === tabId) this.jobTabId = null;
-      throw new Error(`working tab ${t.url || '(no url)'} is off your allow-list (${r.reason}); call open_tab with an allowed URL first`);
+      throw new Error(`working tab ${t.url || '(no url)'} is off your allow-list (${r.reason}); add it to Config (allowed_hosts) or call open_tab with an allowed URL first`);
     }
   }
 
@@ -173,7 +185,13 @@ export class BrowserTools {
       }
     }
     if (id === undefined) {
-      const [active] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
+      let [active] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
+      if (!active?.id) {
+        [active] = await browser.tabs.query({ active: true, currentWindow: true });
+      }
+      if (!active?.id) {
+        [active] = await browser.tabs.query({ active: true });
+      }
       if (!active?.id) throw new Error('no active tab');
       id = active.id;
     }

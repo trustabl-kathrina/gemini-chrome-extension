@@ -11,7 +11,7 @@
 // harness/specs/<scene>.mjs. Exit 0 = spec passed, 1 otherwise (never throws out).
 // --real: persistent profile ~/.gstack/chromium-profile (already signed in to wsp.kbtu.kz — the runner never logs in and never
 // types credentials) and the real portal prompt; fake Drive + fake connectors stay in place, only the portal is real.
-import { createRequire } from 'node:module';
+import { createRequire, register } from 'node:module';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -88,7 +88,9 @@ const spec = (await import(pathToFileURL(specFile).href)).default;
 // Stamped into the result so a stale harness/out/<scene>.json (older spec or runner) is detectable.
 const sha = (file) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex').slice(0, 12);
 const specVersion = { spec: path.relative(ROOT, specFile), specSha256: sha(specFile), runnerSha256: sha(fileURLToPath(import.meta.url)) };
-// Node strips TypeScript types natively (>=22.18/24): reuse the extension's own defaults and config mapper.
+// Node strips TypeScript types natively (>=22.18/24): reuse the extension's own defaults and config mapper. Its
+// extension-less value imports (`from '../protocol'`) need the resolver hook in lib/ts-resolve.mjs.
+register('./lib/ts-resolve.mjs', import.meta.url);
 const { DEFAULT_SETTINGS } = await import(pathToFileURL(path.join(ROOT, 'extension/src/protocol.ts')).href);
 const { toUserConfig } = await import(pathToFileURL(path.join(ROOT, 'extension/src/agent/sync.ts')).href);
 

@@ -476,3 +476,29 @@ async def test_503_when_no_credential_source_is_configured(monkeypatch: pytest.M
     with pytest.raises(HTTPException) as e2:
         await current_user("Bearer whatever")
     assert e2.value.status_code == 401
+
+
+async def test_chat_settles_the_previous_runs_pending_calls_in_the_same_session(
+    client: httpx.AsyncClient, fake: FakeRunner
+) -> None:
+    from dayflow.api.app import CANCELLED_CALL, pending_in
+
+    await seed(fake, [("c1", "click"), ("c2", "screenshot")])
+    r = await client.post("/chat", headers=AUTH, json={"session_id": "s1", "text": "now do lab 2"})
+    assert r.status_code == 200 and fake.calls[0]["session_id"] == "s1"
+    session = await fake.session_service.get_session(app_name="dayflow", user_id="local", session_id="s1")
+    assert session is not None and pending_in(session) == {}
+    settled = session.events[-1]
+    assert settled.author == "user" and settled.invocation_id == "inv"
+    answers = {fr.id: fr.response for fr in settled.get_function_responses()}
+    assert answers == {"c1": CANCELLED_CALL, "c2": CANCELLED_CALL}
+    # The settled calls are no longer answerable — the extension cannot resume a run the user replaced.
+    bad = await client.post(
+        "/tool_result", headers=AUTH, json={"session_id": "s1", "results": [{"call_id": "c1", "name": "click"}]}
+    )
+    assert bad.status_code == 400
+
+
+async def test_chat_on_a_fresh_session_has_nothing_to_settle(client: httpx.AsyncClient, fake: FakeRunner) -> None:
+    r = await client.post("/chat", headers=AUTH, json={"session_id": "new", "text": "go"})
+    assert r.status_code == 200 and fake.calls[0]["session_id"] == "new"

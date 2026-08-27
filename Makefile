@@ -28,10 +28,16 @@ verify-extension:
 verify-harness:
 	node --test harness/*.test.mjs
 
-# Loads backend/.env when present (GOOGLE_CLOUD_PROJECT, GOOGLE_GENAI_USE_ENTERPRISE, DAYFLOW_TOKEN, …) — nothing else
-# reads that file, so without this flag the brain would start with no Gemini configuration at all.
+PORT    ?= 8080
+
 dev-brain:
-	cd backend && DAYFLOW_TOKEN=$${DAYFLOW_TOKEN:-dev} uv run $(if $(wildcard backend/.env),--env-file .env,) python -m dayflow.api
+	cd backend && \
+	  GOOGLE_GENAI_USE_ENTERPRISE=$${GOOGLE_GENAI_USE_ENTERPRISE:-1} \
+	  GOOGLE_CLOUD_PROJECT=$${GOOGLE_CLOUD_PROJECT:-$$(gcloud config get-value project 2>/dev/null || echo dayflow-agentic)} \
+	  GOOGLE_CLOUD_LOCATION=$${GOOGLE_CLOUD_LOCATION:-global} \
+	  DAYFLOW_TOKEN=$${DAYFLOW_TOKEN:-dev} \
+	  PORT=$${PORT:-$(PORT)} \
+	  uv run $(if $(wildcard backend/.env),--env-file .env,) python -m dayflow.api
 
 dev-extension:
 	cd extension && pnpm dev

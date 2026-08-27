@@ -267,3 +267,26 @@ def test_lab_tools_are_registered_on_the_orchestrator() -> None:
     names = {str(getattr(t, "name", None) or getattr(t, "__name__", "")) for t in tools}
     assert {"build_notebook", "build_report", "solve_lab_task"} <= names
     assert lab.LAB_TOOLS == [build_notebook, build_report]
+
+
+async def test_build_notebook_serves_the_ipynb_for_drive_and_colab(pages: PageStore) -> None:
+    import httpx
+
+    from dayflow.api.app import create_app
+    from dayflow.core.loader import MemoryConfigStore
+    from dayflow.tools.lab import IPYNB_MIME, load_notebook
+
+    out = await build_notebook("Lab 01", CELLS, execute=False)
+    url = out["ipynb_url"]
+    assert url.startswith("http://brain.test/pages/notebook/") and url.endswith(".ipynb")
+    page_id = url.rsplit("/", 1)[1].removesuffix(".ipynb")
+    assert (await load_notebook(page_id, pages)) == out["ipynb_json"].encode()
+    assert await load_notebook("../etc/passwd", pages) is None
+    assert "colab.research.google.com/drive/" in out["next"] and "push_files" in out["next"]
+
+    app = create_app(store=MemoryConfigStore(), runner=object(), pages=pages)  # type: ignore[arg-type]
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://brain.test") as c:
+        res = await c.get(f"/pages/notebook/{page_id}.ipynb")
+        assert res.status_code == 200 and res.headers["content-type"].startswith(IPYNB_MIME)
+        assert json.loads(res.content)["nbformat"] == 4
+        assert (await c.get("/pages/notebook/nope.ipynb")).status_code == 404

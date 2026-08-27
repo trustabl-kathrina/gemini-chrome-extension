@@ -11,6 +11,8 @@ import {
   Image as ImageIcon,
   Link2,
   Loader2,
+  Pause,
+  Play,
   Presentation,
   Server,
   Square,
@@ -31,7 +33,7 @@ const ARTIFACT_ICON: Record<ArtifactType, typeof FileText> = {
   pr: GitPullRequest,
 };
 
-const STATUS_TONE = { running: 'accent', done: 'ok', error: 'err', cancelled: 'neutral' } as const;
+const STATUS_TONE = { running: 'accent', paused: 'warn', done: 'ok', error: 'err', cancelled: 'neutral' } as const;
 
 /** `key=value` pairs, long strings clipped, screenshots never shown here. */
 export function argsSummary(args: Record<string, unknown>): string {
@@ -175,11 +177,15 @@ function ConfirmCard({ step, onAnswer }: { step: Extract<Step, { kind: 'confirm'
 export function RunBlock({
   run,
   latest,
+  onPause,
+  onResume,
   onCancel,
   onAnswer,
 }: {
   run: Run;
   latest: boolean;
+  onPause?: () => void;
+  onResume?: () => void;
   onCancel: () => void;
   onAnswer: (confirmId: string, allow: boolean) => void;
 }) {
@@ -204,20 +210,57 @@ export function RunBlock({
         </p>
         <div className="flex shrink-0 items-center gap-1">
           <span {...(latest ? { 'data-run-status': run.status } : {})}>
-            <Pill tone={STATUS_TONE[run.status]} pulse={run.status === 'running'}>
+            <Pill tone={STATUS_TONE[run.status]} pulse={run.status === 'running' || run.status === 'paused'}>
               {run.status}
             </Pill>
           </span>
           {run.status === 'running' && (
-            <button
-              onClick={onCancel}
-              aria-label="Stop"
-              title="Stop"
-              data-action="stop"
-              className="inline-flex h-6 w-6 items-center justify-center rounded-full text-fg-2 hover:bg-bg-2 hover:text-fg"
-            >
-              <Square size={12} />
-            </button>
+            <>
+              {onPause && (
+                <button
+                  onClick={onPause}
+                  aria-label="Pause"
+                  title="Pause"
+                  data-action="pause"
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-full text-fg-2 hover:bg-bg-2 hover:text-fg"
+                >
+                  <Pause size={12} />
+                </button>
+              )}
+              <button
+                onClick={onCancel}
+                aria-label="Stop"
+                title="Stop"
+                data-action="stop"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-full text-fg-2 hover:bg-bg-2 hover:text-err"
+              >
+                <Square size={12} />
+              </button>
+            </>
+          )}
+          {run.status === 'paused' && (
+            <>
+              {onResume && (
+                <button
+                  onClick={onResume}
+                  aria-label="Resume"
+                  title="Resume"
+                  data-action="resume"
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-full text-ok hover:bg-bg-2"
+                >
+                  <Play size={12} fill="currentColor" />
+                </button>
+              )}
+              <button
+                onClick={onCancel}
+                aria-label="Stop"
+                title="Stop"
+                data-action="stop"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-full text-fg-2 hover:bg-bg-2 hover:text-err"
+              >
+                <Square size={12} />
+              </button>
+            </>
           )}
         </div>
       </div>

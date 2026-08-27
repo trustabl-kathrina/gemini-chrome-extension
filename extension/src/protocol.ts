@@ -159,6 +159,18 @@ interface StoredSettings extends Partial<Settings> {
   google?: { token?: string; email?: string; name?: string };
 }
 
+export function normalizeBackendUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+  if (!/^https?:\/\//i.test(trimmed)) {
+    if (/^(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?$/i.test(trimmed) || /:\d+$/.test(trimmed)) {
+      return `http://${trimmed}`.replace(/\/+$/, '');
+    }
+    return `https://${trimmed}`.replace(/\/+$/, '');
+  }
+  return trimmed.replace(/\/+$/, '');
+}
+
 /** Fills defaults and maps older shapes (`vault.mode`, `google.token`, `account.token`) onto the v2 model. */
 export function normalizeSettings(stored: unknown): Settings {
   const s = (stored && typeof stored === 'object' ? stored : {}) as StoredSettings;
@@ -167,6 +179,8 @@ export function normalizeSettings(stored: unknown): Settings {
   if (s.vault?.folder) next.vaultFolder = s.vault.folder;
   if (!next.driveToken) next.driveToken = s.account?.token ?? s.google?.token;
   if (!next.account && s.google?.email) next.account = { email: s.google.email, name: s.google.name ?? '' };
+  if (next.backendUrl) next.backendUrl = normalizeBackendUrl(next.backendUrl);
+  if (next.driveApiBase) next.driveApiBase = normalizeBackendUrl(next.driveApiBase);
   next.sites = (next.sites ?? []).map((site) => ({ ...site, mode: site.mode ?? DEFAULT_SITES.find((d) => d.domain === site.domain)?.mode ?? 'dom' }));
   next.permissions = { ...DEFAULT_SETTINGS.permissions, ...next.permissions, askBefore: { ...DEFAULT_SETTINGS.permissions.askBefore, ...next.permissions?.askBefore } };
   return next;
@@ -208,11 +222,18 @@ export type AgentEvent =
   | { kind: 'tool.result'; callId: string; ok: boolean; summary: string; ms: number; screenshot?: string }
   | { kind: 'artifact'; type: ArtifactType; label: string; href?: string }
   | { kind: 'confirm'; id: string; message: string }
+  | { kind: 'run.pause' }
+  | { kind: 'run.resume' }
   | { kind: 'run.end'; status: 'done' | 'error' | 'cancelled'; summary: string };
 
-/** Side panel → background. */
+/**
+ * Side panel → background. `runId` = one prompt (transcript row, cancel/pause/confirm routing);
+ * `sessionId` = the conversation the brain remembers, shared by every run typed into the panel.
+ */
 export type PanelRequest =
-  | { type: 'run.start'; runId: string; skillId?: string; text: string }
+  | { type: 'run.start'; runId: string; sessionId: string; skillId?: string; text: string }
+  | { type: 'run.pause'; runId: string }
+  | { type: 'run.resume'; runId: string }
   | { type: 'run.cancel'; runId: string }
   | { type: 'confirm.answer'; runId: string; confirmId: string; allow: boolean };
 

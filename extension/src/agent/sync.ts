@@ -1,4 +1,4 @@
-import type { Settings, SiteMode } from '../protocol';
+import { normalizeBackendUrl, type Settings, type SiteMode } from '../protocol';
 
 /**
  * Backend `UserConfig` (backend/dayflow/core/models.py). Kept structural so the mapper is testable and
@@ -86,7 +86,8 @@ function authHeaders(s: Settings): Record<string, string> {
 }
 
 export function brainUrl(s: Settings, path: string): string {
-  return `${s.backendUrl.replace(/\/+$/, '')}${path}`;
+  const base = normalizeBackendUrl(s.backendUrl);
+  return `${base}${path.startsWith('/') ? path : `/${path}`}`;
 }
 
 /**

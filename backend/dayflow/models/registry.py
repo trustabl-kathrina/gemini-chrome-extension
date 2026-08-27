@@ -1,4 +1,5 @@
-"""Role → model id registry, loaded from models.yaml (override with DAYFLOW_MODEL_<ROLE>)."""
+"""Role → model id registry, loaded from models.yaml (override with DAYFLOW_MODEL_<ROLE>; DAYFLOW_THINKING for the
+orchestrator's thinking level)."""
 
 from __future__ import annotations
 
@@ -19,6 +20,7 @@ class ModelRegistry(BaseModel):
     classifier: str
     embed: str
     embed_dims: int = 768
+    thinking: str = "low"  # orchestrator thinking level: minimal | low | medium | high
 
 
 @lru_cache(maxsize=1)
@@ -27,6 +29,8 @@ def registry() -> ModelRegistry:
     for role in ("orchestrator", "solver", "parser", "classifier", "embed"):
         if override := os.getenv(f"DAYFLOW_MODEL_{role.upper()}"):
             data[role] = override
+    if override := os.getenv("DAYFLOW_THINKING"):
+        data["thinking"] = override
     reg = ModelRegistry.model_validate(data)
     if not reg.solver:
         reg.solver = reg.orchestrator

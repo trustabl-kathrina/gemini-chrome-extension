@@ -1,4 +1,4 @@
-import { ArrowLeft, FileCode2, Monitor, Moon, Search, Settings as SettingsIcon, Sun } from 'lucide-react';
+import { ArrowLeft, FileCode2, Monitor, Moon, Search, Settings as SettingsIcon, SquarePen, Sun } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fromUserConfig, pullConfig, syncFingerprint } from '../agent/sync';
 import { Chat } from './Chat';
@@ -16,7 +16,7 @@ const THEME_ICON = { system: Monitor, light: Sun, dark: Moon } as const;
 
 export function App() {
   const { settings, setSettings, loaded } = useSettings();
-  const { runs, start, cancel, answer } = useAgent();
+  const { runs, start, newChat, pause, resume, cancel, answer } = useAgent();
   const [view, setView] = useState<View>('chat');
   const [palette, setPalette] = useState(false);
   const [theme, , cycleTheme] = useTheme();
@@ -60,14 +60,24 @@ export function App() {
     () => [
       ...commandsFromSkills(settings.skills, runSkill),
       { id: 'nav:chat', title: 'Chat', hint: 'Back to the transcript', run: () => setView('chat') },
+      {
+        id: 'nav:new-chat',
+        title: 'New chat',
+        hint: 'Start a fresh conversation with the brain',
+        run: () => {
+          setView('chat');
+          newChat();
+        },
+      },
       { id: 'nav:config', title: 'Config', hint: 'Edit skills, sites, permissions, schedules (YAML)', run: () => setView('config') },
       { id: 'nav:settings', title: 'Settings', hint: 'Google account, brain, vision, Drive', run: () => setView('settings') },
       { id: 'nav:theme', title: `Theme: ${theme}`, hint: 'Cycle system → light → dark', run: cycleTheme },
     ],
-    [settings.skills, runSkill, theme, cycleTheme],
+    [settings.skills, runSkill, newChat, theme, cycleTheme],
   );
 
   const anyRunning = Object.values(runs).some((r) => r.status === 'running');
+  const anyPaused = Object.values(runs).some((r) => r.status === 'paused');
   const ThemeIcon = THEME_ICON[theme];
 
   if (!inExtension) {
@@ -94,9 +104,14 @@ export function App() {
         )}
         <span className="ml-0.5 text-[15px] font-medium tracking-tight">{TITLES[view]}</span>
         <div className="ml-auto flex items-center gap-0.5">
-          <Pill tone={settings.token ? 'ok' : 'warn'} pulse={anyRunning}>
-            {anyRunning ? 'working' : settings.token ? 'ready' : 'no brain'}
+          <Pill tone={anyPaused ? 'warn' : settings.token ? 'ok' : 'warn'} pulse={anyRunning || anyPaused}>
+            {anyPaused ? 'paused' : anyRunning ? 'working' : settings.token ? 'ready' : 'no brain'}
           </Pill>
+          {view === 'chat' && (
+            <IconButton label="New chat" onClick={newChat}>
+              <SquarePen size={16} />
+            </IconButton>
+          )}
           <IconButton label={`Theme: ${theme} (click to change)`} onClick={cycleTheme} data-theme-toggle>
             <ThemeIcon size={16} />
           </IconButton>
@@ -112,7 +127,18 @@ export function App() {
         </div>
       </header>
 
-      {view === 'chat' && <Chat settings={settings} runs={runs} onSubmit={runText} onRunSkill={runSkill} onCancel={cancel} onAnswer={answer} />}
+      {view === 'chat' && (
+        <Chat
+          settings={settings}
+          runs={runs}
+          onSubmit={runText}
+          onRunSkill={runSkill}
+          onPause={pause}
+          onResume={resume}
+          onCancel={cancel}
+          onAnswer={answer}
+        />
+      )}
       {view === 'settings' && (
         <div className="flex-1 overflow-y-auto">
           <SettingsView settings={settings} update={(fn) => setSettings(fn)} />

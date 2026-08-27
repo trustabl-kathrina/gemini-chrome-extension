@@ -1,4 +1,4 @@
-import type { AgentEvent, Settings, ToolCall } from '../protocol';
+import { normalizeBackendUrl, type AgentEvent, type Settings, type ToolCall } from '../protocol';
 import { AdkAdapter, parseSse, type AdkEvent, type PendingCall } from './adk';
 import { brainAuthHeader, brainAuthToken } from './sync';
 import type { ToolOutcome } from './tools';
@@ -11,6 +11,7 @@ export interface LiveControls {
   signal: AbortSignal;
   executeTool: (call: ToolCall) => Promise<ToolOutcome>;
   waitForConfirm: (id: string) => Promise<boolean>;
+  waitIfPaused?: () => Promise<void>;
 }
 
 /** `source` when it is one of the brain's own pages (`<backendUrl>/pages/<kind>/<id>`), else undefined. */
@@ -38,14 +39,15 @@ export function resultSummary(result: Record<string, unknown>): string {
  */
 export async function* liveRun(
   settings: Settings,
-  req: { runId: string; skillId?: string; text: string },
+  req: { runId: string; sessionId: string; skillId?: string; text: string },
   ctl: LiveControls,
 ): AsyncGenerator<AgentEvent> {
-  const base = settings.backendUrl.replace(/\/+$/, '');
+  const base = normalizeBackendUrl(settings.backendUrl);
   const headers = { 'content-type': 'application/json', ...brainAuthHeader(settings) };
   const adapter = new AdkAdapter();
 
   async function* exchange(path: string, body: unknown): AsyncGenerator<AdkEvent> {
+    await ctl.waitIfPaused?.();
     const res = await fetch(`${base}${path}`, { method: 'POST', headers, body: JSON.stringify(body), signal: ctl.signal });
     if (!res.ok || !res.body) throw new Error(`${path} → HTTP ${res.status} ${(await res.text()).slice(0, 200)}`);
     yield* parseSse<AdkEvent>(res.body, ctl.signal);
@@ -58,13 +60,16 @@ export async function* liveRun(
   }
 
   try {
-    let stream = exchange('/chat', { session_id: req.runId, skill_id: req.skillId, text: req.text });
+    // session_id is the CONVERSATION, not the run: follow-ups land in the same ADK session and keep the history.
+    let stream = exchange('/chat', { session_id: req.sessionId, skill_id: req.skillId, text: req.text });
     for (;;) {
+      await ctl.waitIfPaused?.();
       const queued: PendingCall[] = [];
       for await (const ev of stream) {
         const { events, pending: p } = adapter.map(ev);
         for (const e of events) yield e;
         queued.push(...p);
+        await ctl.waitIfPaused?.();
       }
       // ADK streams each function call twice (partial + aggregate) → dedupe by id;
       // a call the server already answered (guard error) is not ours to execute.
@@ -74,6 +79,7 @@ export async function* liveRun(
       // Resolve every pending call, then resume with all results in one message.
       const results: { call_id: string; name: string; result: Record<string, unknown> }[] = [];
       for (const call of pending) {
+        await ctl.waitIfPaused?.();
         const t0 = Date.now();
         let result: Record<string, unknown>;
         if (call.kind === 'confirm') {
@@ -94,7 +100,8 @@ export async function* liveRun(
         }
         results.push({ call_id: call.id, name: call.name, result });
       }
-      stream = exchange('/tool_result', { session_id: req.runId, results });
+      await ctl.waitIfPaused?.();
+      stream = exchange('/tool_result', { session_id: req.sessionId, results });
     }
     if (adapter.lastError) yield { kind: 'run.end', status: 'error', summary: adapter.lastError.slice(0, 200) };
     else yield { kind: 'run.end', status: 'done', summary: adapter.lastText.slice(0, 200) || 'Done' };

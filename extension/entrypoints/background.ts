@@ -1,18 +1,30 @@
 import { ConfirmBox } from '@/src/agent/confirm';
 import { liveRun } from '@/src/agent/live';
+import { PauseBox } from '@/src/agent/pause';
 import { BrowserTools, watchDownloads } from '@/src/agent/tools';
 import { notify, skillIdFromAlarm, syncAlarms } from '@/src/agent/scheduler';
 import { pushConfig, syncFingerprint } from '@/src/agent/sync';
 import { normalizeSettings, PANEL_PORT, type AgentEvent, type PanelMessage, type PanelRequest, type Settings } from '@/src/protocol';
 
-/** One in-flight run: cancellation + confirmation answers (kept until the loop asks for them). */
+/** One in-flight run: cancellation + pause + confirmation answers (kept until the loop asks for them). */
 interface Active {
   abort: AbortController;
   confirms: ConfirmBox;
+  pauser: PauseBox;
 }
 
 const active = new Map<string, Active>();
 const panels = new Set<ReturnType<typeof browser.runtime.connect>>();
+
+function broadcast(m: PanelMessage) {
+  panels.forEach((p) => {
+    try {
+      p.postMessage(m);
+    } catch {
+      panels.delete(p);
+    }
+  });
+}
 
 async function loadSettings(): Promise<Settings> {
   const { settings } = await browser.storage.local.get('settings');
@@ -22,10 +34,12 @@ async function loadSettings(): Promise<Settings> {
 async function startRun(req: Extract<PanelRequest, { type: 'run.start' }>, post: (m: PanelMessage) => void, background = false) {
   const abort = new AbortController();
   const confirms = new ConfirmBox();
-  active.set(req.runId, { abort, confirms });
+  const pauser = new PauseBox();
+  active.set(req.runId, { abort, confirms, pauser });
   const settings = await loadSettings();
   const send = (event: AgentEvent) => post({ type: 'event', runId: req.runId, event });
   const waitForConfirm = (id: string) => confirms.wait(id);
+  const waitIfPaused = () => pauser.waitIfPaused(abort.signal);
 
   try {
     // Client-side gate: surfaces a confirm card in the panel and waits for the answer.
@@ -35,7 +49,7 @@ async function startRun(req: Extract<PanelRequest, { type: 'run.start' }>, post:
       return waitForConfirm(id);
     };
     const tools = new BrowserTools({ settings, confirm, emit: send, log: (line) => console.log('[dayflow]', line) });
-    const stream = liveRun(settings, req, { signal: abort.signal, waitForConfirm, executeTool: (call) => tools.execute(call) });
+    const stream = liveRun(settings, req, { signal: abort.signal, waitForConfirm, waitIfPaused, executeTool: (call) => tools.execute(call) });
     for await (const ev of stream) {
       send(ev);
       if (background && ev.kind === 'run.end') notify(ev.status === 'done' ? 'Dayflow finished a scheduled skill' : `Dayflow: ${ev.status}`, ev.summary);
@@ -55,22 +69,34 @@ export default defineBackground(() => {
     if (port.name !== PANEL_PORT) return;
     panels.add(port);
     port.onDisconnect.addListener(() => panels.delete(port));
-    const post = (m: PanelMessage) => {
-      try {
-        port.postMessage(m);
-      } catch {
-        /* panel closed; the run keeps going */
-      }
-    };
     port.onMessage.addListener((raw: unknown) => {
       const msg = raw as PanelRequest;
       switch (msg.type) {
         case 'run.start':
-          void startRun(msg, post);
+          void startRun(msg, broadcast);
           break;
-        case 'run.cancel':
-          active.get(msg.runId)?.abort.abort();
+        case 'run.pause': {
+          const a = active.get(msg.runId);
+          if (a) {
+            a.pauser.pause();
+            broadcast({ type: 'event', runId: msg.runId, event: { kind: 'run.pause' } });
+          }
           break;
+        }
+        case 'run.resume': {
+          const a = active.get(msg.runId);
+          if (a) {
+            a.pauser.resume();
+            broadcast({ type: 'event', runId: msg.runId, event: { kind: 'run.resume' } });
+          }
+          break;
+        }
+        case 'run.cancel': {
+          const a = active.get(msg.runId);
+          if (a) a.abort.abort();
+          else broadcast({ type: 'event', runId: msg.runId, event: { kind: 'run.end', status: 'cancelled', summary: 'Cancelled' } });
+          break;
+        }
         case 'confirm.answer':
           active.get(msg.runId)?.confirms.answer(msg.confirmId, msg.allow);
           break;
@@ -109,8 +135,8 @@ export default defineBackground(() => {
     const skill = settings.skills.find((s) => s.id === skillId);
     if (skill?.enabled) {
       const runId = crypto.randomUUID();
-      const post = (m: PanelMessage) => panels.forEach((p) => { try { p.postMessage(m); } catch { /* closed */ } });
-      void startRun({ type: 'run.start', runId, skillId, text: skill.prompt }, post, true);
+      // A scheduled run is nobody's conversation: give it its own brain session instead of the panel's chat.
+      void startRun({ type: 'run.start', runId, sessionId: runId, skillId, text: skill.prompt }, broadcast, true);
     }
     await syncAlarms(settings);
   });

@@ -11,6 +11,8 @@ export function Chat({
   runs,
   onSubmit,
   onRunSkill,
+  onPause,
+  onResume,
   onCancel,
   onAnswer,
 }: {
@@ -18,6 +20,8 @@ export function Chat({
   runs: Record<string, Run>;
   onSubmit: (text: string) => void;
   onRunSkill: (id: string) => void;
+  onPause: (runId: string) => void;
+  onResume: (runId: string) => void;
   onCancel: (runId: string) => void;
   onAnswer: (runId: string, confirmId: string, allow: boolean) => void;
 }) {
@@ -29,7 +33,8 @@ export function Chat({
   }, [stepCount, ordered.length, ordered.at(-1)?.status]);
 
   const latest = ordered.at(-1);
-  const busy = ordered.some((r) => r.status === 'running');
+  const activeRun = ordered.find((r) => r.status === 'running' || r.status === 'paused');
+  const busy = ordered.some((r) => r.status === 'running' || r.status === 'paused');
   const unconfigured = !settings.token || !settings.backendUrl;
   const firstName = settings.account?.name?.split(' ')[0] || settings.account?.email?.split('@')[0] || '';
   const suggestions = settings.skills.filter((s) => s.enabled).slice(0, 4);
@@ -63,11 +68,28 @@ export function Chat({
           </div>
         )}
         {ordered.map((r) => (
-          <RunBlock key={r.id} run={r} latest={r.id === latest?.id} onCancel={() => onCancel(r.id)} onAnswer={(cid, allow) => onAnswer(r.id, cid, allow)} />
+          <RunBlock
+            key={r.id}
+            run={r}
+            latest={r.id === latest?.id}
+            onPause={() => onPause(r.id)}
+            onResume={() => onResume(r.id)}
+            onCancel={() => onCancel(r.id)}
+            onAnswer={(cid, allow) => onAnswer(r.id, cid, allow)}
+          />
         ))}
         <div ref={endRef} />
       </div>
-      <Composer skills={settings.skills} busy={busy} onSubmit={onSubmit} onRunSkill={onRunSkill} />
+      <Composer
+        skills={settings.skills}
+        busy={busy}
+        activeRun={activeRun}
+        onSubmit={onSubmit}
+        onRunSkill={onRunSkill}
+        onPause={() => activeRun && onPause(activeRun.id)}
+        onResume={() => activeRun && onResume(activeRun.id)}
+        onCancel={() => activeRun && onCancel(activeRun.id)}
+      />
     </div>
   );
 }

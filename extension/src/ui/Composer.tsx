@@ -1,6 +1,7 @@
-import { ArrowUp, Slash } from 'lucide-react';
+import { ArrowUp, Pause, Play, Slash, Square } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import type { Skill } from '../protocol';
+import type { Run } from '../state/runs';
 import { filterCommands, type Command } from './CommandPalette';
 import { Kbd } from './primitives';
 
@@ -12,14 +13,22 @@ export function Composer({
   skills,
   placeholder = 'Ask Dayflow to do something in this tab…',
   busy,
+  activeRun,
   onSubmit,
   onRunSkill,
+  onPause,
+  onResume,
+  onCancel,
 }: {
   skills: Skill[];
   placeholder?: string;
   busy?: boolean;
+  activeRun?: Run;
   onSubmit: (text: string) => void;
   onRunSkill: (id: string) => void;
+  onPause?: () => void;
+  onResume?: () => void;
+  onCancel?: () => void;
 }) {
   const [text, setText] = useState('');
   const [idx, setIdx] = useState(0);
@@ -69,16 +78,26 @@ export function Composer({
         return;
       }
     }
-    if (e.key === 'Escape' && slash) {
-      e.preventDefault();
-      setText('');
-      return;
+    if (e.key === 'Escape') {
+      if (slash) {
+        e.preventDefault();
+        setText('');
+        return;
+      }
+      if (activeRun) {
+        e.preventDefault();
+        onCancel?.();
+        return;
+      }
     }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       submit();
     }
   };
+
+  const isRunning = activeRun?.status === 'running';
+  const isPaused = activeRun?.status === 'paused';
 
   return (
     <div className="relative px-3 pb-3 pt-1">
@@ -116,20 +135,76 @@ export function Composer({
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKey}
-          placeholder={placeholder}
+          placeholder={isPaused ? 'Agent is paused…' : isRunning ? 'Agent is working…' : placeholder}
           className="max-h-32 min-h-8 flex-1 resize-none bg-transparent py-1.5 text-[14px] outline-none placeholder:text-fg-3"
         />
-        <button
-          onClick={submit}
-          disabled={!text.trim() || (slash && !matches.length)}
-          aria-label="Send"
-          className="mb-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent transition-opacity disabled:opacity-30"
-        >
-          <ArrowUp size={14} />
-        </button>
+        {isRunning ? (
+          <div className="mb-0.5 flex items-center gap-1">
+            {onPause && (
+              <button
+                onClick={onPause}
+                aria-label="Pause run"
+                title="Pause run"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-bg-2 text-fg-2 transition-colors hover:bg-bg-3 hover:text-fg"
+              >
+                <Pause size={13} />
+              </button>
+            )}
+            {onCancel && (
+              <button
+                onClick={onCancel}
+                aria-label="Stop run"
+                title="Stop run (Esc)"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-err text-white transition-opacity hover:opacity-90"
+              >
+                <Square size={12} fill="currentColor" />
+              </button>
+            )}
+          </div>
+        ) : isPaused ? (
+          <div className="mb-0.5 flex items-center gap-1">
+            {onResume && (
+              <button
+                onClick={onResume}
+                aria-label="Resume run"
+                title="Resume run"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-ok text-white transition-opacity hover:opacity-90"
+              >
+                <Play size={13} fill="currentColor" />
+              </button>
+            )}
+            {onCancel && (
+              <button
+                onClick={onCancel}
+                aria-label="Stop run"
+                title="Stop run (Esc)"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-err text-white transition-opacity hover:opacity-90"
+              >
+                <Square size={12} fill="currentColor" />
+              </button>
+            )}
+          </div>
+        ) : (
+          <button
+            onClick={submit}
+            disabled={!text.trim() || (slash && !matches.length)}
+            aria-label="Send"
+            className="mb-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-on-accent transition-opacity disabled:opacity-30"
+          >
+            <ArrowUp size={14} />
+          </button>
+        )}
       </div>
       <div className="flex items-center gap-1 px-3 pt-1.5 text-[11px] text-fg-3">
-        <Kbd>⏎</Kbd> send · <Kbd>/</Kbd> skills · <Kbd>⌘K</Kbd> palette
+        {isRunning || isPaused ? (
+          <>
+            <Kbd>Esc</Kbd> stop · {isPaused ? <><Kbd>▶</Kbd> resume · </> : <><Kbd>❚❚</Kbd> pause · </>}<Kbd>⌘K</Kbd> palette
+          </>
+        ) : (
+          <>
+            <Kbd>⏎</Kbd> send · <Kbd>/</Kbd> skills · <Kbd>⌘K</Kbd> palette
+          </>
+        )}
       </div>
     </div>
   );

@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from google.adk.agents.run_config import RunConfig, StreamingMode  # pyright: ignore[reportPrivateImportUsage]
 from google.adk.apps import App
+from google.adk.events import Event
 from google.adk.runners import Runner
 from google.adk.sessions import BaseSessionService, InMemorySessionService, Session
 from google.genai import types
@@ -41,13 +42,13 @@ SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 SCREENSHOT_KEY = "screenshot_b64"
 MAX_SCREENSHOT_BYTES = 1_500_000  # decoded; the extension sends JPEG ≤1280px q≈55, typically 100–200 KB
 
+
 def trusted_public_host(host: str | None) -> bool:
     """Hosts whose request base URL may seed public page links when DAYFLOW_PUBLIC_URL is unset."""
     if not host:
         return False
     h = host.lower()
     return h in {"localhost", "127.0.0.1", "::1"} or h.endswith(".run.app")
-
 
 
 class ChatRequest(BaseModel):
@@ -152,20 +153,58 @@ class PendingCall(NamedTuple):
     name: str
     event_id: str
     args: dict[str, Any]
+    invocation_id: str = ""
 
 
-async def pending_calls(runner: Runner, user_id: str, session_id: str) -> tuple[Session, dict[str, PendingCall]]:
-    """The session and call_id -> (tool name, event id, args) for FunctionCalls that have no FunctionResponse yet."""
-    session = await runner.session_service.get_session(app_name=APP_NAME, user_id=user_id, session_id=session_id)
-    if session is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, f"unknown session '{session_id}'")
+def pending_in(session: Session) -> dict[str, PendingCall]:
+    """call_id -> (tool name, event id, args, invocation) for FunctionCalls that have no FunctionResponse yet."""
     answered = {fr.id for ev in session.events for fr in ev.get_function_responses()}
-    return session, {
-        fc.id: PendingCall(fc.name or "", ev.id, dict(fc.args or {}))
+    return {
+        fc.id: PendingCall(fc.name or "", ev.id, dict(fc.args or {}), ev.invocation_id)
         for ev in session.events
         for fc in ev.get_function_calls()
         if fc.id and fc.id not in answered
     }
+
+
+async def pending_calls(runner: Runner, user_id: str, session_id: str) -> tuple[Session, dict[str, PendingCall]]:
+    session = await runner.session_service.get_session(app_name=APP_NAME, user_id=user_id, session_id=session_id)
+    if session is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"unknown session '{session_id}'")
+    return session, pending_in(session)
+
+
+CANCELLED_CALL = {"status": "error", "error": "cancelled: the user sent a new request before this call was answered"}
+
+
+async def settle_pending_calls(runner: Runner, user_id: str, session_id: str) -> int:
+    """Answers every still-pending tool call of the session with a cancelled result, one FunctionResponse event
+    per model turn. A chat is one long session across runs; a run the user cancelled (or that died with the
+    panel) leaves its last FunctionCalls unanswered, and Gemini rejects a history whose function calls have no
+    responses. Returns how many calls were settled."""
+    session = await runner.session_service.get_session(app_name=APP_NAME, user_id=user_id, session_id=session_id)
+    if session is None:
+        return 0
+    pending = pending_in(session)
+    by_turn: dict[str, list[tuple[str, PendingCall]]] = {}
+    for call_id, pc in pending.items():
+        by_turn.setdefault(pc.event_id, []).append((call_id, pc))
+    for calls in by_turn.values():
+        parts = [
+            types.Part(
+                function_response=types.FunctionResponse(id=call_id, name=pc.name, response=dict(CANCELLED_CALL))
+            )
+            for call_id, pc in calls
+        ]
+        await runner.session_service.append_event(
+            session,
+            Event(
+                author="user", invocation_id=calls[0][1].invocation_id, content=types.Content(role="user", parts=parts)
+            ),
+        )
+    if pending:
+        log.info("settled %d pending call(s) in session %s before a new prompt", len(pending), session_id)
+    return len(pending)
 
 
 def gemini_backend() -> dict[str, Any]:
@@ -203,7 +242,7 @@ def create_app(
     app.state.pages = default_pages()
     app.add_middleware(
         CORSMiddleware,
-        allow_origin_regex=r"chrome-extension://.*|http://localhost(:\d+)?",
+        allow_origin_regex=r"chrome-extension://.*|http://(localhost|127\.0\.0\.1)(:\d+)?",
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -259,11 +298,14 @@ def create_app(
             text = text or skill.prompt
         if not text.strip():
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "text or skill_id required")
-        # A new prompt starts a new run: the browser action budget starts from zero.
+        # A new prompt starts a new run in the same conversation: the browser action budget starts from zero
+        # and whatever the previous run left unanswered is closed so the history stays valid for the model.
+        runner: Runner = request.app.state.runner
+        await settle_pending_calls(runner, user_id, body.session_id)
         state_delta: dict[str, Any] = {SKILL_KEY: body.skill_id, DOMAINS_KEY: body.domains, ACTIONS_KEY: 0}
         content = types.Content(role="user", parts=[types.Part(text=text)])
         return StreamingResponse(
-            sse(request.app.state.runner, user_id, body.session_id, content, state_delta),
+            sse(runner, user_id, body.session_id, content, state_delta),
             media_type="text/event-stream",
             headers=SSE_HEADERS,
         )

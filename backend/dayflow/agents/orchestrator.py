@@ -29,8 +29,12 @@ from typing import Any, Protocol
 from urllib.parse import urlparse
 
 from google.adk.agents import LlmAgent
+from google.adk.agents.callback_context import CallbackContext
 from google.adk.agents.readonly_context import ReadonlyContext
+from google.adk.models.llm_request import LlmRequest
+from google.adk.models.llm_response import LlmResponse
 from google.adk.tools import BaseTool, ToolContext
+from google.genai import types
 
 from dayflow.agents.lab_solver import lab_solver_tool
 from dayflow.core.loader import ConfigStore
@@ -59,6 +63,10 @@ SKILL_KEY = "skill_id"
 DOMAINS_KEY = "domains"
 ACTIONS_KEY = "actions"
 MAX_ACTIONS = 40
+# Screenshots stay in the session, but only the last KEEP_SCREENSHOTS tool results reach the model as images:
+# older pages are history the model already acted on, and every extra image slows the next turn down.
+KEEP_SCREENSHOTS = 2
+MAX_MEMORY_CHARS = 4000
 # Older configs and the extension's permission mapper say `type_text`; the tool the model sees is `type`.
 TOOL_ALIASES = {"type_text": "type"}
 # Arguments that carry what a gated call sends or creates; every one present must appear in the approval text.
@@ -72,6 +80,18 @@ wait) and server tools (vault_list, vault_read, parse_document, GitHub, Linear, 
 signed in to their sites; never ask for or type passwords.
 
 How you work:
+- This chat is ONE continuous conversation: earlier turns — the user's requests, your tool results and your
+  summaries — are context. A follow-up ("now lab 2", "same for the other course", "open it") refers to them.
+  Never redo work whose result is already in the conversation; reuse the paths, ids and URLs you found.
+- Plan first: on a new request, before any tool call, write a numbered plan of at most 6 steps that takes
+  the CHEAPEST path — server tools before browser tools, vault_list before browsing WSP, a URL you know
+  before clicking through menus, one read_page per page. Then execute it; re-plan only when a step fails.
+- When something does not exist (a course folder, a file, an instructor on WSP), conclude after at most 3
+  checks, say what is missing, and continue with the next best option from the playbook — never spend the
+  budget searching. If the task cannot be finished without the user, finish everything else and ask once.
+- Learn: when you discover a durable fact (an instructor's name, a URL, that a course has no WSP folder, a
+  preference the user states), call remember(note) once with one short line. Check "What you remember"
+  before searching for a fact again.
 - Before EVERY tool call write exactly one sentence: what you see → what you do next. Then call the tool.
   Call ONE browser tool at a time and wait for its result; never queue several browser calls in one turn.
 - Every browser tool result includes a screenshot taken after the action. Look at it and check that the
@@ -282,6 +302,46 @@ def result_state_delta(
     return delta
 
 
+def merge_memory(memory: str, note: str, limit: int = MAX_MEMORY_CHARS) -> str:
+    """`memory` plus `note` as one more "- " line (no duplicate lines; oldest lines dropped past `limit`)."""
+    line = "- " + " ".join(note.split())
+    lines = [ln for ln in memory.splitlines() if ln.strip()]
+    if line in lines:
+        return "\n".join(lines)
+    lines.append(line)
+    while len("\n".join(lines)) > limit and len(lines) > 1:
+        lines.pop(0)
+    return "\n".join(lines)
+
+
+def prune_screenshots(contents: list[types.Content], keep: int = KEEP_SCREENSHOTS) -> int:
+    """Drops the inline images of every function response except the last `keep` that carry one; returns how
+    many were dropped. Replaces entries with copies — the session-owned events are never mutated."""
+    with_images = [
+        i
+        for i, c in enumerate(contents)
+        if any(p.function_response and p.function_response.parts for p in (c.parts or []))
+    ]
+    dropped = 0
+    for i in with_images[: max(len(with_images) - keep, 0)]:
+        parts: list[types.Part] = []
+        for p in contents[i].parts or []:
+            fr = p.function_response
+            if fr and fr.parts:
+                response = {**(fr.response or {}), "screenshot": "dropped: an older step, see the newer screenshots"}
+                parts.append(types.Part(function_response=fr.model_copy(update={"parts": None, "response": response})))
+                dropped += 1
+            else:
+                parts.append(p)
+        contents[i] = contents[i].model_copy(update={"parts": parts})
+    return dropped
+
+
+def thinking_config() -> types.GenerateContentConfig:
+    level = types.ThinkingLevel(registry().thinking.upper())
+    return types.GenerateContentConfig(thinking_config=types.ThinkingConfig(thinking_level=level))
+
+
 def build_root_agent(store: ConfigStore) -> LlmAgent:
     async def instruction(ctx: ReadonlyContext) -> str:
         cfg = await store.get(ctx.user_id)
@@ -294,15 +354,35 @@ def build_root_agent(store: ConfigStore) -> LlmAgent:
         cfg = await store.get(tool_context.user_id)
         return guard_tool(tool.name, args, tool_context.state, cfg.permissions, trusted_hosts=brain_hosts())
 
+    async def before_model(callback_context: CallbackContext, llm_request: LlmRequest) -> LlmResponse | None:
+        prune_screenshots(llm_request.contents)
+        return None
+
+    async def remember(note: str, tool_context: ToolContext) -> dict[str, Any]:
+        """Saves one durable fact about the user's world to the memory every future run starts with.
+
+        Args:
+            note: One short line, e.g. "CSCI3240 Computer Vision: no instructor folder on WSP; materials are on Teams."
+        """
+        if not note.strip():
+            return {"status": "error", "error": "note is empty"}
+        cfg = await store.get(tool_context.user_id)
+        memory = merge_memory(cfg.memory, note)
+        if memory != cfg.memory:
+            await store.put(tool_context.user_id, cfg.model_copy(update={"memory": memory}))
+        return {"status": "success", "memory_lines": len(memory.splitlines())}
+
     return LlmAgent(
         name="dayflow",
         model=registry().orchestrator,
         description="Dayflow orchestrator: drives the user's browser and server tools to run skills.",
         instruction=instruction,
+        generate_content_config=thinking_config(),
         tools=[
             *BROWSER_TOOLS,
             CONFIRM_TOOL,
             *SERVER_TOOLS,
+            remember,
             *LAB_TOOLS,
             *SCAFFOLD_TOOLS,
             *COURSEWARE_TOOLS,
@@ -310,5 +390,6 @@ def build_root_agent(store: ConfigStore) -> LlmAgent:
             lab_solver_tool(),
             *connector_toolsets(),
         ],
+        before_model_callback=before_model,
         before_tool_callback=before_tool,
     )

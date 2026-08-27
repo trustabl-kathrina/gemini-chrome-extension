@@ -191,9 +191,15 @@ def test_pack_skills_name_only_tools_the_brain_has() -> None:
         | {t.__name__ for t in SERVER_TOOLS}
         | {t.__name__ for t in LAB_TOOLS}
         | {"solve_lab_task"}
+        | {"remember"}  # closes over the config store, so it is built inside build_root_agent
         | set(GITHUB_TOOLS)
         | set(LINEAR_TOOLS)
     )
+    from dayflow.agents.orchestrator import build_root_agent
+    from dayflow.core.loader import MemoryConfigStore
+
+    agent_tools = {getattr(t, "__name__", getattr(t, "name", "")) for t in build_root_agent(MemoryConfigStore()).tools}
+    assert "remember" in agent_tools
     cfg = default_config()
     for skill_id in ("vault-sync", "lab", "team-ops"):
         skill = cfg.skill(skill_id)
@@ -211,3 +217,64 @@ def test_guard_rejects_non_http_schemes_even_without_allowlist() -> None:
     # download by ref has no URL to check.
     strict = Permissions(allowed_hosts=["a.b"])
     assert guard_tool("download", {"ref": "e3", "path": "C/Lab 01/a.pdf"}, {}, strict) is None
+
+
+def test_base_prompt_states_conversation_planning_and_learning_rules() -> None:
+    from dayflow.agents.orchestrator import BASE_PROMPT
+
+    assert "ONE continuous conversation" in BASE_PROMPT and "Never redo work" in BASE_PROMPT
+    assert "Plan first" in BASE_PROMPT and "CHEAPEST path" in BASE_PROMPT
+    assert "at most 3" in BASE_PROMPT and "remember(note)" in BASE_PROMPT
+
+
+def test_merge_memory_appends_dedupes_and_caps() -> None:
+    from dayflow.agents.orchestrator import merge_memory
+
+    m = merge_memory("", "  CSCI3240:  no folder on WSP ")
+    assert m == "- CSCI3240: no folder on WSP"
+    assert merge_memory(m, "CSCI3240: no folder on WSP") == m, "an identical note is not stored twice"
+    m2 = merge_memory(m, "Instructor for CV: see Teams")
+    assert m2.splitlines() == ["- CSCI3240: no folder on WSP", "- Instructor for CV: see Teams"]
+    capped = merge_memory("- " + "x" * 60, "y" * 30, limit=50)
+    assert capped == "- " + "y" * 30, "oldest lines go first when the memory is over the cap"
+
+
+def test_prune_screenshots_keeps_only_the_newest_images() -> None:
+    from google.genai import types
+
+    from dayflow.agents.orchestrator import prune_screenshots
+
+    def shot(i: int) -> types.Content:
+        blob = types.FunctionResponseBlob(mime_type="image/jpeg", data=bytes([i]))
+        fr = types.FunctionResponse(
+            id=f"c{i}", name="click", response={"ok": True}, parts=[types.FunctionResponsePart(inline_data=blob)]
+        )
+        return types.Content(role="user", parts=[types.Part(function_response=fr)])
+
+    originals = [shot(1), shot(2), shot(3), shot(4)]
+    contents = [types.Content(role="user", parts=[types.Part(text="go")]), *originals]
+    assert prune_screenshots(contents, keep=2) == 2
+    frs = [p.function_response for c in contents[1:] for p in (c.parts or []) if p.function_response]
+    assert [bool(fr.parts) for fr in frs] == [False, False, True, True]
+    assert frs[0].response == {"ok": True, "screenshot": "dropped: an older step, see the newer screenshots"}
+    assert all(o.parts and o.parts[0].function_response and o.parts[0].function_response.parts for o in originals), (
+        "session-owned contents are copied, never mutated"
+    )
+    assert prune_screenshots(contents, keep=2) == 0
+
+
+def test_thinking_level_comes_from_the_registry(monkeypatch: pytest.MonkeyPatch) -> None:
+    from google.genai import types
+
+    from dayflow.agents.orchestrator import thinking_config
+    from dayflow.models.registry import registry
+
+    assert registry().thinking == "low"
+    cfg = thinking_config()
+    assert cfg.thinking_config is not None and cfg.thinking_config.thinking_level == types.ThinkingLevel.LOW
+    registry.cache_clear()
+    monkeypatch.setenv("DAYFLOW_THINKING", "medium")
+    try:
+        assert thinking_config().thinking_config.thinking_level == types.ThinkingLevel.MEDIUM  # type: ignore[union-attr]
+    finally:
+        registry.cache_clear()

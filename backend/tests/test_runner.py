@@ -131,3 +131,42 @@ async def test_screenshot_part_reaches_the_model_as_an_image() -> None:
     assert parts and parts[-1].function_response is not None
     inline = parts[-1].function_response.parts
     assert inline and inline[0].inline_data is not None and inline[0].inline_data.data == b"\xff\xd8\xff\x00"
+
+
+async def test_remember_tool_writes_the_users_memory_for_the_next_turn() -> None:
+    store = MemoryConfigStore()
+    agent = build_root_agent(store)
+    note = "CSCI3240: no files on WSP, materials on Teams"
+    llm = ScriptedLlm(script=[[fc("m1", "remember", note=note)], [txt("Noted.")]])
+    agent.model = llm
+    runner = Runner(
+        app=App(name="dayflow", root_agent=agent), session_service=InMemorySessionService(), auto_create_session=True
+    )
+    events = await collect(runner, [txt("the CV course has no WSP folder")])
+    assert final_text(events[-1]) == "Noted."
+    frs = [fr for ev in events for fr in ev.get_function_responses()]
+    assert frs and frs[0].response and frs[0].response.get("status") == "success"
+    assert (await store.get("u")).memory == "- CSCI3240: no files on WSP, materials on Teams"
+    # The remembered line is in the system instruction of the NEXT model call in this conversation.
+    llm.script.append([txt("ok")])
+    await collect(runner, [txt("and now?")])
+    instruction = llm.requests[-1].config.system_instruction if llm.requests[-1].config else None
+    assert instruction and "no files on WSP" in str(instruction)
+
+
+async def test_older_screenshots_are_pruned_from_the_model_request() -> None:
+    from dayflow.agents.orchestrator import KEEP_SCREENSHOTS
+
+    n = KEEP_SCREENSHOTS + 2
+    script: list[list[types.Part]] = [[fc(f"c{i}", "click", ref=f"e{i}")] for i in range(n)] + [[txt("done")]]
+    runner, llm = make_runner(script)
+    await collect(runner, [txt("go")])
+    for i in range(n):
+        blob = types.FunctionResponseBlob(mime_type="image/jpeg", data=bytes([i]))
+        shot = [types.FunctionResponsePart(inline_data=blob)]
+        fr = types.FunctionResponse(id=f"c{i}", name="click", response={"clicked": True}, parts=shot)
+        await collect(runner, [types.Part(function_response=fr)])
+    frs = [p.function_response for c in llm.requests[-1].contents for p in (c.parts or []) if p.function_response]
+    assert len(frs) == n
+    assert [bool(fr.parts) for fr in frs] == [False] * 2 + [True] * KEEP_SCREENSHOTS
+    assert all("dropped" in str(fr.response.get("screenshot")) for fr in frs[:2] if fr.response)

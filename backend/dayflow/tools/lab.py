@@ -3,7 +3,9 @@
 `build_notebook` turns the solver's (code, stdout) pairs into a runnable nbformat v4 notebook whose
 code cells carry stream outputs, then re-executes it with nbclient (ipykernel subprocess, timeout) so
 the outputs shipped to GitHub are real and any cell that fails is reported back to the model instead
-of landing in the repo. `build_report` renders the Markdown report and stores it in the PageStore
+of landing in the repo. The .ipynb is also stored under `pages/notebook/{id}.ipynb` and served at
+GET /pages/notebook/{id}.ipynb, so `download(url=ipynb_url, path=...)` can put it in the Drive vault and Colab
+can open it from there. `build_report` renders the Markdown report and stores it in the PageStore
 (kind=report) so the extension can open it and save it to the vault with download(url=page_url).
 """
 
@@ -14,6 +16,7 @@ import html
 import logging
 import os
 import re
+import secrets
 import subprocess
 import sys
 import tempfile
@@ -22,10 +25,11 @@ from typing import Any, Literal
 import nbformat
 from pydantic import BaseModel, ValidationError
 
-from dayflow.core.pages import default_pages
+from dayflow.core.pages import PageStore, default_pages
 
 log = logging.getLogger("dayflow.lab")
 
+IPYNB_MIME = "application/x-ipynb+json"
 EXEC_TIMEOUT_S = 90  # per cell (nbclient) / per script (local sandbox)
 MAX_OUTPUT_CHARS = 20_000
 LOCAL_EXEC_ENV_KEYS = ("PATH", "LANG", "LC_ALL", "SYSTEMROOT", "TMPDIR")
@@ -210,16 +214,43 @@ async def build_notebook(title: str, cells: list[dict[str, str]], execute: bool 
             **result,
         }
     ipynb = nbformat.writes(nb, split_lines=False)  # one string per source: fewer tokens for the model to copy
+    pages = default_pages()
+    page_id = await save_notebook(ipynb.encode(), pages)
     return {
         "status": "success",
         "file_name": "lab01.ipynb",
         "code_cells": len(code_cells),
         "ipynb_json": ipynb,
+        "ipynb_url": notebook_url(page_id, pages),
         "outputs_preview": [_outputs_text(c)[:200] for c in code_cells],
         **result,
-        "next": "Pass ipynb_json VERBATIM as the content of the .ipynb entry in push_files (do not reformat it), "
-        "together with README.md, TODO.md, REPORT.md, requirements.txt (numpy, jupyter) and .gitignore in ONE call.",
+        "next": 'Drive/Colab: download(url=ipynb_url, path="<course>/Lab NN/<file_name>") saves it to the vault; then '
+        'open_tab("https://colab.research.google.com/drive/<drive_file_id from that result>"). GitHub: pass '
+        "ipynb_json VERBATIM as the content of the .ipynb entry in push_files (do not reformat it), together with "
+        "README.md, TODO.md, REPORT.md, requirements.txt (numpy, jupyter) and .gitignore in ONE call.",
     }
+
+
+def notebook_key(page_id: str) -> str:
+    return f"pages/notebook/{page_id}.ipynb"
+
+
+def notebook_url(page_id: str, pages: PageStore | None = None) -> str:
+    return (pages or default_pages()).url_for("notebook", page_id) + ".ipynb"
+
+
+async def save_notebook(data: bytes, pages: PageStore | None = None) -> str:
+    """Stores the .ipynb bytes next to the HTML pages and returns the unguessable id it is served under."""
+    page_id = secrets.token_urlsafe(16)
+    await (pages or default_pages()).blobs.put(notebook_key(page_id), data, IPYNB_MIME)
+    return page_id
+
+
+async def load_notebook(page_id: str, pages: PageStore | None = None) -> bytes | None:
+    store = pages or default_pages()
+    if not store.valid_id(page_id):
+        return None
+    return await store.blobs.get(notebook_key(page_id))
 
 
 # ---------- report ----------

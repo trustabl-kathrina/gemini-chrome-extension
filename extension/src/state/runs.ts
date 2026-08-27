@@ -8,10 +8,12 @@ export type Step =
   | { id: string; kind: 'artifact'; type: ArtifactType; label: string; href?: string }
   | { id: string; kind: 'confirm'; message: string; answer: 'pending' | 'allowed' | 'denied' };
 
-export type RunStatus = 'running' | 'done' | 'error' | 'cancelled';
+export type RunStatus = 'running' | 'paused' | 'done' | 'error' | 'cancelled';
 
 export interface Run {
   id: string;
+  /** The conversation this run belongs to — the brain's session id, shared by every run of one chat. */
+  sessionId: string;
   /** Short form of the prompt (header, recents). */
   title: string;
   /** What the user typed, in full — the transcript shows it verbatim. */
@@ -23,15 +25,20 @@ export interface Run {
   steps: Step[];
 }
 
-export function newRun(id: string, prompt: string, skillId: string | undefined, now: number): Run {
-  return { id, title: prompt.slice(0, 80), prompt, skillId, status: 'running', startedAt: now, steps: [] };
+export function newRun(id: string, sessionId: string, prompt: string, skillId: string | undefined, now: number): Run {
+  return { id, sessionId, title: prompt.slice(0, 80), prompt, skillId, status: 'running', startedAt: now, steps: [] };
 }
 
 /** Pure reducer: folds one agent event into a run. Returns the same object if nothing changed. */
 export function applyEvent(run: Run, ev: AgentEvent): Run {
+  if ((run.status === 'done' || run.status === 'error' || run.status === 'cancelled') && ev.kind !== 'run.start') return run;
   switch (ev.kind) {
     case 'run.start':
       return { ...run, title: ev.title, skillId: ev.skillId ?? run.skillId };
+    case 'run.pause':
+      return { ...run, status: 'paused' };
+    case 'run.resume':
+      return { ...run, status: 'running' };
     case 'text': {
       const last = run.steps.at(-1);
       if (last?.kind === 'text' && last.partial) {

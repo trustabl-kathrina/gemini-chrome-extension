@@ -95,7 +95,9 @@ function snapshot(maxNodes = 400): { text: string; nodes: number; truncated: boo
   const lines: string[] = [];
   const seen = new Set<string>();
   let truncated = false;
-  for (const el of walk(document.body)) {
+  const root = document.body ?? document.documentElement;
+  if (!root) return { text: head, nodes: 0, truncated: false };
+  for (const el of walk(root)) {
     if (lines.length >= cap) {
       truncated = true;
       break;
@@ -241,7 +243,9 @@ function type(ref: string, text: string, submit = false) {
     Object.getOwnPropertyDescriptor(proto, 'value')?.set?.call(el, text);
     el.dispatchEvent(new Event('input', { bubbles: true }));
     el.dispatchEvent(new Event('change', { bubbles: true }));
-  } else if (el.isContentEditable) {
+  } else if (el.isContentEditable || el.closest('[contenteditable="true"]')) {
+    const editable = el.isContentEditable ? el : (el.closest<HTMLElement>('[contenteditable="true"]') ?? el);
+    editable.focus();
     document.execCommand('selectAll', false);
     document.execCommand('insertText', false, text);
   } else {
