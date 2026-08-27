@@ -222,6 +222,15 @@ course, instructor or student names may appear outside `harness/fake-wsp` (whose
       with outputs, the Cloud Run logs.
 - [ ] Bonus links pasted (social post, blog post) if those boxes were ticked.
 
+## The language wall
+
+KBTU's student portal (WSP) is a Vaadin app whose interface is largely Russian — "Войти", "Назад", instructor names in
+Cyrillic — and it has no API. For the international students in every cohort that is a wall, not a website. Dayflow's
+site profile for the portal carries the Cyrillic ↔ English mapping and the navigation model (rows select, Enter
+opens, the download icon hides in the last column), so a student types one sentence in their own language and the
+agent reads the Russian screen, walks the tree, and reports back in theirs. The same mechanism — site knowledge as
+data — is what lets one loop drive Telegram Web, GitHub or any other portal a university throws at its students.
+
 ## What a task costs — and why Gemini Flash
 
 Every run logs its own bill (`usage session=… ≈$`), so these are measured, not estimated. Two real runs on the KBTU

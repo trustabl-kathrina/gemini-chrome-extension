@@ -193,7 +193,7 @@ Beats: the solver rows' `stdout` (real numbers, e.g. `squares up to 10: 0 1 4 9 
 | Time | Shot | Source | Note |
 |---|---|---|---|
 | 0:00–0:08 | Cold open, no narration: the portal's file tree, a lecture PDF, the Colab logo — 2 s each, then the title card **Dayflow — a browser agent on Gemini** | b-roll | |
-| 0:08–0:25 | The problem: files appear on a portal with no notifications; an assignment is a zip of Markdown; every week the same clicks | portal + zip on screen | narration starts at 0:08 |
+| 0:08–0:25 | The problem: files appear on a portal with no notifications, in a Russian-only UI that international students cannot read; an assignment is a zip of Markdown; every week the same clicks | portal (Russian UI) + zip on screen | narration starts at 0:08 |
 | 0:25–0:45 | The panel appears **in its own window next to the portal**; `/` opens the skills palette; 3 s on Config YAML (skills, site notes, permissions) | pre-flight capture | "config you own" beat |
 | 0:45–2:15 | **Scene 1** live: plan → portal walk → downloads → memory → changelog. Real time on the plan and the first two actions, 2× over the walk, real time on `remember` and the changelog. Cut to Drive `Dayflow/Programming Principles II/…` for 3 s | live take | keep the `screenshot: unchanged` row in |
 | 2:15–3:20 | **Scene 2** live, same chat: plan → `vault_read` bundle → `solve_lab_task` rows (hold 2 s on one stdout) → `build_notebook executed: true` → Colab opens with the notebook → report page | live take | 4× over the middle solver rows |
@@ -210,8 +210,9 @@ subtitles for both prompts.
 
 **[0:08 — problem]**
 Every week the same twenty minutes disappear. New files appear on my university portal with no notification, so I go
-looking. An assignment arrives as a zip of Markdown, so I copy tasks into a notebook by hand. None of it is hard — all
-of it is browser work, and all of it is on me.
+looking — in a portal whose interface is Russian-only, which for the international students in my class is a wall,
+not a website. An assignment arrives as a zip of Markdown, so I copy tasks into a notebook by hand. None of it is
+hard — all of it is browser work, and all of it is on me.
 
 **[0:25 — what it is]**
 This is Dayflow: Claude Code for the browser, on Gemini. A Chrome side panel; a Google ADK brain on Cloud Run. You say
@@ -222,7 +223,9 @@ behaves, permissions on what it must ask before doing. Nothing in the code knows
 **[0:45 — scene 1]**
 First: sync my Programming Principles course. Watch the panel. It writes a plan, then one sentence before every action:
 what it sees, what it does next. The portal has no links — only clickable rows and an Enter button — and the site note
-is what taught it that. Here it clicked a row, and the screenshot came back *unchanged*; it noticed, and clicked Enter.
+is what taught it that. Notice the portal is in Russian: "Войти", "Назад", the instructor's name in Cyrillic. Half of
+my classmates are international students who cannot read that. The agent can — it reads the Russian screen and
+reports to you in your language, so the portal stops being a wall. Here it clicked a row, and the screenshot came back *unchanged*; it noticed, and clicked Enter.
 Syllabus, then the assignments bundle, straight into my Google Drive vault; the brain parses each file with Gemini,
 indexes it, and — this is new — *remembers* the instructor and where the files live. It finishes with a changelog.
 Fifteen actions, about a minute and a half, ten cents.
