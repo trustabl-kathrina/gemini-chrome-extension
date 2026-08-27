@@ -4,7 +4,12 @@
  */
 export class PauseBox {
   private paused = false;
-  private resumeResolve: (() => void) | null = null;
+  /**
+   * Every call currently blocked in `waitIfPaused`. A turn can have several tool calls in flight
+   * (live.ts runs a batch in parallel), so Resume must release ALL of them — keeping only the last
+   * waiter left the rest of the batch hanging forever.
+   */
+  private readonly waiters = new Set<() => void>();
 
   get isPaused(): boolean {
     return this.paused;
@@ -17,11 +22,9 @@ export class PauseBox {
   resume(): void {
     if (!this.paused) return;
     this.paused = false;
-    if (this.resumeResolve) {
-      const resolve = this.resumeResolve;
-      this.resumeResolve = null;
-      resolve();
-    }
+    const release = [...this.waiters];
+    this.waiters.clear();
+    for (const r of release) r();
   }
 
   waitIfPaused(signal?: AbortSignal): Promise<void> {
@@ -31,15 +34,16 @@ export class PauseBox {
         reject(new DOMException('Aborted', 'AbortError'));
         return;
       }
-      const onAbort = () => {
-        this.resumeResolve = null;
-        reject(new DOMException('Aborted', 'AbortError'));
-      };
-      signal?.addEventListener('abort', onAbort, { once: true });
-      this.resumeResolve = () => {
+      const release = () => {
         signal?.removeEventListener('abort', onAbort);
         resolve();
       };
+      const onAbort = () => {
+        this.waiters.delete(release);
+        reject(new DOMException('Aborted', 'AbortError'));
+      };
+      signal?.addEventListener('abort', onAbort, { once: true });
+      this.waiters.add(release);
     });
   }
 }

@@ -35,7 +35,11 @@ def is_due(cron: str, now: datetime) -> bool:
     if len(parts) != 5:
         return False
     minute, hour, _dom, _mon, dow = parts
-    return _field_matches(minute, now.minute) and _field_matches(hour, now.hour) and _field_matches(dow, now.weekday())
+    # Cron counts weekdays from Sunday (0, and 7 too); datetime.weekday() counts from Monday. The extension's
+    # own scheduler (cron.ts) uses getDay() = cron semantics, and both must fire the same skill on the same day.
+    today = (now.weekday() + 1) % 7
+    due_dow = _field_matches(dow, today) or (today == 0 and _field_matches(dow, 7))
+    return _field_matches(minute, now.minute) and _field_matches(hour, now.hour) and due_dow
 
 
 async def list_user_ids(store: ConfigStore) -> list[str]:

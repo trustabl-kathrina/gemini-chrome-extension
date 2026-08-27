@@ -8,12 +8,12 @@ import binascii
 import json
 import logging
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from typing import Any, NamedTuple
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from google.adk.agents.context_cache_config import ContextCacheConfig
 from google.adk.agents.run_config import RunConfig, StreamingMode  # pyright: ignore[reportPrivateImportUsage]
 from google.adk.apps import App
@@ -35,12 +35,15 @@ from dayflow.agents.orchestrator import (
 from dayflow.api.auth import current_user
 from dayflow.api.deck_routes import router as deck_router
 from dayflow.api.oidc import verify_google_oidc
+from dayflow.api.pages import render_ledger_html, render_receipt_html
 from dayflow.api.pages import router as pages_router
 from dayflow.api.pubsub import router as pubsub_router
 from dayflow.api.vault import router as vault_router
+from dayflow.core.ledger import RunLedger, RunRecord, Trigger, default_ledger, receipt_facts, set_default_ledger, totals
 from dayflow.core.loader import ConfigStore, firestore_enabled, make_config_store
 from dayflow.core.models import Skill, UserConfig
 from dayflow.core.pages import PageStore, default_pages, set_default_pages
+from dayflow.core.telemetry import init_tracing
 from dayflow.core.vault import VaultStore, default_vault, set_default_vault
 from dayflow.scheduler import run_once
 from dayflow.tools.lab import local_exec_enabled
@@ -53,6 +56,8 @@ APP_NAME = "dayflow"
 SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 SCREENSHOT_KEY = "screenshot_b64"
 MAX_SCREENSHOT_BYTES = 1_500_000  # decoded; the extension sends JPEG ≤1280px q≈55, typically 100–200 KB
+MAX_LEDGER_RUNS = 50  # the dashboard shows the most recent runs; the documents stay in Firestore
+MAX_SHARED_RECEIPTS = 60  # one published page per artifact when the ledger is shared
 
 
 def trusted_public_host(host: str | None) -> bool:
@@ -68,6 +73,7 @@ class ChatRequest(BaseModel):
     text: str = ""
     skill_id: str | None = None
     domains: list[str] = Field(default_factory=list)
+    trigger: Trigger = Field(default="manual", description='"scheduled" when a chrome.alarm started the run.')
 
 
 class ToolResult(BaseModel):
@@ -169,7 +175,7 @@ def usage_of(ev: Event) -> dict[str, int]:
     }
 
 
-def estimate_usd(t: dict[str, int]) -> float:
+def estimate_usd(t: Mapping[str, int]) -> float:
     uncached = max(t.get("prompt", 0) - t.get("cached", 0), 0)
     return (
         uncached * PRICE_PER_M["prompt"]
@@ -191,10 +197,18 @@ def book_usage(session_id: str, calls: list[dict[str, int]]) -> dict[str, int]:
 
 
 def sse(
-    runner: Runner, user_id: str, session_id: str, content: types.Content, state_delta: dict[str, Any] | None
+    runner: Runner,
+    user_id: str,
+    session_id: str,
+    content: types.Content,
+    state_delta: dict[str, Any] | None,
+    ledger: RunLedger,
 ) -> AsyncIterator[str]:
     async def gen() -> AsyncIterator[str]:
         calls: list[dict[str, int]] = []
+        # Calls with no result yet. Empty at the end of the turn ⇒ nothing is left for the extension to
+        # answer ⇒ the model gave its final answer and the run is over.
+        tool_call_ids: set[str] = set()
         try:
             async for ev in runner.run_async(
                 user_id=user_id,
@@ -206,9 +220,22 @@ def sse(
                 # Streaming: partial chunks carry running counts; the aggregate (non-partial) event has the total.
                 if not ev.partial and (u := usage_of(ev)):
                     calls.append(u)
+                # The ledger records the call the model made and — for server tools, which answer inside the
+                # stream — its result. Browser calls are resolved by POST /tool_result instead.
+                for fc in ev.get_function_calls():
+                    if fc.id:
+                        tool_call_ids.add(fc.id)
+                        ledger.called(session_id, fc.id, fc.name or "", dict(fc.args or {}))
+                for fr in ev.get_function_responses():
+                    if fr.id:
+                        # A server tool answers inside this same stream: its call is settled, not outstanding.
+                        # Leaving it in the set kept every courseware/notebook/deck run open and unpersisted.
+                        tool_call_ids.discard(fr.id)
+                        ledger.resolved(session_id, fr.id, dict(fr.response or {}))
                 yield f"data: {ev.model_dump_json(exclude_none=True, by_alias=True)}\n\n"
         except Exception as e:  # noqa: BLE001 — surface any failure as an ADK-shaped event, never an empty 200
             log.exception("run failed for user=%s session=%s", user_id, session_id)
+            ledger.note_failure(session_id, f"the run stopped: {type(e).__name__}: {e}")
             err = {"errorMessage": f"{type(e).__name__}: {e}", "author": "dayflow"}
             yield f"data: {json.dumps(err)}\n\n"
         finally:
@@ -226,6 +253,11 @@ def sse(
                     *(total[k] for k in USAGE_FIELDS),
                     estimate_usd(total),
                 )
+                ledger.add_usage(session_id, turn)
+            # No tool call left to answer: the model gave its final answer (or the turn died) — close the run.
+            # A run whose panel disappeared mid-turn stays open until the next prompt supersedes it.
+            if not tool_call_ids:
+                await ledger.finish(session_id, price=estimate_usd)
             yield "event: done\ndata: {}\n\n"
 
     return gen()
@@ -309,8 +341,10 @@ def create_app(
     runner: Runner | None = None,
     vault: VaultStore | None = None,
     pages: PageStore | None = None,
+    ledger: RunLedger | None = None,
 ) -> FastAPI:
     store = store or make_config_store()
+    init_tracing()  # ADK's agent/LLM/tool spans go to Cloud Trace on Cloud Run; a no-op anywhere else
     app = FastAPI(title="Dayflow brain", version="0.1.0")
     app.state.store = store
     app.state.runner = runner or make_runner(store)
@@ -320,8 +354,11 @@ def create_app(
         set_default_vault(vault)
     if pages is not None:
         set_default_pages(pages)
+    if ledger is not None:
+        set_default_ledger(ledger)
     app.state.vault = default_vault()
     app.state.pages = default_pages()
+    app.state.ledger = default_ledger()
     app.add_middleware(
         CORSMiddleware,
         allow_origin_regex=r"chrome-extension://.*|http://(localhost|127\.0\.0\.1)(:\d+)?",
@@ -360,6 +397,57 @@ def create_app(
         total = usage_by_session.get(session_id) or {k: 0 for k in USAGE_FIELDS} | {"calls": 0}
         return {**total, "estimate_usd": round(estimate_usd(total), 4), "prices_per_m": PRICE_PER_M}
 
+    @app.get("/ledger.json")
+    async def ledger_json(request: Request, user_id: str = Depends(current_user)) -> dict[str, Any]:
+        """The dashboard's data: cumulative totals plus the most recent runs, exactly as they were recorded."""
+        runs: list[RunRecord] = await request.app.state.ledger.list(user_id, MAX_LEDGER_RUNS)
+        agg = totals(runs)
+        return {
+            "totals": {**agg.model_dump(), "saved_hours": agg.saved_hours},
+            "runs": [r.model_dump(mode="json") for r in runs],
+        }
+
+    @app.get("/ledger", response_class=HTMLResponse)
+    async def ledger_page(request: Request, user_id: str = Depends(current_user)) -> HTMLResponse:
+        runs = await request.app.state.ledger.list(user_id, MAX_LEDGER_RUNS)
+        return HTMLResponse(render_ledger_html(runs, lambda run_id, i: f"/receipt/{run_id}/{i}", user_id))
+
+    @app.post("/ledger/share")
+    async def share_ledger(request: Request, user_id: str = Depends(current_user)) -> dict[str, Any]:
+        """Publishes the dashboard, and one receipt per artifact, as PageStore pages. Those URLs are
+        unguessable and need no token — that is what the panel opens in a tab and what a student can send
+        to a professor; GET /ledger itself is behind the user's token.
+
+        A published receipt does NOT link back to the published dashboard, and the dashboard is rendered
+        without the user id: handing one receipt to a professor must not hand them every run and every file
+        name of the last 50 runs as well."""
+        pages_store: PageStore = request.app.state.pages
+        runs = await request.app.state.ledger.list(user_id, MAX_LEDGER_RUNS)
+        ledger_id = pages_store.new_id()
+        ledger_url = pages_store.url_for("ledger", ledger_id)
+        published: dict[tuple[str, int], str] = {}
+        for run in runs:
+            for index in range(len(run.artifacts)):
+                if len(published) >= MAX_SHARED_RECEIPTS:
+                    break
+                page = await pages_store.put("receipt", render_receipt_html(receipt_facts(run, index)))
+                published[(run.run_id, index)] = str(page["url"])
+        page_html = render_ledger_html(runs, lambda rid, i: published.get((rid, i), f"/receipt/{rid}/{i}"))
+        await pages_store.put("ledger", page_html, ledger_id)
+        return {"id": ledger_id, "url": ledger_url, "runs": len(runs), "receipts": len(published)}
+
+    @app.get("/receipt/{run_id}/{artifact_index}", response_class=HTMLResponse)
+    async def receipt(
+        run_id: str, artifact_index: int, request: Request, user_id: str = Depends(current_user)
+    ) -> HTMLResponse:
+        """The "did & didn't" receipt for one artifact of one run — derived from the action log alone."""
+        record: RunRecord | None = await request.app.state.ledger.get(user_id, run_id)
+        if record is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, f"unknown run '{run_id}'")
+        if not 0 <= artifact_index < len(record.artifacts):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, f"run '{run_id}' has no artifact #{artifact_index}")
+        return HTMLResponse(render_receipt_html(receipt_facts(record, artifact_index), "/ledger"))
+
     @app.get("/skills", response_model=list[Skill])
     async def skills(request: Request, user_id: str = Depends(current_user)) -> list[Skill]:
         cfg: UserConfig = await request.app.state.store.get(user_id)
@@ -389,6 +477,8 @@ def create_app(
         # and whatever the previous run left unanswered is closed so the history stays valid for the model.
         runner: Runner = request.app.state.runner
         await settle_pending_calls(runner, user_id, body.session_id)
+        run_ledger: RunLedger = request.app.state.ledger
+        await run_ledger.start(user_id, body.session_id, trigger=body.trigger, skill=body.skill_id or "")
         state_delta: dict[str, Any] = {
             SKILL_KEY: body.skill_id,
             DOMAINS_KEY: body.domains,
@@ -397,7 +487,7 @@ def create_app(
         }
         content = types.Content(role="user", parts=[types.Part(text=text)])
         return StreamingResponse(
-            sse(runner, user_id, body.session_id, content, state_delta),
+            sse(runner, user_id, body.session_id, content, state_delta, run_ledger),
             media_type="text/event-stream",
             headers=SSE_HEADERS,
         )
@@ -425,7 +515,9 @@ def create_app(
                 granted.append(match.args)
         if len({pending[r.call_id].event_id for r in body.results}) > 1:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "results must answer calls from the same model turn")
+        run_ledger: RunLedger = request.app.state.ledger
         for r in body.results:  # what each tool result costs the next model call: text chars + screenshot bytes
+            run_ledger.resolved(body.session_id, r.call_id, r.result)
             shot = r.result.get(SCREENSHOT_KEY)
             chars = sum(len(v) for k, v in r.result.items() if isinstance(v, str) and k != SCREENSHOT_KEY)
             log.info(
@@ -440,7 +532,7 @@ def create_app(
         state_delta = result_state_delta(calls, session.state, cfg.permissions, granted) or None
         content = types.Content(role="user", parts=[function_response_part(r) for r in body.results])
         return StreamingResponse(
-            sse(runner, user_id, body.session_id, content, state_delta),
+            sse(runner, user_id, body.session_id, content, state_delta, run_ledger),
             media_type="text/event-stream",
             headers=SSE_HEADERS,
         )

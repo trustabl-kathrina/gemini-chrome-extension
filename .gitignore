@@ -2,6 +2,8 @@
 .env
 .env.*
 !.env.example
+.dev.vars
+.dev.vars.*
 *.pem
 *.json.key
 service-account*.json
@@ -12,6 +14,7 @@ service-account*.json
 
 # python
 .venv/
+venv/
 __pycache__/
 *.pyc
 .pytest_cache/
@@ -28,6 +31,8 @@ dist/
 # data / fixtures with real content
 data/private/
 downloads/
+Downloads/
+DayflowVault/
 *.log
 .gstack/
 

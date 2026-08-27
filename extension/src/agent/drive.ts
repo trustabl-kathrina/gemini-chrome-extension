@@ -89,8 +89,15 @@ export class DriveClient {
   private token: string;
   private readonly fetchImpl: typeof fetch;
   private readonly onUnauthorized?: (stale: string) => Promise<string | null>;
-  /** path → folder id, so a run touching 40 files does not re-resolve `Dayflow/<course>` each time. */
-  private readonly folders = new Map<string, string>([['', 'root']]);
+  /**
+   * path → the promise of its folder id, so a run touching 40 files does not re-resolve `Dayflow/<course>`
+   * each time. The PROMISE is cached, not the resolved id: `download_many` resolves the same
+   * "<course>/<week>" chain from four uploads at once, and a cache written only after the await would let
+   * all four miss and create four duplicate folders.
+   */
+  private readonly folders = new Map<string, Promise<string>>([['', Promise.resolve('root')]]);
+  /** path → the last upload to it, so two items of one batch naming the same file do not both create it. */
+  private readonly uploads = new Map<string, Promise<DriveFile>>();
 
   constructor(opts: DriveClientOptions) {
     this.base = opts.base.replace(/\/+$/, '');
@@ -135,34 +142,47 @@ export class DriveClient {
 
   /** Creates the folder chain for `path` (idempotent) and returns the id of the last folder. */
   async ensureFolder(path: string): Promise<string> {
-    const segs = splitDrivePath(path);
     let parent = 'root';
     let key = '';
-    for (const seg of segs) {
+    for (const seg of splitDrivePath(path)) {
       key = key ? `${key}/${seg}` : seg;
-      const cached = this.folders.get(key);
-      if (cached) {
-        parent = cached;
-        continue;
+      const at = key;
+      let pending = this.folders.get(at);
+      if (!pending) {
+        pending = this.folderId(parent, seg).catch((e: unknown) => {
+          this.folders.delete(at); // a failed lookup must not be replayed for the rest of the run
+          throw e;
+        });
+        this.folders.set(at, pending);
       }
-      const existing = await this.findChild(parent, seg, true);
-      const id =
-        existing?.id ??
-        (
-          await this.call<DriveFile>('/drive/v3/files?fields=id,name', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ name: seg, mimeType: FOLDER_MIME, parents: [parent] }),
-          })
-        ).id;
-      this.folders.set(key, id);
-      parent = id;
+      parent = await pending;
     }
     return parent;
   }
 
+  /** The id of `name` under `parentId`, creating it if it is not there yet. */
+  private async folderId(parentId: string, name: string): Promise<string> {
+    const existing = await this.findChild(parentId, name, true);
+    if (existing) return existing.id;
+    const created = await this.call<DriveFile>('/drive/v3/files?fields=id,name', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name, mimeType: FOLDER_MIME, parents: [parentId] }),
+    });
+    return created.id;
+  }
+
   /** Uploads `blob` at `path` (folders created as needed); an existing file with the same name is replaced. */
   async upload(path: string, blob: Blob, mimeType = mimeFor(path)): Promise<DriveFile> {
+    // Uploads to the SAME path are chained: concurrent ones would both miss `findChild` and create two copies.
+    const key = splitDrivePath(path).join('/');
+    const previous = this.uploads.get(key);
+    const next = previous ? previous.then(() => this.uploadOnce(path, blob, mimeType), () => this.uploadOnce(path, blob, mimeType)) : this.uploadOnce(path, blob, mimeType);
+    this.uploads.set(key, next);
+    return next;
+  }
+
+  private async uploadOnce(path: string, blob: Blob, mimeType: string): Promise<DriveFile> {
     const segs = splitDrivePath(path);
     const name = segs.pop();
     if (!name) throw new Error('upload path has no file name');

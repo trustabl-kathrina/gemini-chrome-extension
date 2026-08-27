@@ -12,6 +12,17 @@ It is built like a coding agent, but for the browser: a generic loop plus **user
 - **In a hurry?** → **[docs/JUDGES.md](docs/JUDGES.md)** — a 10-minute evaluation path, with the command that proves each claim.
 - **How it is built:** **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — components, sequence diagrams, trust boundaries.
 
+### Hackathon compliance
+
+| | |
+|---|---|
+| **Built during the submission period** | First commit `2026-08-26`, full history in `git log` — nothing carried over from before the hackathon |
+| **Model** | Gemini 3.7 Flash, with a `gemini-3.5-flash` fallback on capacity errors — see `backend/dayflow/models/models.yaml` |
+| **Google agent framework** | Google ADK (`LlmAgent`, `LongRunningFunctionTool`, `AgentTool`, `McpToolset`, `FirestoreSessionService`) |
+| **Google Cloud services** | Cloud Run, Firestore, Pub/Sub, Cloud Storage |
+| **Track** | Taskmaster |
+| **Code provenance** | No pre-existing code incorporated; AI coding assistants were used as permitted by the hackathon rules |
+
 ```bash
 git clone <repo> && cd <repo>
 make verify                       # ruff + pyright + pytest · tsc + vitest · node --test — no credentials needed

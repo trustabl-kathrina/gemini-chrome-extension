@@ -9,9 +9,11 @@ skills:
     prompt: Sync all course files from WSP into my vault and tell me what changed.
     keywords: [sync, wsp, vault, files, download, mirror, changed]
     sites: [wsp.kbtu.kz]
-    tools: [open_tab, read_page, click, press_key, scroll, download, wait, screenshot, vault_list, vault_read]
+    tools: [open_tab, read_page, click, press_key, scroll, download, download_many, wait, screenshot, vault_list, vault_read]
     schedule: "0 8 * * *"
     instructions: |
+      Once you know several file URLs, call download_many(items=[{url, path}, ...]) ONCE instead of download per
+      file — it runs them in parallel and costs one model turn instead of one per file.
       Goal: mirror the requested course's files from WSP "Student files" into the vault
       ("<course code> <course name>/<Materials|Week NN|Lab NN>/<file>"), then confirm the index.
       The WSP tree: Desktop → "Student files" → School → Instructor (Surname Name) → course folder → files.
@@ -37,6 +39,15 @@ skills:
          changes, download anyway — the brain deduplicates by content. If download(ref) fails, do not call
          run_js or plain click — try the other ref once, then move on to the next file.
       5. After the last file call vault_list() and confirm every downloaded file is present with a summary.
+      SOURCE ORDER — every course, no exceptions. A course's materials live in exactly one place and which one
+      differs per course, so try the sources in this order and stop at the first that has them:
+        1) the university portal, 2) Microsoft Teams (the course's class team), 3) the syllabus already in the
+        vault (derive the week/lab material list from it).
+      Give up on a source after 3 failed checks — a folder that is not there after three looks is not there —
+      and move to the next source instead of widening the search inside the failed one. When a source works,
+      remember("<course>: materials on <source> — <where exactly>") in one line; when a source has nothing,
+      remember("<course>: nothing on <source>"). Next run, start from the remembered source and skip the ones
+      remembered as empty. Never assume a course uses the same source as another course.
       Finish with a changelog: files added (with their vault paths), deadlines discovered, parse errors if any.
       Budget: about 10 actions to reach the course folder, ~4 per subfolder plus one per file — stay under 60;
       if the budget runs out, stop and report what was synced and what remains.
@@ -47,7 +58,7 @@ skills:
     prompt: Build a cheatsheet and a quiz from the syllabus of the current course.
     keywords: [cheatsheet, cheat, quiz, courseware, revise, revision, exam]
     sites: [wsp.kbtu.kz]
-    tools: [vault_list, vault_read, generate_courseware, download, open_tab, read_page, click, wait, screenshot]
+    tools: [vault_list, vault_read, generate_courseware, download, download_many, open_tab, read_page, click, wait, screenshot]
     instructions: |
       Goal: ONE printable HTML page for the requested course - a cheatsheet plus a 10-question quiz with the
       answers folded away - opened in a tab and saved to the vault as
@@ -63,6 +74,8 @@ skills:
          syllabus subfolder if there is one ("1.Syllabus for the student"). Then
          download(ref=<the syllabus row's download button ref>, path="<course code> <course name>/Materials/
          syllabus.pdf"). About 12 browser actions; verify each step on the screenshot before the next click.
+         Follow the vault-sync playbook's SOURCE ORDER here: portal, then Microsoft Teams, then whatever the
+         vault already holds - three failed checks end a source, and remember which one worked for the course.
       3. vault_read(<the syllabus path>) and keep the returned `text` as it is (it holds the weekly topic list).
          If `text` is empty, say so and stop - there is nothing to build courseware from.
       4. generate_courseware(course="<course code> <course name>", weeks=<the scope the user asked for, e.g.
@@ -100,6 +113,8 @@ skills:
          syllabus subfolder if there is one ("1.Syllabus for the student"). Then
          download(ref=<the syllabus row's download button ref>, path="<course code> <course name>/Materials/
          syllabus.pdf"). About 12 browser actions; check each screenshot before the next click.
+         Follow the vault-sync playbook's SOURCE ORDER here: portal, then Microsoft Teams, then whatever the
+         vault already holds - three failed checks end a source, and remember which one worked for the course.
       3. vault_read(<that syllabus path>) and keep the returned `text` exactly as it is - it holds the weekly
          schedule ("Week 01: ...") and the lab list ("Lab 01: ..."). If `text` is empty, say so and stop.
       4. plan_vault_folders(course_code="<e.g. CSCI3240>", course_name="<e.g. Introduction to Computer
@@ -141,9 +156,15 @@ skills:
            School → Instructor → course folder → the assignments/labs subfolder ("4. Assignments", "3.Labs",
            "Practice") → download the lab sheet or the bundle (e.g. programming-principles-2-main.zip) to
            "<course code> <course name>/Lab NN/<file>"; if there is no such folder, download the syllabus from
-           "1.Syllabus for the student" instead. About 12 browser actions; do not download lectures. If the
-           instructor or the course folder is not on WSP after 3 checks, stop browsing, remember("<course>: no
-           files on WSP"), and ask the user for the lab sheet — do not build tasks from nothing.
+           "1.Syllabus for the student" instead. About 12 browser actions; do not download lectures.
+           SOURCE ORDER — courses differ, so try in this order and stop at the first that has the material:
+           1) the university portal, 2) Microsoft Teams (the class team's Assignments/files), 3) the syllabus
+           already in the vault, from which you derive the tasks. Give up on a source after 3 failed checks
+           (instructor missing, course folder missing, nothing under the assignments folder) and move to the
+           next one instead of searching wider inside it. remember("<course>: materials on <source> — <where>")
+           when a source works and remember("<course>: nothing on <source>") when it does not, so the next run
+           goes straight to the right one. If all three fail, ask the user for the lab sheet — never build
+           tasks from nothing.
       2. Split the text into the shared setup (imports, sample data, constraints) and the numbered tasks.
       3. For EACH task call solve_lab_task(task_text=<the task verbatim>, context=<setup + course and lab name
          + constraints such as "standard library only" or "numpy only"; for tasks that read input from the
@@ -274,6 +295,51 @@ skills:
       Finish with: the deck title, the slide count, the vault path of the .pptx and the preview URL.
       Budget: 3 browser actions in total (two downloads and one open_tab); get_file_contents and build_deck are
       server tools and cost nothing from that budget.
+  - id: standing-watch
+    key: "7"
+    title: Watch attendance and grade standing
+    blurb: Reads each course's attendance percentage and grade standing on the portal and warns only when a number is near the exam bar.
+    prompt: Check my attendance and grades and tell me what needs attention this week.
+    keywords: [attendance, absences, absence, attend, skipped, grades, grade, gpa, standing, barred, watch]
+    sites: [wsp.kbtu.kz]
+    # Read-only by design: no download, no type, no run_js, no GitHub/Linear/vault writes. This skill warns; it never acts.
+    tools: [open_tab, read_page, click, scroll, wait, screenshot, remember]
+    # Sunday evening, before the week starts — the warning is only useful while there are still classes to attend.
+    schedule: "0 20 * * 0"
+    instructions: |
+      Goal: for every enrolled course, today's attendance percentage and grade standing, compared against the
+      thresholds AND against what you saw last run, reported as a handful of actionable lines. This skill only
+      reads and warns: it has no download, no type and no write tools — never try to change anything.
+      Why it matters: below 70% attendance the student is barred from the final exam, and the portal never
+      warns anyone. The number is worthless without the consequence — always report both.
+      Thresholds:
+        · attendance < 71% → ALARM. State how many absences are left before the bar.
+        · attendance < 75% → WARN. State the number and that the next absences decide it.
+        · a drop of 3 points or more since the figure you remember → report it even above 75%.
+        · otherwise → silence. Do not report a healthy course beyond one closing tally line.
+      Steps:
+      1. Read "What you remember" first: lines like "<course>: attendance 78%, grade 74 (2026-08-20)" are last
+         run's figures and the list of courses. Do not browse for a fact you already remember.
+      2. open_tab(<the portal URL from memory>/Attendance), read_page. The view lists the enrolled courses of
+         the current term with a percentage (or "attended / total" — then the percentage is attended/total×100,
+         rounded to one decimal). If the term shown is not the current one, use the Year/Term selectors. If a
+         course row has a details/expand control and its number is not on the list, click it once.
+      3. open_tab(<the portal URL>/StudentJournal), read_page for the same courses' grade standing (current
+         total and midterm marks as printed). Never compute a GPA yourself — report the figures the portal shows.
+      4. Per course compare against the thresholds and against the remembered figure; note the delta.
+      5. remember("<course code> <course name>: attendance <N>%, grade <standing> (<today's date>)") — one call
+         per course, one short line, so the next run can report the delta. One line per course, not a history.
+      6. Report ONLY the actionable courses, each one line, number first, then the consequence:
+         "Computer Vision: 71.2% attendance. Two more absences and you cannot sit the final."
+         "Databases: attendance fell 82% → 76% this week; grade standing 68."
+         Close with one tally line for the rest ("4 other courses at 85%+, nothing to do"). If nothing is
+         actionable, say exactly that in one sentence and stop — no table, no per-course recap.
+      GIVE-UP RULE: at most 3 lookups per course. If a course's figure is not on the attendance view, not in
+      the journal and not behind one details click, stop looking for that course, remember("<course>: no
+      attendance figure on the portal"), and list it under "could not read" in the report. Never open other
+      modules, other terms or other courses' pages hoping to find it.
+      Budget: about 6 browser actions in total (two open_tabs, two read_pages, at most two detail clicks);
+      remember costs nothing from that budget.
 sites:
   - domain: wsp.kbtu.kz
     mode: dom
@@ -302,23 +368,34 @@ sites:
       the answer — go Back once to double-check the school, then stop, remember it, and report; never scan other
       schools or instructors hoping to find it.
   - domain: teams.microsoft.com
-    mode: dom
+    # vision: the Teams shell is DOM-readable, but everything that holds course material (Assignments, the Shared
+    # file lists) is a cross-origin iframe whose rows read_page cannot see — so look at the screenshot, always.
+    mode: vision
     notes: |
-      Microsoft Teams web (new "v2" UI, https://teams.microsoft.com/v2/; labels shown EN / RU as the account may be in
-      Russian). Left rail buttons: Activity/Действия, Chat/Чат, Teams/Команды, Assignments/Задания, Calendar, Calls,
-      OneDrive, Apps. Top search box (placeholder "Press Ctrl+Alt+G…"): typing a course name lists matching FILES with
-      their team and channel ("Syllabus ….docx — Computer vision spring'26 > General") — the fastest way to locate a
-      course document; Enter shows all results with Files / Channels / Messages filters.
+      Microsoft Teams web (new "v2" UI, https://teams.microsoft.com/v2/). THE UI MAY BE ENTIRELY IN RUSSIAN — match
+      labels by either language. Left rail: Activity/Действия, Chat/Чат, Teams/Команды, Assignments/Задания,
+      Calendar/Календарь, Calls, OneDrive, Apps. Top search box (placeholder "Press Ctrl+Alt+G…"): typing a course
+      name lists matching FILES with their team and channel ("Syllabus ….docx — Computer vision spring'26 > General")
+      — the fastest way to locate a course document; Enter shows all results with Files / Channels / Messages filters.
       Teams page: class teams are usually under a collapsed "Hidden"/"Скрытые" group — click it to expand, then the
-      team. A team's left tree: Home page, Class Notebook, Classwork, Assignments/Задания, Grades, Reflect, then the
-      channels ("General"/"Общий" under "Hidden channels"). A channel has tabs Posts/Публикации and
-      Shared/Общий доступ (= the channel's files).
-      LIMIT: the Shared file list and the Assignments view are cross-origin iframes (SharePoint filebrowser.aspx,
-      assignments.edu.cloud.microsoft) — read_page does NOT list their rows. Do not click_at blindly on rows; use
-      the screenshot to confirm what is on screen, and prefer the search box, which names the file and its channel.
-      To fetch a file, open it from search or the file row, then download from the viewer's Download button
-      (download(ref=…) if read_page shows it, else say what you see and ask). If the file cannot be obtained in ≤5
-      actions, stop, remember which channel holds it, and ask the user to drop it into the vault.
+      team. A class team's left tree: Home page/Главная, Class Notebook/Записная книжка класса,
+      Classwork/Классная работа, Assignments/Задания, Grades/Оценки, Reflect, then the channels ("General"/"Общий", under
+      "Hidden channels"/"Скрытые каналы"). A channel has tabs Posts/Публикации and Shared/Общий доступ (its files).
+      ASSIGNMENTS (Задания) is an EDU app rendered INSIDE AN IFRAME (assignments.edu.cloud.microsoft), not part of
+      the Teams page: read_page does not list its rows. Its tabs are Предстоящие / Просрочено / Выполнено
+      (Upcoming / Overdue / Completed) — Просрочено is where a missed lab hides. Read the tab strip and the
+      assignment titles off the SCREENSHOT and click_at them.
+      IFRAMES — the rule for this whole site: prefer reading an iframe's `src` and opening that URL as a normal
+      top-level tab (open_tab) over trying to act inside the frame. read_page lists the iframe element itself with
+      its src even when it cannot see through it; a top-level tab is DOM-readable, downloadable and much cheaper.
+      Only fall back to screenshot + click_at inside the frame when there is no usable src.
+      ATTACHMENTS inside an assignment resolve to SharePoint URLs (…sharepoint.com/…/_layouts/15/Doc.aspx? or
+      …/Shared%20Documents/…). Open such a URL top-level and download it from the viewer's Download/Скачать button
+      (download(ref=…) once read_page shows it) into "<course code> <course name>/Lab NN/<file>". The same is true
+      of the Shared/Общий доступ tab: it is a SharePoint filebrowser.aspx iframe — open the SharePoint URL instead
+      of fighting the frame.
+      Do not click_at blindly on rows you have not seen on a screenshot. If the file cannot be obtained in ≤5
+      actions, stop, remember which team/channel/assignment holds it, and ask the user to drop it into the vault.
   - domain: web.telegram.org
     mode: dom
     notes: |

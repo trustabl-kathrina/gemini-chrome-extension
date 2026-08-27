@@ -1,0 +1,14 @@
+# Only serve.mjs + fake-wsp/ belong in the replica image.
+out/
+.profile-*/
+fake-wsp/__pycache__/
+specs/
+lib/
+*.test.mjs
+run.mjs
+fake-drive.mjs
+e2e.sh
+package.json
+Dockerfile
+.dockerignore
+.gcloudignore

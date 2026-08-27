@@ -7,6 +7,13 @@ export function uniqueById<T extends { id: string }>(items: T[]): T[] {
   return [...new Map(items.map((i) => [i.id, i])).values()];
 }
 
+/** One finished pending call: its result body, the panel thumbnail, and how long it actually took. */
+interface Settled {
+  result: Record<string, unknown>;
+  screenshot?: string;
+  ms: number;
+}
+
 export interface LiveControls {
   signal: AbortSignal;
   executeTool: (call: ToolCall) => Promise<ToolOutcome>;
@@ -42,13 +49,66 @@ export function resultSummary(result: Record<string, unknown>): string {
   return ok ? 'ok' : 'failed';
 }
 
+/** The lane every tool that acts on the agent's working tab shares (tools.ts keeps exactly one job tab). */
+const WORKING_TAB = 'tab:working';
+
+/** Tools whose effect is the working tab's state — the switch in tools.ts that starts with `await this.tab()`. */
+const WORKING_TAB_TOOLS = new Set(['open_tab', 'navigate', 'read_page', 'screenshot', 'click', 'click_at', 'type', 'type_text', 'press_key', 'scroll', 'set_viewport', 'run_js', 'wait']);
+
+/** Tool calls in flight at once: enough to overlap a batch of file fetches, not enough to thrash the browser. */
+export const MAX_PARALLEL_TOOLS = 6;
+
+/**
+ * The serial lane a pending call belongs to. Calls in the same lane run strictly in the order the model
+ * emitted them (a click and the screenshot after it are one story); different lanes — and lane-less calls
+ * like url downloads or make_folders — run concurrently. `null` = no lane.
+ */
+export function toolLane(call: PendingCall): string | null {
+  // A confirmation gates the actions that follow it, and the user answers one card at a time.
+  if (call.kind === 'confirm') return WORKING_TAB;
+  // No tool honours a `tab_id` argument — every browser tool acts on the one working tab (tools.ts `tab()`),
+  // so a hallucinated tab_id must NOT take a call out of the working-tab lane.
+  // download(ref=…) clicks inside the working tab; download(url=…) and download_many only fetch bytes.
+  if (call.name === 'download') return typeof call.args.ref === 'string' && call.args.ref ? WORKING_TAB : null;
+  return WORKING_TAB_TOOLS.has(call.name) ? WORKING_TAB : null;
+}
+
+/** Admission control: at most `limit` bodies running at once, FIFO for the rest. */
+function gate(limit: number) {
+  let active = 0;
+  const waiting: (() => void)[] = [];
+  return async <T>(body: () => Promise<T>): Promise<T> => {
+    if (active >= limit) await new Promise<void>((resolve) => waiting.push(resolve));
+    active++;
+    try {
+      return await body();
+    } finally {
+      active--;
+      waiting.shift()?.();
+    }
+  };
+}
+
+/** Files a download tool put in the vault: one artifact per stored file, plus the brain page it came from. */
+function* downloadArtifacts(base: string, result: Record<string, unknown>): Generator<AgentEvent> {
+  const items = Array.isArray(result.items) ? result.items : [result];
+  for (const raw of items) {
+    const item = raw as Record<string, unknown>;
+    if (!item || item.status === 'error' || typeof item.path !== 'string') continue;
+    yield { kind: 'artifact', type: 'file', label: item.path, href: typeof item.drive_link === 'string' ? item.drive_link : undefined };
+    // A page the brain generated (report, courseware) and the vault now holds: link the live page too.
+    const source = brainPageUrl(base, item.source);
+    if (source) yield { kind: 'artifact', type: 'url', label: `${item.path.split('/').pop() ?? 'page'} (page)`, href: source };
+  }
+}
+
 /**
  * One run against the brain. Each HTTP exchange is one short SSE stream: the brain stops at every
  * long-running (browser) tool call; we execute it and post the result to resume.
  */
 export async function* liveRun(
   settings: Settings,
-  req: { runId: string; sessionId: string; skillId?: string; text: string },
+  req: { runId: string; sessionId: string; skillId?: string; text: string; trigger?: 'manual' | 'scheduled' },
   ctl: LiveControls,
 ): AsyncGenerator<AgentEvent> {
   const base = normalizeBackendUrl(settings.backendUrl);
@@ -70,7 +130,7 @@ export async function* liveRun(
 
   try {
     // session_id is the CONVERSATION, not the run: follow-ups land in the same ADK session and keep the history.
-    let stream = exchange('/chat', { session_id: req.sessionId, skill_id: req.skillId, text: req.text });
+    let stream = exchange('/chat', { session_id: req.sessionId, skill_id: req.skillId, text: req.text, trigger: req.trigger ?? 'manual' });
     for (;;) {
       await ctl.waitIfPaused?.();
       const queued: PendingCall[] = [];
@@ -85,27 +145,48 @@ export async function* liveRun(
       const pending = uniqueById(queued).filter((c) => !adapter.resolved.has(c.id));
       if (pending.length === 0) break;
 
-      // Resolve every pending call, then resume with all results in one message.
-      const results: { call_id: string; name: string; result: Record<string, unknown> }[] = [];
-      for (const call of pending) {
-        await ctl.waitIfPaused?.();
-        const t0 = Date.now();
-        let result: Record<string, unknown>;
-        if (call.kind === 'confirm') {
-          const allowed = await ctl.waitForConfirm(call.id);
-          result = { confirmed: allowed };
-          if (!allowed) yield { kind: 'text', text: 'Okay — not doing that.' };
-        } else {
-          const out = await ctl.executeTool(call);
-          result = out.result;
-          const ok = result.status !== 'error';
-          yield { kind: 'tool.result', callId: call.id, ok, summary: resultSummary(result), ms: Date.now() - t0, screenshot: out.screenshot };
-          if (ok && call.name === 'download' && typeof result.path === 'string') {
-            yield { kind: 'artifact', type: 'file', label: result.path, href: typeof result.drive_link === 'string' ? result.drive_link : undefined };
-            // A page the brain generated (report, courseware) and the vault now holds: link the live page too.
-            const source = brainPageUrl(base, result.source);
-            if (source) yield { kind: 'artifact', type: 'url', label: `${result.path.split('/').pop() ?? 'page'} (page)`, href: source };
+      // Resolve every pending call, then resume with all results in one message. Gemini emits several calls
+      // per turn and the brain answers them as one turn, so they run concurrently — except within a lane
+      // (toolLane), where the model's order is the story and must be kept.
+      const admit = gate(MAX_PARALLEL_TOOLS);
+      const lanes = new Map<string, Promise<unknown>>();
+      const started = pending.map((call) => {
+        const settle = async (): Promise<Settled> => {
+          await ctl.waitIfPaused?.();
+          const t0 = Date.now();
+          try {
+            if (call.kind === 'confirm') {
+              const confirmed = await ctl.waitForConfirm(call.id);
+              return { result: { confirmed }, ms: Date.now() - t0 };
+            }
+            const out = await admit(async () => {
+              // Queued behind the gate while the user pressed Pause: the batch stops here too, not only at its start.
+              await ctl.waitIfPaused?.();
+              return ctl.executeTool(call);
+            });
+            return { result: out.result, screenshot: out.screenshot, ms: Date.now() - t0 };
+          } catch (e) {
+            // One call throwing is that call's own error result; the rest of the batch still answers the model.
+            return { result: { status: 'error', message: e instanceof Error ? e.message : String(e) }, ms: Date.now() - t0 };
           }
+        };
+        const lane = toolLane(call);
+        const after = (lane && lanes.get(lane)) || Promise.resolve();
+        const done = after.then(settle, settle);
+        if (lane) lanes.set(lane, done);
+        return done;
+      });
+
+      // Awaited in the model's own order: the transcript and the results array stay deterministic.
+      const results: { call_id: string; name: string; result: Record<string, unknown> }[] = [];
+      for (const [i, call] of pending.entries()) {
+        const { result, screenshot, ms } = await started[i]!;
+        const ok = result.status !== 'error';
+        if (call.kind === 'confirm') {
+          if (!result.confirmed) yield { kind: 'text', text: 'Okay — not doing that.' };
+        } else {
+          yield { kind: 'tool.result', callId: call.id, ok, summary: resultSummary(result), ms, screenshot };
+          if (ok && (call.name === 'download' || call.name === 'download_many')) yield* downloadArtifacts(base, result);
         }
         results.push({ call_id: call.id, name: call.name, result });
       }

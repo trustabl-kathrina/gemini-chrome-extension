@@ -10,7 +10,7 @@ type ToolRequest =
   | { channel: typeof TOOL_CHANNEL; name: 'click'; ref: string }
   | { channel: typeof TOOL_CHANNEL; name: 'click_at'; x: number; y: number }
   | { channel: typeof TOOL_CHANNEL; name: 'type'; ref: string; text: string; submit?: boolean }
-  | { channel: typeof TOOL_CHANNEL; name: 'press_key'; key: string }
+  | { channel: typeof TOOL_CHANNEL; name: 'press_key'; key: string; ref?: string }
   | { channel: typeof TOOL_CHANNEL; name: 'scroll'; ref?: string; dy?: number }
   | { channel: typeof TOOL_CHANNEL; name: 'viewport' }
   | { channel: typeof TOOL_CHANNEL; name: 'fingerprint' }
@@ -72,9 +72,20 @@ function isInteractive(el: Element): boolean {
   return true;
 }
 
+/** Host of a URL, for labelling an embed by where it comes from; '' when the src is empty or relative-broken. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url, location.href).hostname;
+  } catch {
+    return '';
+  }
+}
+
 function labelOf(el: Element, own: string): string {
   const aria = el.getAttribute('aria-label') ?? el.getAttribute('title') ?? el.getAttribute('placeholder');
   if (aria) return aria;
+  // An iframe has no text of its own: name it by what it embeds (its document is listed separately).
+  if (el instanceof HTMLIFrameElement) return el.name || hostOf(el.src) || 'iframe';
   if (el instanceof HTMLImageElement) return el.alt || el.src.split('/').pop() || 'image';
   if (el instanceof HTMLInputElement && (el.type === 'submit' || el.type === 'button')) return el.value;
   const text = own || (el as HTMLElement).innerText?.replace(/\s+/g, ' ').trim() || '';
@@ -105,7 +116,10 @@ function snapshot(maxNodes = 400): { text: string; nodes: number; truncated: boo
     }
     const own = ownText(el);
     const interactive = isInteractive(el);
-    if (!interactive && !own) continue;
+    // An embed carries no text and is not clickable, but its `src` is the door to the content behind it
+    // (Teams renders Files/Assignments in cross-origin iframes): always list it.
+    const embed = el instanceof HTMLIFrameElement || el instanceof HTMLFrameElement;
+    if (!interactive && !own && !embed) continue;
     const rect = el.getBoundingClientRect();
     if (!isVisible(el, rect)) continue;
     const role = el.getAttribute('role') ?? (el instanceof HTMLInputElement ? `input:${el.type}` : el.tagName.toLowerCase());
@@ -115,12 +129,13 @@ function snapshot(maxNodes = 400): { text: string; nodes: number; truncated: boo
     // Values reach the brain, Gemini and the session store: never a password / card / one-time code.
     const value = el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement ? valueLabel(el.value, el instanceof HTMLInputElement && isSecretInput(el)) : '';
     const href = el instanceof HTMLAnchorElement && el.href ? ` href=${el.href.slice(0, 80)}` : '';
+    const src = embed ? ` src=${((el as HTMLIFrameElement | HTMLFrameElement).src || '(none)').slice(0, 120)}` : '';
     const state = el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio') ? (el.checked ? ' checked' : '') : el.classList.contains('v-selected') || el.getAttribute('aria-selected') === 'true' ? ' selected' : '';
     const ref = refFor(el);
     signatures.set(ref, { tag: el.tagName, role: el.getAttribute('role'), label, x, y });
     // Coordinates only where the model may click_at: plain text lines keep their ref but drop the "@x,y".
     const at = interactive ? ` @${x},${y}` : '';
-    const line = `[${ref}] ${role} ${JSON.stringify(label)}${at}${value}${href}${state}`;
+    const line = `[${ref}] ${role} ${JSON.stringify(label)}${at}${value}${href}${src}${state}`;
     // Nested wrappers repeat the same label at the same spot: keep the outermost only.
     const key = `${role}|${label}|${x}|${y}`;
     if (seen.has(key)) continue;
@@ -222,11 +237,15 @@ function clickAt(x: number, y: number) {
 
 const KEY_CODES: Record<string, number> = { Enter: 13, Escape: 27, Tab: 9, Backspace: 8, Delete: 46, ArrowUp: 38, ArrowDown: 40, ArrowLeft: 37, ArrowRight: 39, ' ': 32, Space: 32, PageDown: 34, PageUp: 33, Home: 36, End: 35 };
 
-function pressKey(spec: string) {
+function pressKey(spec: string, ref?: string) {
   const parts = spec.split('+').map((p) => p.trim()).filter(Boolean);
   const key = parts.pop() ?? 'Enter';
   const mods = new Set(parts.map((m) => m.toLowerCase()));
-  const target = (document.activeElement as HTMLElement | null) ?? document.body;
+  // With a ref the key goes to that element (a table row the agent just selected); without one, to whatever
+  // has focus in THIS document — which is why the call must be routed to the ref's frame.
+  const el = ref ? (resolve(ref) as HTMLElement) : null;
+  el?.focus?.();
+  const target = el ?? (document.activeElement as HTMLElement | null) ?? document.body;
   const norm = key.length === 1 ? key : key === 'Space' ? ' ' : key;
   const init: KeyboardEventInit = {
     key: norm,
@@ -337,7 +356,7 @@ function handle(req: ToolRequest): ToolResponse {
       case 'type':
         return { ok: true, data: type(req.ref, req.text, req.submit) };
       case 'press_key':
-        return { ok: true, data: pressKey(req.key) };
+        return { ok: true, data: pressKey(req.key, req.ref) };
       case 'scroll':
         return { ok: true, data: scroll(req.ref, req.dy) };
       case 'viewport':

@@ -13,6 +13,17 @@ from dayflow.core.vault import MemoryBlobStore
 from tests.test_api import FakeRunner
 
 
+def test_the_deployed_privacy_policy_is_the_repo_one() -> None:
+    """`gcloud run deploy --source backend` ships backend/ only, so /pages/privacy serves the copy embedded
+    in the module. A drift between the two publishes a policy the product no longer follows."""
+    from dayflow.api.pages import PRIVACY_FILE, PRIVACY_MD
+
+    assert PRIVACY_FILE.exists(), "run from the repo checkout"
+    assert PRIVACY_MD == PRIVACY_FILE.read_text(encoding="utf-8"), (
+        "docs/PRIVACY.md changed without updating PRIVACY_MD in dayflow/api/pages.py"
+    )
+
+
 @pytest.fixture
 def pages() -> Iterator[PageStore]:
     store = PageStore(MemoryBlobStore(), public_url="")

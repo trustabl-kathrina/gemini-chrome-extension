@@ -95,6 +95,23 @@ describe('DriveClient', () => {
     expect(d.log.some((l) => l.startsWith('PATCH /upload/'))).toBe(true);
   });
 
+  it('creates each folder once when a whole batch uploads into the same chain at once', async () => {
+    const d = fakeDrive();
+    const c = new DriveClient({ base: 'https://drive.test', token: 'tok', fetch: d.fetchImpl });
+    // download_many stores four files through one client: the folder chain must not be created four times.
+    await Promise.all([1, 2, 3, 4].map((n) => c.upload(`Dayflow/CSCI3240 CV/Lab 01/f${n}.pdf`, new Blob([`f${n}`]))));
+    const folders = [...d.files.values()].filter((f) => f.mimeType === FOLDER_MIME).map((f) => f.name);
+    expect(folders).toEqual(['Dayflow', 'CSCI3240 CV', 'Lab 01']);
+    expect([...d.files.values()].filter((f) => f.mimeType !== FOLDER_MIME)).toHaveLength(4);
+  });
+
+  it('keeps one file when the same path is uploaded twice at once', async () => {
+    const d = fakeDrive();
+    const c = new DriveClient({ base: 'https://drive.test', token: 'tok', fetch: d.fetchImpl });
+    await Promise.all([c.upload('Dayflow/A/x.txt', new Blob(['1'])), c.upload('Dayflow/A/x.txt', new Blob(['2']))]);
+    expect([...d.files.values()].filter((f) => f.name === 'x.txt')).toHaveLength(1);
+  });
+
   it('lists a folder by path and returns [] for a missing one', async () => {
     const d = fakeDrive();
     const c = new DriveClient({ base: 'https://drive.test', token: 'tok', fetch: d.fetchImpl });

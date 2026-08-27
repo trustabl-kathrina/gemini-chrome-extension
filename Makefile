@@ -1,4 +1,4 @@
-.PHONY: verify verify-backend verify-extension verify-harness dev-brain dev-extension deploy-brain deploy-smoke e2e e2e-setup e2e-up e2e-down e2e-run extension-build fake-wsp fake-drive
+.PHONY: verify verify-backend verify-extension verify-harness dev-brain dev-extension deploy-brain deploy-smoke e2e e2e-setup e2e-up e2e-down e2e-run extension-build fake-wsp fake-drive replica replica-docker replica-deploy
 
 # Your own GCP project. The author's values are never the default for deploy targets: PROJECT is required there.
 PROJECT ?=
@@ -74,6 +74,31 @@ fake-wsp:
 
 fake-drive:
 	FAKE_DRIVE_PORT=$$(( $(E2E_PORT_BASE) + 2 )) node harness/fake-drive.mjs
+
+# The judge-facing portal (docs/JUDGES.md). Same server `make e2e` drives, plus the seeded login screen the
+# real university portal has — so nobody needs our university credentials to see the whole flow. Node only.
+REPLICA_PORT    ?= $(E2E_PORT_BASE)
+REPLICA_SERVICE ?= dayflow-wsp-replica
+REPLICA_IMAGE   ?= dayflow-wsp-replica
+
+replica:
+	@echo "WSP replica -> http://127.0.0.1:$(REPLICA_PORT)   sign in with demo / demo   (Ctrl-C to stop)"
+	node harness/serve.mjs --login --port $(REPLICA_PORT)
+
+# The same container Cloud Run would run, locally (harness/Dockerfile; PORT is the platform's, 8080 inside).
+replica-docker:
+	docker build -t $(REPLICA_IMAGE) harness
+	docker run --rm -p $(REPLICA_PORT):8080 $(REPLICA_IMAGE)
+
+# Prints the deploy command instead of running it: deploying spends money in YOUR project, so it stays your call.
+replica-deploy:
+	@test -n "$(PROJECT)" || { echo "usage: make replica-deploy PROJECT=<gcp-project> [REGION=$(REGION)]"; exit 2; }
+	@echo "# Copy-paste to publish the replica portal on Cloud Run (this target executes nothing):"
+	@echo "gcloud run deploy $(REPLICA_SERVICE) --source harness --project $(PROJECT) --region $(REGION) \\"
+	@echo "  --allow-unauthenticated --min-instances 0 --memory 256Mi --cpu 1 \\"
+	@echo "  --set-env-vars FAKE_WSP_LOGIN=1,FAKE_WSP_USER=demo,FAKE_WSP_PASSWORD=demo"
+	@echo "# then read the URL back:"
+	@echo "gcloud run services describe $(REPLICA_SERVICE) --project $(PROJECT) --region $(REGION) --format='value(status.url)'"
 
 # One-time machine setup for the harness: extension deps + Playwright's Chromium + the brain's venv.
 e2e-setup:

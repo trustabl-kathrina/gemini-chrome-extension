@@ -2,9 +2,10 @@
   "name": "dayflow-harness",
   "private": true,
   "type": "module",
-  "description": "Fake WSP + fake Google Drive + Playwright scene runner for Dayflow (PLAN.md §Harness). Playwright resolves from ../extension/node_modules; notebook checks run via `uv run --script lib/nbcheck.py`.",
+  "description": "Fake WSP + fake Google Drive + Playwright scene runner for Dayflow (PLAN.md §Harness). Playwright resolves from ../extension/node_modules; notebook checks run via `uv run --script lib/nbcheck.py`. `serve.mjs --login` is the judge-facing replica portal (docs/JUDGES.md).",
   "scripts": {
     "serve": "node serve.mjs",
+    "replica": "node serve.mjs --login",
     "drive": "node fake-drive.mjs",
     "scene": "node run.mjs",
     "gen": "python3 fake-wsp/gen.py",

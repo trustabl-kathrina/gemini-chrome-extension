@@ -1,6 +1,6 @@
 # Dayflow — Privacy
 
-Last updated: 2026-08-26. Applies to the Chrome extension "Dayflow Agent" and the Dayflow brain (the backend you run).
+Last updated: 2026-08-27. Applies to the Chrome extension "Dayflow Agent" and the Dayflow brain (the backend you run).
 
 Dayflow is a browser agent you self-host. There is no Dayflow company server: the extension only talks to the
 backend URL you type into Settings (your own Cloud Run service, or `localhost`), and that backend only talks to
@@ -13,7 +13,17 @@ Stored with `chrome.storage.local`, and removed when you uninstall the extension
 - The backend URL and access token you entered.
 - Your config: skills, site profiles, permissions and schedules (the YAML shown in the Config screen).
 - If you sign in with Google: your email, display name and a short-lived Google OAuth access token for Drive.
-- Recent run transcripts, including tool arguments and small screenshot thumbnails of the pages the agent used.
+
+Kept only in the side panel's memory while it is open — never written to `chrome.storage`, gone when you close or
+reload the panel:
+
+- The transcript of the runs in the current session: your prompts, the agent's one-line reasoning, tool calls and
+  their arguments, and the JPEG screenshot attached to each step when **Vision** is on.
+
+The current chat's id (not its content) is kept in `chrome.storage.session`, which survives closing the panel but
+is cleared when the browser closes; it is what lets a follow-up prompt continue the same brain-side conversation.
+The brain itself keeps the session history (see "What the backend stores" below) for as long as your own
+Firestore retention allows.
 
 ## What leaves your browser
 
@@ -46,6 +56,10 @@ produced or downloaded. Without Drive, files stay with your own backend.
   short summary, extracted deadlines, SHA-256.
 - Cloud Storage (your bucket) or process memory: the file bytes and the HTML/PPTX artifacts the agent generates.
 - Cloud Run request logs, under your project's retention settings.
+- Cloud Trace (your project), when the brain runs on Cloud Run or you set `DAYFLOW_TRACE=1`: one span per
+  agent invocation, model call and tool call — names, timings and token counts. The CONTENT of those calls
+  (prompts, page snapshots, tool arguments and results) is switched off; set `DAYFLOW_TRACE_CONTENT=1` if you
+  want it in your own traces for debugging.
 
 Gemini is called through Vertex AI or the Gemini API with your credentials, so those requests are handled by Google
 under the terms of that product. No other model provider is used.
@@ -54,21 +68,24 @@ under the terms of that product. No other model provider is used.
 
 GitHub, Linear and Telegram are used only when you connect them or ask for them by name. The data goes to them
 directly, under your account and their privacy policies. Dayflow adds no intermediary and keeps no copy beyond the
-run transcript on your machine.
+brain's own session history.
 
 ## Deleting your data
 
-- Uninstall the extension — local settings, tokens and transcripts go with it.
-- Delete the Firestore collection and the Cloud Storage bucket in your project — the vault index and artifacts go
-  with them.
+- Uninstall the extension — local settings and tokens go with it (run transcripts are already gone once the panel
+  is closed; they are never written to disk on the extension side).
+- Delete the Firestore collection and the Cloud Storage bucket in your project — the session history, the vault
+  index and the generated artifacts go with them.
 - Revoke Dayflow's access to your Google account at https://myaccount.google.com/permissions.
 
 ## Why each permission exists
 
-- `storage` — keep your settings and transcripts locally.
+- `storage` — keep your settings locally, and the current chat's id in session storage.
 - `alarms` — run the schedules you created in Config.
 - `sidePanel` — the panel is the whole UI.
 - `tabs` — open and focus the tab a task needs, and read that tab's URL and title.
+- `tabGroups` — group the tabs a run opens into one labelled, collapsible strip, separate from the rest of your
+  tabs.
 - `scripting` — read the page and click/type in it; this is how the agent acts instead of you.
 - `downloads` — capture the file a page downloads so it can be saved to your vault.
 - `notifications` — tell you when a scheduled run finished (or failed) while the panel was closed.

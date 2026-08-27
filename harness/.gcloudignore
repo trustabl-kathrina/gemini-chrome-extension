@@ -1,0 +1,13 @@
+# `gcloud run deploy --source harness` (see `make replica-deploy`) uploads this directory: the replica image
+# needs serve.mjs, fake-wsp/ and the Dockerfile — nothing else. Machine-local run output must never be uploaded.
+.git/
+out/
+.profile-*/
+fake-wsp/__pycache__/
+specs/
+lib/
+*.test.mjs
+run.mjs
+fake-drive.mjs
+e2e.sh
+package.json

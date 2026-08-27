@@ -9,7 +9,7 @@ describe('toUserConfig', () => {
       permissions: { navigationAllowlist: ['wsp.kbtu.kz'], askBefore: { sendMessage: true, createPr: false, download: true, runJs: true } },
       connections: DEFAULT_SETTINGS.connections.map((c) => (c.id === 'github' ? { ...c, connected: true } : c)),
     });
-    expect(cfg.permissions).toEqual({ allowed_hosts: ['wsp.kbtu.kz'], ask_before: ['type', 'type_text', 'download', 'run_js'], mode: 'ask' });
+    expect(cfg.permissions).toEqual({ allowed_hosts: ['wsp.kbtu.kz'], ask_before: ['type', 'type_text', 'download', 'download_many', 'run_js'], mode: 'ask' });
     expect(cfg.connections).toEqual({ github: true, linear: false });
     expect(cfg.skills.map((s) => s.id)).toEqual(DEFAULT_SETTINGS.skills.map((s) => s.id));
     expect(cfg.skills.every((s) => typeof s.key === 'string')).toBe(true);

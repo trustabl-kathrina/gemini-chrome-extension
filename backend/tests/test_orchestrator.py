@@ -9,6 +9,7 @@ from dayflow.agents.orchestrator import (
     find_approval,
     guard_tool,
     host_allowed,
+    is_gated,
     normalize_text,
     result_state_delta,
 )
@@ -126,6 +127,21 @@ def test_guard_blocks_disallowed_navigation() -> None:
     assert err is not None and "not on the user's allow-list" in err["error"]
     assert guard_tool("navigate", {"url": "https://wsp.kbtu.kz/x"}, {}, perms) is None
     assert guard_tool("read_page", {}, {}, perms) is None
+
+
+def test_guard_checks_every_url_a_batch_download_carries() -> None:
+    """`download_many` keeps its URLs in items[], so a guard that only reads args["url"] waves the whole
+    batch through — the brain must refuse a bad host on the tool the playbook tells the model to prefer."""
+    perms = Permissions(allowed_hosts=["wsp.kbtu.kz"])
+    ok = {"url": "https://wsp.kbtu.kz/f/a.pdf", "path": "C/Lab 01/a.pdf"}
+    evil = {"url": "https://evil.example/x.pdf", "path": "C/Lab 01/x.pdf"}
+    assert guard_tool("download_many", {"items": [ok]}, {}, perms) is None
+    err = guard_tool("download_many", {"items": [ok, evil]}, {}, perms)
+    assert err is not None and "evil.example" in err["error"]
+    scheme = guard_tool("download_many", {"items": [{"url": "file:///etc/passwd", "path": "a"}]}, {}, perms)
+    assert scheme is not None and "http(s)" in scheme["error"]
+    # And the ask-before credit covers it: the extension maps its `download` toggle to both names.
+    assert is_gated("download_many", Permissions(ask_before=["download", "download_many"]))
 
 
 def test_brain_host_is_implicitly_navigable(monkeypatch: pytest.MonkeyPatch) -> None:

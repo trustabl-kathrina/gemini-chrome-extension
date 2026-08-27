@@ -21,6 +21,7 @@ dependencies = [
     "ipykernel>=7.3.0",
     "numpy>=2.5.2",
     "python-pptx>=1.0.2",
+    "opentelemetry-exporter-gcp-trace>=1.15",
 ]
 
 [dependency-groups]

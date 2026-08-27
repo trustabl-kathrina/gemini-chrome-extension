@@ -9,6 +9,7 @@ import { brainAuthHeader, brainAuthToken } from './sync';
 import { Workspace } from './workspace';
 
 type Json = Record<string, unknown>;
+type Snapshot = { text: string; nodes: number; truncated: boolean };
 type DownloadItem = { id: number; url: string; finalUrl?: string; filename?: string; state?: string; mime?: string };
 
 /** What the run loop gets back: the brain's result (with `screenshot_b64`) and a small thumbnail for the panel. */
@@ -24,7 +25,42 @@ const CAPTURE_GAP_MS = 550;
 
 /** Upper bound for one make_folders call (the brain's tool declaration promises the same). */
 const MAX_FOLDERS = 200;
+
+/** Upper bound for one download_many call, and how many of its files are fetched at once. */
+const MAX_DOWNLOADS = 40;
+const DOWNLOAD_CONCURRENCY = 4;
+
+/** Child frames one `read_page(frames=true)` reads, and the element budget each of them gets. */
+const MAX_FRAMES = 8;
+const FRAME_MAX_NODES = 150;
+
 let lastCaptureAt = 0;
+
+/**
+ * Runs `fn` over `items` with at most `limit` in flight, keeping the result order. Rejections are the
+ * caller's to model: `fn` is expected to resolve to its own error value (one bad file must not sink a batch).
+ */
+export async function mapWithLimit<T, R>(items: readonly T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let next = 0;
+  const worker = async () => {
+    for (let i = next++; i < items.length; i = next++) out[i] = await fn(items[i]!, i);
+  };
+  await Promise.all(Array.from({ length: Math.min(Math.max(1, limit), items.length) }, worker));
+  return out;
+}
+
+/** `e17` (top frame — the format every ref had before frames) or `f3:e17` (an element inside frame 3). */
+export function parseRef(raw: string): { frameId: number; ref: string } {
+  const s = raw.trim().replace(/^\[|\]$/g, '');
+  const m = /^f(\d+):(.+)$/.exec(s);
+  return m ? { frameId: Number(m[1]), ref: m[2]! } : { frameId: 0, ref: s };
+}
+
+/** Qualifies a frame's snapshot refs with the frame that owns them; frame 0 keeps the bare `[eN]`. */
+export function prefixRefs(text: string, frameId: number): string {
+  return frameId === 0 ? text : text.replace(/^\[(e\d+)\]/gm, `[f${frameId}:$1]`);
+}
 
 function waitForLoad(tabId: number, timeoutMs = 20000): Promise<void> {
   return new Promise((resolve) => {
@@ -42,16 +78,17 @@ function waitForLoad(tabId: number, timeoutMs = 20000): Promise<void> {
   });
 }
 
-async function contentTool<T = Json>(tabId: number, req: Json, attempts = 3): Promise<T> {
+/** Talks to the content script in one frame of a tab (frame 0 = the top document, the default target). */
+async function contentTool<T = Json>(tabId: number, req: Json, frameId = 0, attempts = 3): Promise<T> {
   for (let i = 0; ; i++) {
     let res: { ok: true; data: unknown } | { ok: false; error: string } | undefined;
     try {
-      res = (await browser.tabs.sendMessage(tabId, { channel: TOOL_CHANNEL, ...req }, { frameId: 0 })) as typeof res;
+      res = (await browser.tabs.sendMessage(tabId, { channel: TOOL_CHANNEL, ...req }, { frameId })) as typeof res;
     } catch (e) {
       if (i === 0) {
         try {
           await browser.scripting.executeScript({
-            target: { tabId, frameIds: [0] },
+            target: { tabId, frameIds: [frameId] },
             files: ['/content-scripts/content.js'],
           });
           await sleep(150);
@@ -65,7 +102,7 @@ async function contentTool<T = Json>(tabId: number, req: Json, attempts = 3): Pr
         await sleep(400);
         continue;
       }
-      throw new Error(`page has no content script (chrome:// page, or still loading): ${e instanceof Error ? e.message : String(e)}`);
+      throw new Error(`${frameId ? `frame f${frameId}` : 'page'} has no content script (chrome:// page, or still loading): ${e instanceof Error ? e.message : String(e)}`);
     }
     if (!res) throw new Error('page has no content script (chrome:// or not loaded yet)');
     if (!res.ok) throw new Error(res.error);
@@ -137,7 +174,8 @@ export class BrowserTools {
   private jobTabId: number | null = null;
   /** The Dayflow tab group (own window by default): where open_tab puts tabs and where tab() looks first. */
   private readonly workspace: Workspace;
-  private drive: DriveClient | null = null;
+  /** One client per run, memoised as the promise: concurrent downloads must not each fetch a token. */
+  private drive: Promise<DriveClient> | null = null;
 
   constructor(private guards: ToolGuards) {
     this.workspace = new Workspace(browser as unknown as ConstructorParameters<typeof Workspace>[0], this.settings.ownWindow);}
@@ -179,6 +217,19 @@ export class BrowserTools {
     }
   }
 
+  /**
+   * The same allow-list check for the frame an `fN:eM` ref points into: an allow-listed page can embed a
+   * third-party iframe (an SSO widget, an ad, a SharePoint viewer), and reading or clicking inside it is
+   * acting on a host the user never allowed. Frame 0 is the tab itself, already covered by `guardTab`.
+   */
+  private async guardFrame(tabId: number, frameId: number): Promise<void> {
+    if (!frameId) return;
+    const all = await browser.webNavigation.getAllFrames({ tabId }).catch(() => null);
+    const frame = (all ?? []).find((f) => f.frameId === frameId);
+    const r = checkNavigable(frame?.url ?? '', this.allowlist);
+    if (!r.ok) throw new Error(`frame f${frameId} (${frame?.url || 'unknown'}) is off your allow-list (${r.reason}); read_page again and act on the top frame`);
+  }
+
   private async tab(): Promise<number> {
     let id: number | undefined;
     if (this.jobTabId !== null) {
@@ -212,8 +263,7 @@ export class BrowserTools {
     return { tabId, title: t.title, url: t.url };
   }
 
-  /** The tool being dispatched (screenshot policy) and each tab's fingerprint at its last capture. */
-  private currentTool = '';
+  /** Each tab's page fingerprint at its last capture (the screenshot policy's "did anything move?"). */
   private readonly lastShot = new Map<number, string>();
 
   /** JPEG of the tab's viewport, ≤SHOT_MAX_PX, q≈SHOT_QUALITY. Null when the page cannot be captured (chrome://, closed). */
@@ -247,10 +297,11 @@ export class BrowserTools {
    * Attaches the screenshot (brain: `screenshot_b64`; panel: ≤320px thumbnail) when vision is on or forced —
    * subject to the tool's policy (shots.ts): never for read_page/list_tabs/download, and for actions only when
    * the page fingerprint moved since the tab's last capture (else `screenshot: "unchanged…"`).
+   * The tool name is passed in, never kept on the instance: the run loop executes several calls at once.
    */
-  private async withShot(tabId: number | null, data: Json, force = false): Promise<ToolOutcome> {
+  private async withShot(tabId: number | null, tool: string, data: Json, force = false): Promise<ToolOutcome> {
     if (tabId === null || (!force && !this.settings.vision)) return { result: data };
-    const policy = force ? 'always' : shotPolicy(this.currentTool);
+    const policy = force ? 'always' : shotPolicy(tool);
     if (policy === 'never') return { result: data };
     let print: string | null = null;
     if (policy === 'if-changed') {
@@ -280,7 +331,6 @@ export class BrowserTools {
   }
 
   private async dispatch(call: ToolCall): Promise<ToolOutcome> {
-    this.currentTool = call.name;
     const a = call.args;
     const str = (k: string, d = '') => (typeof a[k] === 'string' ? (a[k] as string) : typeof a[k] === 'number' ? String(a[k]) : d);
     const num = (k: string, d: number) => (typeof a[k] === 'number' ? (a[k] as number) : typeof a[k] === 'string' && a[k] !== '' && !Number.isNaN(Number(a[k])) ? Number(a[k]) : d);
@@ -291,7 +341,7 @@ export class BrowserTools {
         this.jobTabId = id;
         await waitForLoad(id);
         await this.guardTab(id); // the page may have redirected off the allow-list
-        return this.withShot(id, await this.tabInfo(id));
+        return this.withShot(id, call.name, await this.tabInfo(id));
       }
       case 'navigate': {
         const id = await this.tab();
@@ -299,29 +349,43 @@ export class BrowserTools {
         await browser.tabs.update(id, { url: this.navigable(str('url')) });
         await waitForLoad(id);
         await this.guardTab(id);
-        return this.withShot(id, await this.tabInfo(id));
+        return this.withShot(id, call.name, await this.tabInfo(id));
       }
       case 'read_page': {
         const id = await this.tab();
         await this.reveal(id);
-        const snap = await contentTool<{ text: string; nodes: number; truncated: boolean }>(id, { name: 'snapshot', maxNodes: num('max_nodes', 400) });
-        return this.withShot(id, { ...(await this.tabInfo(id)), result: snap.text, nodes: snap.nodes, truncated: snap.truncated, summary: `${snap.nodes} elements${snap.truncated ? ' (truncated)' : ''}` });
+        const maxNodes = num('max_nodes', 400);
+        const snap = await contentTool<Snapshot>(id, { name: 'snapshot', maxNodes });
+        const sub = a.frames === true ? await this.frameSnapshots(id, maxNodes) : null;
+        const nodes = snap.nodes + (sub?.nodes ?? 0);
+        // A cut-short FRAME is a cut-short result: reporting `false` told the model a 200-row folder had 150 files.
+        const cutShort = snap.truncated || (sub?.truncated ?? false);
+        return this.withShot(id, call.name, {
+          ...(await this.tabInfo(id)),
+          result: sub ? `${snap.text}\n${sub.text}` : snap.text,
+          nodes,
+          truncated: cutShort,
+          ...(sub ? { frames: sub.frames } : {}),
+          summary: `${nodes} elements${sub ? ` in ${sub.frames + 1} frames` : ''}${cutShort ? ' (truncated — raise max_nodes)' : ''}`,
+        });
       }
       case 'screenshot': {
         const id = await this.tab();
         await this.reveal(id);
-        const out = await this.withShot(id, await this.tabInfo(id), true);
+        const out = await this.withShot(id, call.name, await this.tabInfo(id), true);
         if (!out.result.screenshot_b64) throw new Error('could not capture this tab');
         return out;
       }
       case 'click': {
         const id = await this.tab();
         await this.reveal(id);
-        const r = await contentTool(id, { name: 'click', ref: str('ref') });
+        const { frameId, ref } = parseRef(str('ref'));
+        await this.guardFrame(id, frameId);
+        const r = await contentTool(id, { name: 'click', ref }, frameId);
         await sleep(400);
         await waitForLoad(id, 5000);
         await this.guardTab(id); // a link may have left the allowed site
-        return this.withShot(id, { ...r, ...(await this.tabInfo(id)) });
+        return this.withShot(id, call.name, { ...r, ...(await this.tabInfo(id)) });
       }
       case 'click_at': {
         const id = await this.tab();
@@ -330,35 +394,43 @@ export class BrowserTools {
         await sleep(400);
         await waitForLoad(id, 5000);
         await this.guardTab(id);
-        return this.withShot(id, { ...r, ...(await this.tabInfo(id)) });
+        return this.withShot(id, call.name, { ...r, ...(await this.tabInfo(id)) });
       }
       case 'type':
       case 'type_text': {
         const id = await this.tab();
         await this.reveal(id);
-        const r = await contentTool(id, { name: 'type', ref: str('ref'), text: str('text'), submit: a.submit === true });
+        const { frameId, ref } = parseRef(str('ref'));
+        await this.guardFrame(id, frameId);
+        const r = await contentTool(id, { name: 'type', ref, text: str('text'), submit: a.submit === true }, frameId);
         if (a.submit === true) {
           await sleep(400);
           await waitForLoad(id, 5000);
           await this.guardTab(id);
         }
-        return this.withShot(id, r);
+        return this.withShot(id, call.name, r);
       }
       case 'press_key': {
         const id = await this.tab();
         await this.reveal(id);
-        const r = await contentTool(id, { name: 'press_key', key: str('key', 'Enter') });
+        // Without the ref's frame the key lands on the TOP document, whose activeElement is the <iframe>
+        // element itself — the "click the row, then press Enter" flow silently did nothing inside a frame.
+        const { frameId, ref } = parseRef(str('ref'));
+        await this.guardFrame(id, frameId);
+        const r = await contentTool(id, { name: 'press_key', key: str('key', 'Enter'), ...(ref ? { ref } : {}) }, frameId);
         await sleep(400);
         await waitForLoad(id, 5000);
         await this.guardTab(id);
-        return this.withShot(id, { ...r, ...(await this.tabInfo(id)) });
+        return this.withShot(id, call.name, { ...r, ...(await this.tabInfo(id)) });
       }
       case 'scroll': {
         const id = await this.tab();
         await this.reveal(id);
-        const r = await contentTool(id, { name: 'scroll', ref: str('ref') || undefined, dy: num('dy', 600) });
+        const { frameId, ref } = parseRef(str('ref'));
+        await this.guardFrame(id, frameId);
+        const r = await contentTool(id, { name: 'scroll', ref: ref || undefined, dy: num('dy', 600) }, frameId);
         await sleep(250);
-        return this.withShot(id, r);
+        return this.withShot(id, call.name, r);
       }
       case 'set_viewport': {
         const id = await this.tab();
@@ -373,7 +445,7 @@ export class BrowserTools {
         await browser.windows.update(t.windowId, { state: 'normal', width: width + Math.max(0, dw), height: height + Math.max(0, dh) });
         await sleep(300);
         const after = await contentTool<{ width: number; height: number }>(id, { name: 'viewport' });
-        return this.withShot(id, { viewport: [after.width, after.height], requested: [width, height] });
+        return this.withShot(id, call.name, { viewport: [after.width, after.height], requested: [width, height] });
       }
       case 'run_js': {
         const id = await this.tab(); // guardTab: allow-listed host only
@@ -407,16 +479,18 @@ export class BrowserTools {
         if (!r.ok) throw new Error(`run_js: ${r.error}`);
         const value = r.value;
         const text = JSON.stringify(value);
-        return this.withShot(id, { value: text.length > 20000 ? `${text.slice(0, 20000)}…` : value, host, logged: true, summary: text.slice(0, 100) });
+        return this.withShot(id, call.name, { value: text.length > 20000 ? `${text.slice(0, 20000)}…` : value, host, logged: true, summary: text.slice(0, 100) });
       }
       case 'wait': {
         const id = await this.tab().catch(() => null);
         await sleep(Math.min(Math.max(num('ms', 1000), 100), 15000));
         if (id !== null) await waitForLoad(id, 3000);
-        return this.withShot(id, { waited: true });
+        return this.withShot(id, call.name, { waited: true });
       }
       case 'download':
         return this.download(str('path'), str('ref'), str('url'));
+      case 'download_many':
+        return this.downloadMany(Array.isArray(a.items) ? a.items : []);
       case 'make_folders':
         return this.makeFolders(Array.isArray(a.paths) ? a.paths : typeof a.paths === 'string' ? [a.paths] : []);
       case 'list_tabs': {
@@ -428,12 +502,63 @@ export class BrowserTools {
     }
   }
 
+  /**
+   * `read_page(frames=true)`: the element list of every http(s) child frame, appended to the top frame's.
+   * Microsoft Teams renders Assignments/Files as cross-origin iframes, so the top document alone shows an
+   * empty shell. Refs coming out of a frame are qualified (`f3:e17`) and click/type/scroll/download route
+   * back to that frame; frame 0 keeps the bare `eN` format everything already speaks. A frame the content
+   * script cannot reach (about:blank, a sandboxed ad) is skipped, never fatal.
+   */
+  private async frameSnapshots(tabId: number, maxNodes: number): Promise<{ text: string; nodes: number; frames: number; truncated: boolean }> {
+    const all = await browser.webNavigation.getAllFrames({ tabId }).catch(() => null);
+    const http = (all ?? []).filter((f) => f.frameId !== 0 && /^https?:/.test(f.url));
+    // A frame is often a different host than the tab: it passes the user's allow-list on its own, or it is
+    // not read at all — guardTab covers the top document only.
+    const ok = (url: string) => checkNavigable(url, this.allowlist).ok;
+    const allowed = http.filter((f) => ok(f.url));
+    const blocked = [...new Set(http.filter((f) => !ok(f.url)).map((f) => new URL(f.url).host))];
+    const children = allowed.slice(0, MAX_FRAMES);
+    const skipped = blocked.length ? `\n## frames skipped — not on your allow-list: ${blocked.join(', ')}` : '';
+    if (!children.length) return { text: skipped, nodes: 0, frames: 0, truncated: false };
+    // The caller's budget follows into the frames ("raise max_nodes for long tables" must mean something
+    // inside a Teams file list too), halved so eight frames cannot blow the element list up.
+    const perFrame = Math.max(FRAME_MAX_NODES, Math.round(maxNodes / 2));
+    const snaps = await mapWithLimit(children, 4, async (f) => {
+      const snap = await contentTool<Snapshot>(tabId, { name: 'snapshot', maxNodes: perFrame }, f.frameId, 1).catch(() => null);
+      return snap ? { frameId: f.frameId, url: f.url, snap } : null;
+    });
+    const got = snaps.filter((s): s is NonNullable<typeof s> => s !== null && s.snap.nodes > 0);
+    const cut = (s: (typeof got)[number]) => (s.snap.truncated ? ` — cut off at ${s.snap.nodes} elements, raise max_nodes to see the rest` : '');
+    return {
+      // @x,y inside a frame are frame-local, so the header points the model at ref-based tools, not click_at.
+      text:
+        got
+          .map((s) => `\n## frame f${s.frameId} — ${s.url} (act on these with click/type/press_key using the f${s.frameId}:eN refs, not click_at)${cut(s)}\n${prefixRefs(s.snap.text, s.frameId)}`)
+          .join('\n') + skipped,
+      nodes: got.reduce((n, s) => n + s.snap.nodes, 0),
+      frames: got.length,
+      truncated: got.some((s) => s.snap.truncated),
+    };
+  }
+
   // ---------- make_folders → Drive (PLAN v2 scene 5: the vault's folder tree) ----------
 
   /**
    * Drive client for this run. `onUnauthorized` covers the token expiring mid-run (chrome.identity keeps
    * handing out the cached token until it does): drop it, ask for a fresh one, retry the request once.
    */
+  /**
+   * The run's Drive client, created once and shared by every concurrent download (one token, one folder
+   * cache). The promise is memoised, so a failed creation is dropped: the next download asks for a fresh
+   * token instead of replaying the first failure for the rest of the run.
+   */
+  private driveOnce(): Promise<DriveClient> {
+    return (this.drive ??= this.driveClient().catch((e: unknown) => {
+      this.drive = null;
+      throw e;
+    }));
+  }
+
   private async driveClient(): Promise<DriveClient> {
     const s = this.settings;
     const token = await getGoogleToken(s);
@@ -472,8 +597,7 @@ export class BrowserTools {
     const mode = effectiveVaultMode(s, driveConfigured());
     if (mode !== 'drive') throw new Error(`the vault is in "${mode}" mode — connect Google Drive in Settings to create folders`);
 
-    this.drive ??= await this.driveClient();
-    const drive = this.drive;
+    const drive = await this.driveOnce();
     const created: string[] = [];
     const existing: string[] = [];
     const failed: { path: string; error: string }[] = [];
@@ -519,15 +643,16 @@ export class BrowserTools {
   }
 
   /** Bytes for `download`: a direct URL, or the URL of the download the page starts when `ref` is clicked. */
-  private async captureBytes(ref: string, url: string): Promise<{ blob: Blob; name: string; source: string }> {
+  private async captureBytes(rawRef: string, url: string): Promise<{ blob: Blob; name: string; source: string }> {
     if (url) {
       const src = this.navigable(url);
       return { ...(await this.fetchBytes(src)), source: src };
     }
+    const { frameId, ref } = parseRef(rawRef);
     const id = await this.tab();
     await this.reveal(id);
     if (ref) {
-      const { href } = await contentTool<{ href?: string }>(id, { name: 'href', ref });
+      const { href } = await contentTool<{ href?: string }>(id, { name: 'href', ref }, frameId);
       if (href && checkNavigable(href, this.allowlist).ok && !/\.(html?|php|aspx?)$/i.test(new URL(href).pathname)) {
         const got = await this.fetchBytes(href).catch(() => null);
         if (got && !got.blob.type.startsWith('text/html')) return { ...got, source: href };
@@ -543,7 +668,7 @@ export class BrowserTools {
       for (const [i, req] of attempts.entries()) {
         const pending = nextDownload(i === attempts.length - 1 ? 8000 : 4000);
         pending.catch(() => undefined);
-        const r = await contentTool<{ activated?: string[] }>(id, req).catch((): { activated?: string[] } => ({}));
+        const r = await contentTool<{ activated?: string[] }>(id, req, frameId).catch((): { activated?: string[] } => ({}));
         if (req.name === 'activate' && !(r.activated?.length ?? 0)) continue; // nothing to click inside
         got = await pending.catch(() => null);
         if (got) break;
@@ -572,11 +697,47 @@ export class BrowserTools {
   }
 
   private async download(requestedPath: string, ref: string, url: string): Promise<ToolOutcome> {
-    const s = this.settings;
     if (!ref && !url) throw new Error('download needs a ref (file row/link) or a url');
-    if (s.permissions.askBefore.download && !(await this.guards.confirm(`Download ${url || ref} → vault/${requestedPath || '?'}?`))) {
+    if (this.settings.permissions.askBefore.download && !(await this.guards.confirm(`Download ${url || ref} → vault/${requestedPath || '?'}?`))) {
       throw new Error('download denied by user');
     }
+    // shotPolicy('download') is `never`: the vault entry IS the result, so no screenshot is attached and the
+    // working tab is not touched — which is what lets several downloads run at once.
+    return { result: await this.storeDownload(requestedPath, ref, url) };
+  }
+
+  /**
+   * `download_many`: the whole list in one model round trip, DOWNLOAD_CONCURRENCY files at a time. Each item
+   * answers for itself — a 404 on one file leaves the other results intact — and the ask-before gate is asked
+   * once for the batch instead of once per file. URL items only; a click-triggered file needs `download(ref=…)`.
+   */
+  private async downloadMany(raw: unknown[]): Promise<ToolOutcome> {
+    const items = raw
+      .map((i) => (typeof i === 'object' && i !== null ? (i as Json) : {}))
+      .map((i) => ({ url: typeof i.url === 'string' ? i.url : '', path: typeof i.path === 'string' ? i.path : '' }))
+      .filter((i) => i.url);
+    if (!items.length) throw new Error('download_many needs `items`: a non-empty list of {url, path}');
+    if (items.length > MAX_DOWNLOADS) throw new Error(`download_many got ${items.length} items; at most ${MAX_DOWNLOADS} per call (split them)`);
+    if (this.settings.permissions.askBefore.download && !(await this.guards.confirm(`Download ${items.length} files → vault?\n\n${items.map((i) => i.path || i.url).join('\n')}`))) {
+      throw new Error('download denied by user');
+    }
+    const results = await mapWithLimit(items, DOWNLOAD_CONCURRENCY, async (item): Promise<Json> => {
+      try {
+        return { status: 'success', ...(await this.storeDownload(item.path, '', item.url)) };
+      } catch (e) {
+        return { status: 'error', url: item.url, path: item.path, message: e instanceof Error ? e.message : String(e), ...(e instanceof ToolError ? e.extra : {}) };
+      }
+    });
+    const ok = results.filter((r) => r.status !== 'error').length;
+    const failed = results.length - ok;
+    this.guards.log?.(`download_many: ${ok}/${results.length} files stored`);
+    if (!ok) throw new ToolError(`no file could be downloaded: ${String(results[0]?.message ?? 'unknown error')}`, { items: results, ok, failed });
+    return { result: { items: results, ok, failed, summary: `${ok}/${results.length} files → vault${failed ? `, ${failed} failed` : ''}` } };
+  }
+
+  /** Fetches one file and stores it in the vault (Drive + brain index); returns the result body, no screenshot. */
+  private async storeDownload(requestedPath: string, ref: string, url: string): Promise<Json> {
+    const s = this.settings;
     const { blob, name, source } = await this.captureBytes(ref, url);
     const rel = requestedPath && !/[\\/]$/.test(requestedPath) ? requestedPath : `${requestedPath}/${name}`;
     const drivePath = safeVaultPath(s.vaultFolder, rel);
@@ -589,8 +750,7 @@ export class BrowserTools {
     let drive: { id?: string; link?: string; error?: string } = {};
     if (mode === 'drive') {
       try {
-        this.drive ??= await this.driveClient();
-        const f = await this.drive.upload(drivePath, blob, mime);
+        const f = await (await this.driveOnce()).upload(drivePath, blob, mime);
         drive = { id: f.id, link: f.webViewLink };
       } catch (e) {
         drive = { error: e instanceof Error ? e.message : String(e) };
@@ -618,8 +778,7 @@ export class BrowserTools {
     if (mode === 'drive' && drive.error) throw new ToolError(`Drive upload failed: ${drive.error}${vault.id ? ' (the brain kept a copy)' : ''}`, base);
     if (vault.error && mode === 'brain') throw new ToolError(`vault upload failed: ${vault.error}`, base);
     if (vault.error) base.vault_error = vault.error;
-    const id = await this.tab().catch(() => null);
-    return this.withShot(id, { ...base, summary: `${fileName} · ${(blob.size / 1024).toFixed(0)} KB${drive.id ? ' → Drive' : ''}${vault.id ? ' → indexed' : ''}` });
+    return { ...base, summary: `${fileName} · ${(blob.size / 1024).toFixed(0)} KB${drive.id ? ' → Drive' : ''}${vault.id ? ' → indexed' : ''}` };
   }
 }
 

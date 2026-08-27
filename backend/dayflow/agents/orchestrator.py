@@ -102,7 +102,10 @@ How you work:
   line. Never remember transient state (signed out, page loading, a temporary error, what you are about to
   do). Check "What you remember" before searching for a fact again.
 - Before EVERY tool call write exactly one sentence: what you see → what you do next. Then call the tool.
-  Call ONE browser tool at a time and wait for its result; never queue several browser calls in one turn.
+  Anything that touches the working TAB (open_tab, navigate, click, type, press_key, scroll, read_page,
+  screenshot) goes ONE at a time: call it, wait for the result, look at it, then decide the next step. Calls
+  that do not touch the tab (download with a url, download_many, make_folders) may be batched in one turn —
+  prefer download_many over several downloads.
 - Every action (click, type, navigate, scroll, …) returns a screenshot when the page changed; when it did
   not, the result says screenshot "unchanged" — that means the action had no visible effect. Check the
   picture (page changed, row selected, folder opened, text entered) before you decide the next step. If the
@@ -260,6 +263,15 @@ def approvals_in(state: StateLike) -> list[dict[str, Any]]:
     return [a for a in raw if isinstance(a, dict)] if isinstance(raw, list) else []
 
 
+def urls_in(args: dict[str, Any]) -> list[str]:
+    """Every URL a call carries: its own `url`, plus one per item for the batch download tool."""
+    urls = [str(args.get("url") or "")]
+    items = args.get("items")
+    if isinstance(items, list):
+        urls += [str(i.get("url") or "") for i in items if isinstance(i, dict)]
+    return [u for u in urls if u]
+
+
 def guard_tool(
     name: str,
     args: dict[str, Any],
@@ -271,17 +283,18 @@ def guard_tool(
     """Pure policy check. Returns an error dict to short-circuit the tool, or None to allow.
     `trusted_hosts` (the brain's own) pass the allow-list in addition to `perms.allowed_hosts`."""
     if name in URL_TOOL_NAMES:
-        url = str(args.get("url", "") or "")
-        scheme = urlparse(url).scheme.lower()
-        if url and scheme not in {"http", "https"}:
-            return {"status": "error", "error": f"Only http(s) URLs are allowed, got scheme '{scheme or 'none'}'."}
-        host = host_of(url)
-        if url and not host_allowed(host, perms.allowed_hosts) and host not in set(trusted_hosts):
-            return {
-                "status": "error",
-                "error": f"Host '{host}' is not on the user's allow-list. "
-                "Ask the user to add it in Settings → Permissions.",
-            }
+        trusted = set(trusted_hosts)
+        for url in urls_in(args):
+            scheme = urlparse(url).scheme.lower()
+            if scheme not in {"http", "https"}:
+                return {"status": "error", "error": f"Only http(s) URLs are allowed, got scheme '{scheme or 'none'}'."}
+            host = host_of(url)
+            if not host_allowed(host, perms.allowed_hosts) and host not in trusted:
+                return {
+                    "status": "error",
+                    "error": f"Host '{host}' is not on the user's allow-list. "
+                    "Ask the user to add it in Settings → Permissions.",
+                }
     if name in BROWSER_ACTION_NAMES and int(state.get(ACTIONS_KEY, 0) or 0) >= max_actions:
         return {
             "status": "error",

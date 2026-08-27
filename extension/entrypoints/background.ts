@@ -49,7 +49,9 @@ async function startRun(req: Extract<PanelRequest, { type: 'run.start' }>, post:
       return waitForConfirm(id);
     };
     const tools = new BrowserTools({ settings, confirm, emit: send, log: (line) => console.log('[dayflow]', line) });
-    const stream = liveRun(settings, req, { signal: abort.signal, waitForConfirm, waitIfPaused, executeTool: (call) => tools.execute(call) });
+    // `background` is a chrome.alarm firing a schedule: the ledger and the receipt must say so, not "manual".
+    const trigger = background ? 'scheduled' : 'manual';
+    const stream = liveRun(settings, { ...req, trigger }, { signal: abort.signal, waitForConfirm, waitIfPaused, executeTool: (call) => tools.execute(call) });
     for await (const ev of stream) {
       send(ev);
       if (background && ev.kind === 'run.end') notify(ev.status === 'done' ? 'Dayflow finished a scheduled skill' : `Dayflow: ${ev.status}`, ev.summary);

@@ -29,7 +29,7 @@ export interface UserConfig {
 const ASK_BEFORE: Record<keyof Settings['permissions']['askBefore'], string[]> = {
   sendMessage: ['type', 'type_text'],
   createPr: ['create_pull_request', 'issue_write', 'create_issue'],
-  download: ['download'],
+  download: ['download', 'download_many'],
   runJs: ['run_js'],
 };
 

@@ -32,14 +32,22 @@ class PageStore:
     def valid_id(page_id: str) -> bool:
         return bool(ID_RE.match(page_id))
 
+    @staticmethod
+    def new_id() -> str:
+        """An id to reserve before the page exists — a page that must link to another one (the shared ledger
+        and its receipts) needs its own URL while it is still being rendered."""
+        return secrets.token_urlsafe(16)
+
     def url_for(self, kind: str, page_id: str) -> str:
         return f"{self.base_url}/pages/{kind}/{page_id}"
 
-    async def put(self, kind: str, html: str) -> dict[str, Any]:
-        """Stores an HTML page and returns {id, url}."""
+    async def put(self, kind: str, html: str, page_id: str | None = None) -> dict[str, Any]:
+        """Stores an HTML page and returns {id, url}. `page_id` reuses an id from `new_id()`."""
         if not self.valid_kind(kind):
             raise ValueError(f"invalid page kind '{kind}' (lowercase letters, digits, dashes)")
-        page_id = secrets.token_urlsafe(16)
+        if page_id is not None and not self.valid_id(page_id):
+            raise ValueError(f"invalid page id '{page_id}'")
+        page_id = page_id or self.new_id()
         await self.blobs.put(self._key(kind, page_id), html.encode(), "text/html; charset=utf-8")
         return {"id": page_id, "url": self.url_for(kind, page_id)}
 

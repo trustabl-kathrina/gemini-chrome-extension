@@ -36,14 +36,19 @@ def navigate(url: str) -> None:
     return None
 
 
-def read_page(max_nodes: int = 400) -> None:
+def read_page(max_nodes: int = 400, frames: bool = False) -> None:
     """Returns the element list of the working tab: one line per visible element that has its own text
     or is interactive, as `[eN] role "label" @x,y` (N = stable ref, x,y = viewport centre). Refs are
     only valid until the next action; re-read after every navigation, click or Enter. Result also
     includes the page title, URL and a screenshot.
 
+    Embedded content shows up as `[eN] iframe "title" src=<url>`: either open that src in a tab, or
+    read it in place with frames=true.
+
     Args:
         max_nodes: Upper bound on listed elements (default 400; raise it for long tables).
+        frames: Also read inside the page's iframes (Microsoft Teams renders Files/Assignments that way).
+            Refs from a frame look like `f3:e17` and work in click / type / scroll / download unchanged.
     """
     return None
 
@@ -95,13 +100,15 @@ def type_text(ref: str, text: str, submit: bool = False) -> None:
 type_text.__name__ = "type"  # the tool the model sees is `type` (PLAN v2); `type_text` stays the Python name
 
 
-def press_key(key: str) -> None:
+def press_key(key: str, ref: str = "") -> None:
     """Presses one key on the focused element (e.g. "Enter", "Escape", "Tab", "ArrowDown", "Backspace",
     "Control+A"). On Vaadin folder tables: click the row, then press Enter to open it. Result includes a
     screenshot taken after the key press.
 
     Args:
         key: Key name as in KeyboardEvent.key, optionally with modifiers joined by "+".
+        ref: Element the key goes to, from the latest read_page — REQUIRED when that element is inside a
+            frame ("f3:e12"), because a key without a ref lands on the top document, not in the frame.
     """
     return None
 
@@ -146,6 +153,22 @@ def download(path: str, ref: str = "", url: str = "") -> None:
     return None
 
 
+def download_many(items: list[dict[str, str]]) -> None:
+    """Downloads several files in ONE call and stores them in the user's vault, up to 4 at a time — one
+    model round trip instead of one per file. A failed item never stops the others.
+    Result: {items: [{status, path, bytes, drive_file_id, vault_id} | {status: "error", url, message}],
+    ok, failed}. Prefer this over repeated `download` as soon as you know two or more file URLs.
+
+    Args:
+        items: File list, at most 40, each {"url": <direct file URL on an allow-listed host>,
+            "path": <vault-relative path, exactly as in `download`>}, e.g.
+            [{"url": "https://wsp.example.edu/files/lab1.pdf",
+              "path": "CSCI3240 Introduction to Computer Vision/Lab 01/Lab_01.pdf"}].
+            Refs are not supported here — a file that only downloads on click needs `download(ref=…)`.
+    """
+    return None
+
+
 def list_tabs() -> None:
     """Lists the user's open tabs as {tabs: [{id, title, url, active}]} so you can pick a working tab."""
     return None
@@ -185,6 +208,7 @@ BROWSER_FUNCTIONS = [
     scroll,
     run_js,
     download,
+    download_many,
     list_tabs,
     wait,
 ]
@@ -193,5 +217,5 @@ CONFIRM_TOOL = LongRunningFunctionTool(func=request_confirmation)
 # Tools that count towards the per-run browser action cap (request_confirmation is a question, not an action).
 BROWSER_ACTION_NAMES = frozenset(f.__name__ for f in BROWSER_FUNCTIONS)
 BROWSER_TOOL_NAMES = BROWSER_ACTION_NAMES | {request_confirmation.__name__}
-# Tools whose `url` argument must pass the host allow-list.
-URL_TOOL_NAMES = frozenset({"navigate", "open_tab", "download"})
+# Tools whose URL arguments must pass the host allow-list (`download_many` carries one per item).
+URL_TOOL_NAMES = frozenset({"navigate", "open_tab", "download", "download_many"})

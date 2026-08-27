@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>WSP — sign in</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/app.css" />
+  <style>
+    /* Login-only styling; the shell above is the same Vaadin-ish look as the portal itself. */
+    .login-wrap { display: flex; justify-content: center; padding: 48px 16px; }
+    .login-card { width: 360px; background: #fff; border: 1px solid #c5cdd6; border-radius: 3px; padding: 22px 24px 18px; }
+    .login-card h2 { margin-top: 0; }
+    .login-field { margin-bottom: 12px; }
+    .login-field label { display: block; margin-bottom: 4px; color: #3b4a5c; }
+    .login-field input { width: 100%; padding: 6px 8px; font: inherit; border: 1px solid #c5cdd6; border-radius: 3px; }
+    .login-card button { font: inherit; padding: 8px 18px; background: #143d66; color: #fff; border: 1px solid #0e2d4d; border-radius: 3px; cursor: pointer; }
+    .login-card button:hover { background: #1b4f83; }
+    .login-error { background: #fdeaea; border: 1px solid #e2b4b4; color: #8b2020; padding: 6px 10px; border-radius: 3px; margin-bottom: 12px; }
+    .login-note { margin-top: 14px; padding-top: 12px; border-top: 1px dashed #c9d2dc; color: #4a5866; font-size: 12px; line-height: 1.5; }
+    .login-note code { background: #eef1f5; padding: 1px 4px; border-radius: 2px; }
+  </style>
+</head>
+<body class="v-generated-body">
+  <div id="app" class="v-app">
+    <div class="v-verticallayout topbar">
+      <div class="brand">
+        <img class="home-icon" src="/icons/home.png" alt="" title="Desktop" />
+        <span class="v-label brand-text">KBTU · WSP</span>
+      </div>
+      <div class="topbar-right"><span class="v-label">Sign in</span></div>
+    </div>
+    <div class="v-panel-content">
+      <div class="login-wrap">
+        <form class="login-card" method="post" action="/login">
+          <h2 class="v-caption">Sign in to WSP</h2>
+          __ERROR__
+          <input type="hidden" name="next" value="__NEXT__" />
+          <div class="login-field">
+            <label for="username">Username</label>
+            <input id="username" name="username" autocomplete="username" value="__USER__" autofocus />
+          </div>
+          <div class="login-field">
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" value="__PASSWORD__" />
+          </div>
+          <button type="submit">Sign in</button>
+          <div class="login-note">
+            <strong>Demo account: <code>__USER__</code> / <code>__PASSWORD__</code></strong> — pre-filled, just press <em>Sign in</em>.<br />
+            This is an <strong>anonymized replica</strong> of a university portal, built for the Dayflow demo.
+            Every student, instructor, course and PDF in it is generated; no real account or personal data exists here.
+          </div>
+        </form>
+      </div>
+    </div>
+    <div class="footer"><span class="v-label">© KBTU · replica portal for the Dayflow demo</span></div>
+  </div>
+</body>
+</html>
