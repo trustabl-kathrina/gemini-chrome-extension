@@ -7,6 +7,7 @@ skills:
     title: Sync WSP files to vault
     blurb: Walk a course's file directory on WSP and download every file into the Drive vault, parsed and indexed.
     prompt: Sync all course files from WSP into my vault and tell me what changed.
+    keywords: [sync, wsp, vault, files, download, mirror, changed]
     sites: [wsp.kbtu.kz]
     tools: [open_tab, read_page, click, press_key, scroll, download, wait, screenshot, vault_list, vault_read]
     schedule: "0 8 * * *"
@@ -44,6 +45,7 @@ skills:
     title: Build courseware from syllabus
     blurb: Cheatsheet + quiz per topic, generated from the syllabus and opened as a page.
     prompt: Build a cheatsheet and a quiz from the syllabus of the current course.
+    keywords: [cheatsheet, cheat, quiz, courseware, revise, revision, exam]
     sites: [wsp.kbtu.kz]
     tools: [vault_list, vault_read, generate_courseware, download, open_tab, read_page, click, wait, screenshot]
     instructions: |
@@ -80,6 +82,7 @@ skills:
     title: Scaffold vault folders
     blurb: Per course, per week, per lab — folder tree initialized in Drive from the syllabus schedule.
     prompt: Create the vault folder structure for this semester from my syllabi.
+    keywords: [scaffold, folders, folder, structure, tree, weeks]
     sites: [wsp.kbtu.kz]
     tools: [vault_list, vault_read, plan_vault_folders, make_folders, open_tab, read_page, click, download, wait, screenshot]
     instructions: |
@@ -115,6 +118,7 @@ skills:
     title: Solve a lab from the vault
     blurb: Read the lab PDF (or the syllabus), solve every task with code that is actually run, deliver a notebook to Colab/Drive or a private repo.
     prompt: Solve Lab 1 of my Computer Vision course as a notebook and open it in Google Colab.
+    keywords: [lab, labs, notebook, ipynb, colab, jupyter, solve, assignment, homework]
     sites: [github.com, colab.research.google.com]
     tools: [vault_list, vault_read, solve_lab_task, build_notebook, build_report, create_repository, push_files, download, open_tab, read_page, click, press_key, wait, screenshot, remember]
     instructions: |
@@ -161,6 +165,7 @@ skills:
     title: "Team ops: Telegram → Linear → GitHub"
     blurb: Post an update to the diploma chat, file Linear issues, open a GitHub issue + PR.
     prompt: Post this week's update to the diploma project chat, create Linear issues for the next milestone, and open the PR.
+    keywords: [telegram, linear, issue, issues, pr, pull, update, team, diploma, chat]
     sites: [web.telegram.org, linear.app, github.com]
     tools: [get_file_contents, open_tab, read_page, click, type, press_key, wait, screenshot, request_confirmation, list_teams, list_projects, create_issue, issue_write, create_branch, push_files, create_pull_request]
     instructions: |
@@ -233,6 +238,7 @@ skills:
     title: Pitch deck from repo
     blurb: A 16:9 .pptx pitch about the diploma project, built from its README/TODO, saved to the vault with an HTML preview.
     prompt: Build a pitch deck about my diploma project repo, save it to my vault and open the preview.
+    keywords: [pitch, deck, slides, presentation, pptx, powerpoint]
     sites: [github.com]
     tools: [get_file_contents, build_deck, download, open_tab, vault_list]
     instructions: |

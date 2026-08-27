@@ -70,6 +70,9 @@ def build_lab_solver(model: str | None = None) -> LlmAgent:
         instruction=SOLVER_INSTRUCTION,
         input_schema=LabTask,
         code_executor=BuiltInCodeExecutor(),
+        generate_content_config=types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel(registry().solver_thinking.upper()))
+        ),
     )
 
 

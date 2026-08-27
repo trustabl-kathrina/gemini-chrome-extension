@@ -427,9 +427,7 @@ async def test_google_id_token_is_accepted_and_scoped_to_its_sub(
     assert (await client.get("/config", headers=AUTH)).json()["vault_folder"] == "Dayflow"
 
 
-async def test_a_jwt_that_fails_verification_is_401(
-    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
+async def test_a_jwt_that_fails_verification_is_401(client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
     google_signin(monkeypatch, None)
     bad = {"Authorization": "Bearer header.payload.signature"}
     assert (await client.get("/config", headers=bad)).status_code == 401
@@ -502,3 +500,10 @@ async def test_chat_settles_the_previous_runs_pending_calls_in_the_same_session(
 async def test_chat_on_a_fresh_session_has_nothing_to_settle(client: httpx.AsyncClient, fake: FakeRunner) -> None:
     r = await client.post("/chat", headers=AUTH, json={"session_id": "new", "text": "go"})
     assert r.status_code == 200 and fake.calls[0]["session_id"] == "new"
+
+
+async def test_chat_picks_the_playbooks_for_a_free_prompt(client: httpx.AsyncClient, fake: FakeRunner) -> None:
+    r = await client.post("/chat", headers=AUTH, json={"session_id": "s1", "text": "Solve lab 1 in Colab"})
+    assert r.status_code == 200 and fake.calls[0]["state_delta"]["playbooks"] == ["lab"]
+    r = await client.post("/chat", headers=AUTH, json={"session_id": "s2", "skill_id": "vault-sync"})
+    assert r.status_code == 200 and fake.calls[1]["state_delta"]["playbooks"] == []

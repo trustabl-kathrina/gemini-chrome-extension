@@ -66,7 +66,14 @@ MAX_ACTIONS = 40
 # Screenshots stay in the session, but only the last KEEP_SCREENSHOTS tool results reach the model as images:
 # older pages are history the model already acted on, and every extra image slows the next turn down.
 KEEP_SCREENSHOTS = 2
+# Older tool results are history the model already acted on: only the last KEEP_RESULTS keep their full text
+# (a read_page is ~6k tokens, a vault_read up to 60k chars); older ones are cut to KEEP_RESULT_CHARS.
+KEEP_RESULTS = 3
+KEEP_RESULT_CHARS = 600
 MAX_MEMORY_CHARS = 4000
+PLAYBOOKS_KEY = "playbooks"  # skill ids whose playbooks a free prompt gets (chosen once per run in /chat)
+# Tools every run may call regardless of the active skill's `tools` list.
+ALWAYS_TOOLS = frozenset({"request_confirmation", "remember", "list_tabs", "wait", "screenshot", "read_page"})
 # Older configs and the extension's permission mapper say `type_text`; the tool the model sees is `type`.
 TOOL_ALIASES = {"type_text": "type"}
 # Arguments that carry what a gated call sends or creates; every one present must appear in the approval text.
@@ -132,9 +139,26 @@ def skill_section(skill: Skill) -> str:
     return text
 
 
-def compose_instruction(cfg: UserConfig, skill: Skill | None, domains: list[str]) -> str:
-    """Base prompt + memory + the active skill (or every enabled skill as a playbook when the user typed a
-    free prompt) + the site profiles in scope (every profile when no narrower scope is known) + permissions."""
+def relevant_playbooks(text: str, skills: list[Skill]) -> list[str]:
+    """Ids of the enabled skills a free prompt is about: a skill with `keywords` matches when one of them occurs
+    in the text (whole word, case-insensitive); a skill without keywords always matches. Empty when nothing
+    matches — the caller then injects every playbook."""
+    words = set(re.findall(r"[a-z0-9][a-z0-9-]*", text.lower()))
+    hits: list[str] = []
+    for sk in skills:
+        if not sk.enabled or not sk.instructions.strip():
+            continue
+        if not sk.keywords or any(k.lower() in words for k in sk.keywords):
+            hits.append(sk.id)
+    return hits
+
+
+def compose_instruction(
+    cfg: UserConfig, skill: Skill | None, domains: list[str], playbooks: list[str] | None = None
+) -> str:
+    """Base prompt + memory + the active skill (or, for a free prompt, the playbooks in `playbooks` — every
+    enabled skill when None/empty) + the site profiles in scope (every profile when no narrower scope is
+    known) + permissions."""
     parts = [BASE_PROMPT]
     if cfg.memory:
         parts.append(f"## What you remember about this user\n{cfg.memory}")
@@ -144,13 +168,14 @@ def compose_instruction(cfg: UserConfig, skill: Skill | None, domains: list[str]
         if skill.tools:
             parts.append("Tools this skill may use: " + ", ".join(skill.tools))
     else:
-        playbooks = [s for s in cfg.skills if s.enabled and s.instructions.strip()]
-        if playbooks:
+        chosen = set(playbooks or [])
+        books = [s for s in cfg.skills if s.enabled and s.instructions.strip() and (not chosen or s.id in chosen)]
+        if books:
             intro = (
                 "## Skills you know (playbooks)\nWhen the request matches one of these, follow its steps as if the "
                 "user had invoked it; otherwise plan from the site notes.\n\n"
             )
-            parts.append(intro + "\n\n".join(map(skill_section, playbooks)))
+            parts.append(intro + "\n\n".join(map(skill_section, books)))
     profiles: list[SiteProfile] = []
     unprofiled: list[str] = []
     if not domains and not skill:
@@ -337,6 +362,67 @@ def prune_screenshots(contents: list[types.Content], keep: int = KEEP_SCREENSHOT
     return dropped
 
 
+def _cut_response(fr: types.FunctionResponse, limit: int) -> types.FunctionResponse | None:
+    """`fr` with every string value longer than `limit` cut, or None when nothing is that long."""
+    response = dict(fr.response or {})
+    cut = False
+    for k, v in response.items():
+        if isinstance(v, str) and len(v) > limit:
+            response[k] = v[:limit] + f"… (older step: {len(v) - limit} more characters dropped)"
+            cut = True
+    return fr.model_copy(update={"response": response}) if cut else None
+
+
+def prune_history(
+    contents: list[types.Content], keep_results: int = KEEP_RESULTS, keep_chars: int = KEEP_RESULT_CHARS
+) -> int:
+    """Shrinks what earlier turns contribute to the request; returns how many parts were changed or dropped.
+    · Runs before the current prompt (the last user content with text) lose their tool calls and results — the
+      prompts and the model's summaries stay, so a follow-up still knows what happened.
+    · In the current run, function responses older than the last `keep_results` have long strings cut to
+      `keep_chars` (page dumps, file texts).
+    Entries are replaced by copies; the session-owned events are never mutated."""
+    changed = 0
+    current = 0
+    for i, c in enumerate(contents):
+        if c.role == "user" and any(p.text for p in (c.parts or [])):
+            current = i
+    kept: list[types.Content] = []
+    for c in contents[:current]:
+        parts = [p for p in (c.parts or []) if not (p.function_call or p.function_response)]
+        changed += len(c.parts or []) - len(parts)
+        if parts:
+            kept.append(c if len(parts) == len(c.parts or []) else c.model_copy(update={"parts": parts}))
+    tail = contents[current:]
+    with_results = [j for j, c in enumerate(tail) if any(p.function_response for p in (c.parts or []))]
+    for j in with_results[: max(len(with_results) - keep_results, 0)]:
+        parts = []
+        for p in tail[j].parts or []:
+            cut = _cut_response(p.function_response, keep_chars) if p.function_response else None
+            if cut is not None:
+                changed += 1
+                parts.append(types.Part(function_response=cut))
+            else:
+                parts.append(p)
+        tail[j] = tail[j].model_copy(update={"parts": parts})
+    contents[:] = kept + tail
+    return changed
+
+
+def restrict_tools(llm_request: LlmRequest, allowed: set[str]) -> int:
+    """Keeps only the function declarations in `allowed` (plus ALWAYS_TOOLS); returns how many were removed.
+    The active skill lists its tools, and every declaration the model does not need is prompt it pays for."""
+    keep = {TOOL_ALIASES.get(n, n) for n in allowed} | ALWAYS_TOOLS
+    removed = 0
+    for tool in llm_request.config.tools or []:
+        if not isinstance(tool, types.Tool) or not tool.function_declarations:
+            continue
+        kept = [d for d in tool.function_declarations if d.name in keep]
+        removed += len(tool.function_declarations) - len(kept)
+        tool.function_declarations = kept
+    return removed
+
+
 def thinking_config() -> types.GenerateContentConfig:
     level = types.ThinkingLevel(registry().thinking.upper())
     return types.GenerateContentConfig(thinking_config=types.ThinkingConfig(thinking_level=level))
@@ -348,14 +434,21 @@ def build_root_agent(store: ConfigStore) -> LlmAgent:
         skill_id = ctx.state.get(SKILL_KEY)
         skill = cfg.skill(str(skill_id)) if skill_id else None
         domains = list(ctx.state.get(DOMAINS_KEY) or (skill.sites if skill else []))
-        return compose_instruction(cfg, skill, domains)
+        return compose_instruction(cfg, skill, domains, list(ctx.state.get(PLAYBOOKS_KEY) or []))
 
     async def before_tool(tool: BaseTool, args: dict[str, Any], tool_context: ToolContext) -> dict[str, Any] | None:
         cfg = await store.get(tool_context.user_id)
         return guard_tool(tool.name, args, tool_context.state, cfg.permissions, trusted_hosts=brain_hosts())
 
     async def before_model(callback_context: CallbackContext, llm_request: LlmRequest) -> LlmResponse | None:
+        prune_history(llm_request.contents)
         prune_screenshots(llm_request.contents)
+        skill_id = callback_context.state.get(SKILL_KEY)
+        if skill_id:
+            cfg = await store.get(callback_context.user_id)
+            skill = cfg.skill(str(skill_id))
+            if skill and skill.tools:
+                restrict_tools(llm_request, set(skill.tools))
         return None
 
     async def remember(note: str, tool_context: ToolContext) -> dict[str, Any]:

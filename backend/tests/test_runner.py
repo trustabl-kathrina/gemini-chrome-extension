@@ -170,3 +170,23 @@ async def test_older_screenshots_are_pruned_from_the_model_request() -> None:
     assert len(frs) == n
     assert [bool(fr.parts) for fr in frs] == [False] * 2 + [True] * KEEP_SCREENSHOTS
     assert all("dropped" in str(fr.response.get("screenshot")) for fr in frs[:2] if fr.response)
+
+
+async def test_active_skill_restricts_the_declared_tools() -> None:
+    from dayflow.agents.orchestrator import SKILL_KEY
+
+    runner, llm = make_runner([[txt("ok")]])
+    events = [
+        ev
+        async for ev in runner.run_async(
+            user_id="u",
+            session_id="s",
+            new_message=types.Content(role="user", parts=[txt("go")]),
+            state_delta={SKILL_KEY: "pitch-deck"},
+        )
+    ]
+    assert final_text(events[-1]) == "ok"
+    tools = llm.requests[-1].config.tools or []
+    names = {d.name for t in tools if isinstance(t, types.Tool) for d in (t.function_declarations or [])}
+    assert {"build_deck", "download", "open_tab", "vault_list", "remember"} <= names  # GitHub toolset needs env
+    assert "create_pull_request" not in names and "solve_lab_task" not in names and len(names) < 15

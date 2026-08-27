@@ -21,6 +21,7 @@ class ModelRegistry(BaseModel):
     embed: str
     embed_dims: int = 768
     thinking: str = "low"  # orchestrator thinking level: minimal | low | medium | high
+    solver_thinking: str = "medium"  # the lab solver writes code: one notch up
 
 
 @lru_cache(maxsize=1)
@@ -31,6 +32,8 @@ def registry() -> ModelRegistry:
             data[role] = override
     if override := os.getenv("DAYFLOW_THINKING"):
         data["thinking"] = override
+    if override := os.getenv("DAYFLOW_SOLVER_THINKING"):
+        data["solver_thinking"] = override
     reg = ModelRegistry.model_validate(data)
     if not reg.solver:
         reg.solver = reg.orchestrator

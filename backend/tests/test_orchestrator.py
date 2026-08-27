@@ -278,3 +278,72 @@ def test_thinking_level_comes_from_the_registry(monkeypatch: pytest.MonkeyPatch)
         assert thinking_config().thinking_config.thinking_level == types.ThinkingLevel.MEDIUM  # type: ignore[union-attr]
     finally:
         registry.cache_clear()
+
+
+def test_relevant_playbooks_match_keywords_and_fall_back_to_all() -> None:
+    from dayflow.agents.orchestrator import compose_instruction, relevant_playbooks
+
+    cfg = default_config()
+    assert relevant_playbooks("Solve Lab 1 of my CV course and open it in Colab", cfg.skills) == ["lab"]
+    assert relevant_playbooks("sync WSP files into my vault", cfg.skills) == ["vault-sync"]
+    assert relevant_playbooks("post the update to telegram and open the PR", cfg.skills) == ["team-ops"]
+    assert relevant_playbooks("what is the weather", cfg.skills) == [], "no match → caller injects every playbook"
+    only_lab = compose_instruction(cfg, None, [], ["lab"])
+    everything = compose_instruction(cfg, None, [], [])
+    assert "(/lab)" in only_lab and "(/vault-sync)" not in only_lab
+    assert "(/lab)" in everything and "(/vault-sync)" in everything and len(everything) > len(only_lab) * 2
+
+
+def test_prune_history_drops_old_runs_tool_traffic_and_cuts_old_results() -> None:
+    from google.genai import types
+
+    from dayflow.agents.orchestrator import prune_history
+
+    def fc(i: int) -> types.Content:
+        return types.Content(
+            role="model", parts=[types.Part(function_call=types.FunctionCall(id=f"c{i}", name="read_page"))]
+        )
+
+    def fr(i: int, size: int) -> types.Content:
+        r = types.FunctionResponse(id=f"c{i}", name="read_page", response={"result": "x" * size, "nodes": 3})
+        return types.Content(role="user", parts=[types.Part(function_response=r)])
+
+    text = lambda role, t: types.Content(role=role, parts=[types.Part(text=t)])  # noqa: E731
+    contents = [
+        text("user", "sync my files"),  # previous run
+        text("model", "plan: …"),
+        fc(1),
+        fr(1, 5000),
+        text("model", "Synced 3 files."),
+        text("user", "now build lab 1"),  # current run
+        fc(2),
+        fr(2, 5000),
+        fc(3),
+        fr(3, 5000),
+        fc(4),
+        fr(4, 5000),
+    ]
+    changed = prune_history(contents, keep_results=2, keep_chars=100)
+    assert changed == 3  # old run: fc+fr dropped (2 parts); current run: the oldest of three results cut (1)
+    texts = [p.text for c in contents for p in (c.parts or []) if p.text]
+    assert texts == ["sync my files", "plan: …", "Synced 3 files.", "now build lab 1"]
+    frs = [p.function_response for c in contents for p in (c.parts or []) if p.function_response]
+    assert [f.id for f in frs] == ["c2", "c3", "c4"]
+    assert frs[0].response and len(frs[0].response["result"]) < 200 and "dropped" in frs[0].response["result"]
+    assert frs[1].response and len(frs[1].response["result"]) == 5000, "the last keep_results results stay whole"
+    assert frs[0].response["nodes"] == 3, "non-string values untouched"
+
+
+def test_restrict_tools_keeps_the_skills_tools_plus_the_always_set() -> None:
+    from google.adk.models.llm_request import LlmRequest
+    from google.genai import types
+
+    from dayflow.agents.orchestrator import ALWAYS_TOOLS, restrict_tools
+
+    names = ["open_tab", "click", "type", "download", "create_pull_request", "build_deck", "remember", "read_page"]
+    req = LlmRequest()
+    req.config.tools = [types.Tool(function_declarations=[types.FunctionDeclaration(name=n) for n in names])]
+    removed = restrict_tools(req, {"open_tab", "type_text", "download"})
+    left = {d.name for d in req.config.tools[0].function_declarations or []}  # type: ignore[union-attr]
+    assert removed == 3 and left == {"open_tab", "type", "download", "remember", "read_page"}
+    assert "request_confirmation" in ALWAYS_TOOLS

@@ -14,6 +14,7 @@ from typing import Any, NamedTuple
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from google.adk.agents.context_cache_config import ContextCacheConfig
 from google.adk.agents.run_config import RunConfig, StreamingMode  # pyright: ignore[reportPrivateImportUsage]
 from google.adk.apps import App
 from google.adk.events import Event
@@ -22,7 +23,15 @@ from google.adk.sessions import BaseSessionService, InMemorySessionService, Sess
 from google.genai import types
 from pydantic import BaseModel, Field
 
-from dayflow.agents.orchestrator import ACTIONS_KEY, DOMAINS_KEY, SKILL_KEY, build_root_agent, result_state_delta
+from dayflow.agents.orchestrator import (
+    ACTIONS_KEY,
+    DOMAINS_KEY,
+    PLAYBOOKS_KEY,
+    SKILL_KEY,
+    build_root_agent,
+    relevant_playbooks,
+    result_state_delta,
+)
 from dayflow.api.auth import current_user
 from dayflow.api.deck_routes import router as deck_router
 from dayflow.api.oidc import verify_google_oidc
@@ -37,6 +46,9 @@ from dayflow.scheduler import run_once
 from dayflow.tools.lab import local_exec_enabled
 
 log = logging.getLogger("dayflow.api")
+# uvicorn configures only its own loggers; without a root handler the brain's INFO lines (usage per turn) are lost.
+if not logging.getLogger().handlers:
+    logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 APP_NAME = "dayflow"
 SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 SCREENSHOT_KEY = "screenshot_b64"
@@ -118,18 +130,69 @@ def make_session_service() -> BaseSessionService:
     return InMemorySessionService()
 
 
+def context_cache() -> ContextCacheConfig | None:
+    """Gemini explicit context caching, opt-in with DAYFLOW_CONTEXT_CACHE=1. Measured on the vault-sync scene
+    (2026-08-27, gemini-3.7-flash on Vertex): implicit caching already covers ~50% of prompt tokens; the explicit
+    cache saved a further ~10% of the run's cost but each cache creation stalled the loop (98 s → 186 s)."""
+    if os.getenv("DAYFLOW_CONTEXT_CACHE", "0") != "1":
+        return None
+    return ContextCacheConfig(cache_intervals=20, ttl_seconds=1800)
+
+
 def make_runner(store: ConfigStore) -> Runner:
     return Runner(
-        app=App(name=APP_NAME, root_agent=build_root_agent(store)),
+        app=App(name=APP_NAME, root_agent=build_root_agent(store), context_cache_config=context_cache()),
         session_service=make_session_service(),
         auto_create_session=True,
     )
+
+
+USAGE_FIELDS = ("prompt", "cached", "thoughts", "output")
+# Gemini 3.7 Flash list prices per 1M tokens (ai.google.dev/gemini-api/docs/pricing, valid through 2026-12-31);
+# only used for the estimate in the usage log line — billing is the source of truth.
+PRICE_PER_M = {"prompt": 0.75, "cached": 0.075, "thoughts": 3.75, "output": 3.75}
+usage_by_session: dict[str, dict[str, int]] = {}  # session_id → running totals (this process only)
+
+
+def usage_of(ev: Event) -> dict[str, int]:
+    """Token counts of one model call. `prompt` includes the cached part; Gemini bills that part at the cached rate."""
+    u = ev.usage_metadata
+    if u is None:
+        return {}
+    return {
+        "prompt": int(u.prompt_token_count or 0),
+        "cached": int(u.cached_content_token_count or 0),
+        "thoughts": int(u.thoughts_token_count or 0),
+        "output": int(u.candidates_token_count or 0),
+    }
+
+
+def estimate_usd(t: dict[str, int]) -> float:
+    uncached = max(t.get("prompt", 0) - t.get("cached", 0), 0)
+    return (
+        uncached * PRICE_PER_M["prompt"]
+        + t.get("cached", 0) * PRICE_PER_M["cached"]
+        + t.get("thoughts", 0) * PRICE_PER_M["thoughts"]
+        + t.get("output", 0) * PRICE_PER_M["output"]
+    ) / 1_000_000
+
+
+def book_usage(session_id: str, calls: list[dict[str, int]]) -> dict[str, int]:
+    total = usage_by_session.setdefault(session_id, {k: 0 for k in USAGE_FIELDS} | {"calls": 0})
+    for c in calls:
+        for k in USAGE_FIELDS:
+            total[k] += c.get(k, 0)
+        total["calls"] += 1
+    if len(usage_by_session) > 500:  # bounded: oldest sessions fall off
+        usage_by_session.pop(next(iter(usage_by_session)))
+    return total
 
 
 def sse(
     runner: Runner, user_id: str, session_id: str, content: types.Content, state_delta: dict[str, Any] | None
 ) -> AsyncIterator[str]:
     async def gen() -> AsyncIterator[str]:
+        calls: list[dict[str, int]] = []
         try:
             async for ev in runner.run_async(
                 user_id=user_id,
@@ -138,12 +201,29 @@ def sse(
                 state_delta=state_delta,
                 run_config=RunConfig(streaming_mode=StreamingMode.SSE),
             ):
+                # Streaming: partial chunks carry running counts; the aggregate (non-partial) event has the total.
+                if not ev.partial and (u := usage_of(ev)):
+                    calls.append(u)
                 yield f"data: {ev.model_dump_json(exclude_none=True, by_alias=True)}\n\n"
         except Exception as e:  # noqa: BLE001 — surface any failure as an ADK-shaped event, never an empty 200
             log.exception("run failed for user=%s session=%s", user_id, session_id)
             err = {"errorMessage": f"{type(e).__name__}: {e}", "author": "dayflow"}
             yield f"data: {json.dumps(err)}\n\n"
         finally:
+            if calls:
+                total = book_usage(session_id, calls)
+                turn = {k: sum(c.get(k, 0) for c in calls) for k in USAGE_FIELDS}
+                log.info(
+                    "usage session=%s turn: calls=%d prompt=%d cached=%d thoughts=%d output=%d ≈$%.4f | session: "
+                    "calls=%d prompt=%d cached=%d thoughts=%d output=%d ≈$%.4f",
+                    session_id,
+                    len(calls),
+                    *(turn[k] for k in USAGE_FIELDS),
+                    estimate_usd(turn),
+                    total["calls"],
+                    *(total[k] for k in USAGE_FIELDS),
+                    estimate_usd(total),
+                )
             yield "event: done\ndata: {}\n\n"
 
     return gen()
@@ -273,6 +353,11 @@ def create_app(
             "local_exec": local_exec_enabled(),
         }
 
+    @app.get("/usage/{session_id}")
+    async def usage(session_id: str, user_id: str = Depends(current_user)) -> dict[str, Any]:
+        total = usage_by_session.get(session_id) or {k: 0 for k in USAGE_FIELDS} | {"calls": 0}
+        return {**total, "estimate_usd": round(estimate_usd(total), 4), "prices_per_m": PRICE_PER_M}
+
     @app.get("/skills", response_model=list[Skill])
     async def skills(request: Request, user_id: str = Depends(current_user)) -> list[Skill]:
         cfg: UserConfig = await request.app.state.store.get(user_id)
@@ -302,7 +387,12 @@ def create_app(
         # and whatever the previous run left unanswered is closed so the history stays valid for the model.
         runner: Runner = request.app.state.runner
         await settle_pending_calls(runner, user_id, body.session_id)
-        state_delta: dict[str, Any] = {SKILL_KEY: body.skill_id, DOMAINS_KEY: body.domains, ACTIONS_KEY: 0}
+        state_delta: dict[str, Any] = {
+            SKILL_KEY: body.skill_id,
+            DOMAINS_KEY: body.domains,
+            ACTIONS_KEY: 0,
+            PLAYBOOKS_KEY: [] if body.skill_id else relevant_playbooks(text, cfg.skills),
+        }
         content = types.Content(role="user", parts=[types.Part(text=text)])
         return StreamingResponse(
             sse(runner, user_id, body.session_id, content, state_delta),

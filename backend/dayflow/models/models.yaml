@@ -7,3 +7,4 @@ embed: gemini-embedding-2
 embed_dims: 768
 # Orchestrator thinking level (minimal|low|medium|high): browsing steps are small — LOW keeps turns fast.
 thinking: low
+solver_thinking: medium

@@ -19,6 +19,11 @@ class Skill(BaseModel):
     instructions: str = Field(description="Injected into the system prompt while this skill is active.")
     tools: list[str] = Field(default_factory=list, description="Tool names the skill may use; empty = all.")
     sites: list[str] = Field(default_factory=list, description="Domains the skill operates on.")
+    keywords: list[str] = Field(
+        default_factory=list,
+        description="Words that mark a free-text prompt as this skill's job; its playbook is then injected "
+        "(no keywords = always injected).",
+    )
     schedule: str | None = Field(default=None, description="Cron expression; None = on demand only.")
     pack: str = "custom"
     enabled: bool = True
