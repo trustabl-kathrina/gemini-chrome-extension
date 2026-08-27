@@ -12,13 +12,14 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import PlainTextResponse
 
 from dayflow.api.auth import current_user
-from dayflow.core.vault import VaultEntry, VaultStore, guess_content_type, is_pdf, normalize_path
-from dayflow.tools.server import parse_document
+from dayflow.core.vault import VaultEntry, VaultStore, extract_text, guess_content_type, is_pdf, normalize_path
+from dayflow.tools.server import parse_document, transcribe_pdf
 
 log = logging.getLogger("dayflow.vault")
 router = APIRouter(prefix="/vault", tags=["vault"])
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 MAX_PARSE_BYTES = 20 * 1024 * 1024  # inline PDF limit for Gemini
+MIN_TEXT_CHARS = 200  # below this a PDF is treated as scanned and transcribed by Gemini
 
 
 def vault_of(request: Request) -> VaultStore:
@@ -35,6 +36,21 @@ async def parse_pdf(name: str, data: bytes) -> tuple[dict[str, Any] | None, str]
         log.exception("parse_document failed for %s", name)
         return None, f"{type(e).__name__}: {e}"
     return parsed, ""
+
+
+async def ocr_if_scanned(name: str, data: bytes, ctype: str) -> str | None:
+    """pypdf text when the PDF has a text layer; otherwise Gemini's transcription (scanned syllabi are common).
+    None → the store extracts as usual. Never raises: a transcription outage leaves the file with empty text."""
+    text = extract_text(data, ctype, name)
+    if len(text.strip()) >= MIN_TEXT_CHARS or len(data) > MAX_PARSE_BYTES:
+        return text
+    try:
+        ocr = await transcribe_pdf(name, base64.b64encode(data).decode())
+    except Exception as e:  # noqa: BLE001 — recorded in the log; the upload itself succeeds
+        log.warning("transcribe_pdf failed for %s: %s: %s", name, type(e).__name__, e)
+        return text
+    log.info("vault: %s had %d chars of text; Gemini transcribed %d", name, len(text), len(ocr))
+    return ocr if len(ocr.strip()) > len(text.strip()) else text
 
 
 @router.post("/upload", response_model=VaultEntry)
@@ -59,14 +75,25 @@ async def upload(
     vault = vault_of(request)
     parsed: dict[str, Any] | None = None
     error = ""
+    text: str | None = None
     if is_pdf(data, ctype):
         existing = await vault.find_by_path(user_id, clean)
         digest = hashlib.sha256(data).hexdigest()
         unchanged = existing is not None and bool(existing.summary) and existing.sha256 == digest
         if not unchanged:
             parsed, error = await parse_pdf(name, data)
+            text = await ocr_if_scanned(name, data, ctype)
+        elif existing is not None:
+            text = await vault.text(user_id, existing)  # keep the transcription made last time
     entry = await vault.add(
-        user_id, clean, data, content_type=ctype, drive_file_id=drive_file_id or None, parsed=parsed, parse_error=error
+        user_id,
+        clean,
+        data,
+        content_type=ctype,
+        drive_file_id=drive_file_id or None,
+        parsed=parsed,
+        parse_error=error,
+        text=text,
     )
     log.info("vault upload user=%s path=%s bytes=%d parsed=%s", user_id, entry.path, entry.size, bool(parsed))
     return entry

@@ -53,6 +53,25 @@ async def parse_document(file_name: str, pdf_base64: str) -> dict:
     return {"status": "success", **doc.model_dump()}
 
 
+async def transcribe_pdf(file_name: str, pdf_base64: str) -> str:
+    """Plain text of a PDF that has no text layer (scanned syllabi, photographed sheets): Gemini reads the pages.
+    Returns "" when the model finds no readable text. Page breaks are kept as "[page N]" lines."""
+    pdf = base64.b64decode(pdf_base64)
+    resp = await client().aio.models.generate_content(
+        model=registry().parser,
+        contents=[
+            types.Part.from_bytes(data=pdf, mime_type="application/pdf"),
+            f"File name: {file_name}. Transcribe ALL the text of this document verbatim, page by page, in reading "
+            "order; start each page with a line '[page N]'. Keep tables as text lines. Output the text only — no "
+            "commentary, no markdown fences. If a page has no readable text, write '[page N] (no text)'.",
+        ],
+        config=types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW)
+        ),
+    )
+    return (resp.text or "").strip()
+
+
 async def embed_text(text: str) -> dict:
     """Embeds text for vault search (gemini-embedding-2, 768 dims, Firestore-compatible).
 

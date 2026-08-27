@@ -161,3 +161,53 @@ async def test_upload_survives_parser_failure_and_validates_input(
     ).status_code == 422
     assert (await client.post("/vault/upload", headers=AUTH, files={"file": ("b", b"x")})).status_code == 422
     assert (await client.get("/vault")).status_code == 401
+
+
+async def test_upload_transcribes_scanned_pdfs_with_gemini(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A PDF without a text layer (scanned syllabus) gets Gemini transcription as its text; a text PDF does not."""
+    transcribed: list[str] = []
+
+    async def fake_parse(file_name: str, pdf_base64: str) -> dict[str, Any]:
+        return PARSED
+
+    async def fake_transcribe(file_name: str, pdf_base64: str) -> str:
+        transcribed.append(file_name)
+        return "[page 1]\nCyber Security Fundamentals — syllabus\nWeek 01: Threat landscape"
+
+    monkeypatch.setattr("dayflow.api.vault.parse_document", fake_parse)
+    monkeypatch.setattr("dayflow.api.vault.transcribe_pdf", fake_transcribe)
+    monkeypatch.setattr(
+        "dayflow.api.vault.extract_text", lambda data, ctype, name="": ""
+    )  # what pypdf yields on a scan
+    scanned = make_pdf("scan")
+    r = await client.post(
+        "/vault/upload",
+        headers=AUTH,
+        data={"path": "CSF Cyber Security Fundamentals/Materials/syllabus.pdf"},
+        files={"file": ("syllabus.pdf", scanned, "application/pdf")},
+    )
+    assert r.status_code == 200, r.text
+    text = await client.get(f"/vault/{r.json()['id']}/text", headers=AUTH)
+    assert text.status_code == 200 and "Week 01: Threat landscape" in text.text
+    assert transcribed == ["syllabus.pdf"]
+    # Re-upload of the same bytes: no second transcription, the stored text survives.
+    r2 = await client.post(
+        "/vault/upload",
+        headers=AUTH,
+        data={"path": "CSF Cyber Security Fundamentals/Materials/syllabus.pdf"},
+        files={"file": ("syllabus.pdf", scanned, "application/pdf")},
+    )
+    assert r2.status_code == 200 and r2.json()["id"] == r.json()["id"] and transcribed == ["syllabus.pdf"]
+    again = await client.get(f"/vault/{r.json()['id']}/text", headers=AUTH)
+    assert "Week 01: Threat landscape" in again.text
+    # A PDF with a text layer is never sent for transcription.
+    monkeypatch.setattr("dayflow.api.vault.extract_text", lambda data, ctype, name="": "x" * 500)
+    r3 = await client.post(
+        "/vault/upload",
+        headers=AUTH,
+        data={"path": "CSF/Lab 01/2.1.7.pdf"},
+        files={"file": ("2.1.7.pdf", make_pdf("lab"), "application/pdf")},
+    )
+    assert r3.status_code == 200 and transcribed == ["syllabus.pdf"]
