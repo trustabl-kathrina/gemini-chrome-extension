@@ -11,3 +11,7 @@ solver_thinking: medium
 # Screenshot detail the model gets (Gemini 3: low ≈ 280 tokens/image, medium ≈ 560, high ≈ 1120). Sites in vision
 # mode (act by coordinates) always get high; dom-mode sites verify with the picture and read text via read_page.
 image_resolution: low
+# When the orchestrator model answers 429 RESOURCE_EXHAUSTED (Vertex capacity) after the retries, the same request is
+# replayed on these, in order. gemini-3.7-flash is served from the global endpoint only (regional endpoints 404), so
+# the fallback is another model. DAYFLOW_FALLBACKS overrides (comma-separated; empty disables).
+fallbacks: [gemini-3.5-flash]

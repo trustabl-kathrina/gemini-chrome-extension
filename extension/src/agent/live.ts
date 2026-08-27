@@ -26,6 +26,15 @@ export function brainPageUrl(base: string, source: unknown): string | undefined 
   }
 }
 
+/** One line for the closing summary of a failed run; the full text is already in the transcript as a text step. */
+export function errorSummary(message: string): string {
+  const m = /(\d{3}) ([A-Z_]+)/.exec(message);
+  if (m?.[1] === '429') return 'Gemini is out of capacity right now (429) — the brain retried and fell back; press Retry to continue this chat.';
+  if (m) return `Model call failed (${m[1]} ${m[2]}) — press Retry to continue this chat.`;
+  const first = message.split('\n').find((l) => l.trim() && !/^On how to mitigate|^https?:/.test(l.trim())) ?? message;
+  return `${first.trim().slice(0, 160)} — press Retry to continue this chat.`;
+}
+
 /** One line for the tool row: the tool's own summary, else its message/title, else ok/failed. */
 export function resultSummary(result: Record<string, unknown>): string {
   const ok = result.status !== 'error';
@@ -103,7 +112,7 @@ export async function* liveRun(
       await ctl.waitIfPaused?.();
       stream = exchange('/tool_result', { session_id: req.sessionId, results });
     }
-    if (adapter.lastError) yield { kind: 'run.end', status: 'error', summary: adapter.lastError.slice(0, 200) };
+    if (adapter.lastError) yield { kind: 'run.end', status: 'error', summary: errorSummary(adapter.lastError) };
     else yield { kind: 'run.end', status: 'done', summary: adapter.lastText.slice(0, 200) || 'Done' };
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') {

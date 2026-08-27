@@ -180,6 +180,7 @@ export function RunBlock({
   onPause,
   onResume,
   onCancel,
+  onRetry,
   onAnswer,
 }: {
   run: Run;
@@ -187,6 +188,8 @@ export function RunBlock({
   onPause?: () => void;
   onResume?: () => void;
   onCancel: () => void;
+  /** Error runs: ask the brain to continue in the same chat (the session keeps every step so far). */
+  onRetry?: () => void;
   onAnswer: (confirmId: string, allow: boolean) => void;
 }) {
   const pending = pendingConfirm(run);
@@ -283,6 +286,11 @@ export function RunBlock({
             {run.summary}
           </span>
           {actions > 0 && <span className="shrink-0 font-mono text-[11px] text-fg-3">{actions} actions</span>}
+          {run.status === 'error' && onRetry && (
+            <button type="button" onClick={onRetry} data-action="retry" className="shrink-0 rounded-full bg-surface-2 px-2.5 py-0.5 text-[12px] font-medium text-fg hover:bg-surface-3">
+              Retry
+            </button>
+          )}
         </div>
       )}
     </section>

@@ -41,6 +41,7 @@ from dayflow.core.loader import ConfigStore
 from dayflow.core.models import Permissions, SiteProfile, Skill, UserConfig
 from dayflow.core.pages import default_pages
 from dayflow.models.registry import registry
+from dayflow.models.resilient import RETRY, ResilientGemini
 from dayflow.tools.browser import BROWSER_ACTION_NAMES, BROWSER_TOOLS, CONFIRM_TOOL, URL_TOOL_NAMES
 from dayflow.tools.connectors import connector_toolsets
 from dayflow.tools.courseware import COURSEWARE_TOOLS
@@ -498,7 +499,7 @@ def build_root_agent(store: ConfigStore) -> LlmAgent:
 
     return LlmAgent(
         name="dayflow",
-        model=registry().orchestrator,
+        model=ResilientGemini(model=registry().orchestrator, retry_options=RETRY, fallbacks=list(registry().fallbacks)),
         description="Dayflow orchestrator: drives the user's browser and server tools to run skills.",
         instruction=instruction,
         generate_content_config=thinking_config(),

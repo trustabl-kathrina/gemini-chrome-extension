@@ -6,6 +6,9 @@ import { Kbd } from './primitives';
 import { RunBlock } from './Timeline';
 
 /** Chat-first transcript: runs in order, composer at the bottom. */
+/** Sent as a new turn of the same chat: the brain's session holds every step of the failed run. */
+export const RETRY_PROMPT = 'Continue exactly where you stopped: the earlier steps of this chat are done, do not repeat them.';
+
 export function Chat({
   settings,
   runs,
@@ -75,6 +78,7 @@ export function Chat({
             onPause={() => onPause(r.id)}
             onResume={() => onResume(r.id)}
             onCancel={() => onCancel(r.id)}
+            onRetry={() => onSubmit(RETRY_PROMPT)}
             onAnswer={(cid, allow) => onAnswer(r.id, cid, allow)}
           />
         ))}

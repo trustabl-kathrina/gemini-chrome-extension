@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_SETTINGS, type AgentEvent } from '../protocol';
-import { brainPageUrl, liveRun, resultSummary } from './live';
+import { brainPageUrl, errorSummary, liveRun, resultSummary } from './live';
 
 describe('brainPageUrl', () => {
   const base = 'http://localhost:8100';
@@ -58,5 +58,14 @@ describe('liveRun session id', () => {
     expect(posted[1]?.body.session_id).toBe('chat-1');
     expect(posted.some((p) => p.body.session_id === 'run-2')).toBe(false);
     expect(events.at(-1)).toEqual({ kind: 'run.end', status: 'done', summary: 'Done' });
+  });
+});
+
+describe('errorSummary', () => {
+  it('turns the ADK 429 wall of text into one actionable line', () => {
+    const adk = '_ResourceExhaustedError: \nOn how to mitigate this issue, please refer to:\n\nhttps://google.github.io/adk-docs/x\n\n\n429 RESOURCE_EXHAUSTED. {"error": {"code": 429}}';
+    expect(errorSummary(adk)).toMatch(/^Gemini is out of capacity right now \(429\)/);
+    expect(errorSummary('ClientError: 400 INVALID_ARGUMENT. bad')).toBe('Model call failed (400 INVALID_ARGUMENT) — press Retry to continue this chat.');
+    expect(errorSummary('TypeError: fetch failed')).toBe('TypeError: fetch failed — press Retry to continue this chat.');
   });
 });

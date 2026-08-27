@@ -23,6 +23,7 @@ class ModelRegistry(BaseModel):
     thinking: str = "low"  # orchestrator thinking level: minimal | low | medium | high
     solver_thinking: str = "medium"  # the lab solver writes code: one notch up
     image_resolution: str = "low"  # Gemini media_resolution for screenshots on dom-mode sites: low | medium | high
+    fallbacks: list[str] = []  # tried in order when the orchestrator model answers 429/5xx: "model@location" | "model"
 
 
 @lru_cache(maxsize=1)
@@ -37,6 +38,8 @@ def registry() -> ModelRegistry:
         data["solver_thinking"] = override
     if override := os.getenv("DAYFLOW_IMAGE_RESOLUTION"):
         data["image_resolution"] = override
+    if (override := os.getenv("DAYFLOW_FALLBACKS")) is not None:
+        data["fallbacks"] = [f for f in override.split(",") if f.strip()]
     reg = ModelRegistry.model_validate(data)
     if not reg.solver:
         reg.solver = reg.orchestrator
