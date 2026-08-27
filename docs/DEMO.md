@@ -8,7 +8,11 @@ What the four minutes have to prove, in this order of importance:
 1. an agent really drives a real browser and finishes a real chore (scenes on screen, not slides);
 2. it runs on Google's stack — Gemini via Vertex AI, Google ADK, Cloud Run, Firestore (Cloud console visible);
 3. the user stays in control — one sentence of reasoning per action, an Allow card before anything outward-facing;
-4. it is a product, not a script — the same loop runs six different skills from a config the user owns.
+4. it is a product, not a script — one generic loop, skills and site knowledge as config the user owns, memory that
+   carries from one request to the next.
+
+The cut is **two deep scenes on the real portal** (Programming Principles II: sync → solve Assignment 4 → Colab), not
+six shallow ones. Judges score autonomous high-value action (40 %), architecture discipline (30 %), demo readiness (30 %).
 
 ---
 
@@ -115,74 +119,65 @@ against `harness/fake-wsp` with a headed browser, and every scene is green there
 
 ---
 
-## 2. Prompts, in priority order
+## 2. The storyline — one chat, two prompts
 
-Type them into the composer (or press `/` and pick the skill — the palette is a better shot for scene 1). Priority
-order = the order to record; if time runs out, the last ones become the 20-second montage.
+Both prompts go into the **same chat** (do not press *New chat* between them): the second one relies on the first —
+the zip is already in the vault and the instructor's name is in memory, so the agent never browses for it.
 
-> Replace `<COURSE>`, `<CHAT>`, `<OWNER>/<REPO>` with your real values while recording. **Never type credentials on
-> camera** and never show the portal's login page — the profile is already signed in.
+### Scene 1 — Vault sync on the real portal (≈ 90 s of screen time)
 
-### Scene 1 — Vault sync (the hero scene, real portal)
-
-```
-Sync the files of my <COURSE> course (Spring 2025-2026, instructor <SURNAME NAME>) from WSP into my vault and tell me what changed.
-```
-
-Naming the instructor is not decoration: without it the agent first opens *Student's schedule* to find them, and a real
-run has already come in at 40 of the 40 allowed browser actions (`harness/out/vault-sync.real4.json`). Naming the
-instructor saves ~6 actions and is the difference between a finished take and a cap error.
-
-Capture: the `/` palette → the first reasoning sentence → the portal tree being clicked open (School → Instructor →
-course) → the download rows → `vault_list` → the closing changelog with Drive links. Then cut to the Drive folder
-`Dayflow/<course>/…` in the other window, and to the Firestore `vault` collection.
-
-### Scene 2 — Lab
+Prompt:
 
 ```
-Solve Lab 1 of my <COURSE> course from my vault: create a private GitHub repo, solve every task with code you actually run, push README.md, TODO.md, the notebook with outputs and REPORT.md, and save the report to my vault.
+Sync the syllabus and the assignments of my Programming Principles II course (instructor Kelgenbayev, spring 2025-2026) from WSP into my vault and tell me what changed.
 ```
 
-Capture: the `solve_lab_task` rows (Gemini code execution — say the words "the code is actually executed"), the
-`build_notebook` / `build_report` rows, `create_repository` + `push_files`, then the opened report page, then GitHub
-showing the notebook **with outputs**. This scene is the longest (≈3–5 min live) — record it in full, cut to ~45 s.
+What happens (verified 2026-08-27 on wsp.kbtu.kz): plan (6 numbered steps) → `vault_list` (empty) → `open_tab`
+wsp.kbtu.kz/StudentFiles in the **Dayflow window** (your own tabs are never touched) → School of IT&E → Kelgenbayev →
+"Programming Principles II, spring 2025-2026" → `1. Syllabus for the student` → download both PDFs →
+`4. Assignments` → download `programming-principles-2-main.zip` → `remember("PP2: instructor Kelgenbayev, files on
+WSP …")` → `vault_list` → changelog with the vault paths and the syllabus summary (parsed by Gemini: 15 weeks, Python,
+Pygame, PostgreSQL). ~15 browser actions, ~90–120 s, ≈ $0.10.
 
-### Scene 3 — Team ops (Telegram Web)
+Beats to catch on screen: the one-sentence reasoning above every tool row; a row that says `screenshot: unchanged` after
+a click that only *selected* a row (the agent then clicks Enter — it reads its own screenshots); the download rows
+turning into `→ Drive → indexed` artifacts; the changelog.
+
+### Scene 2 — Solve Assignment 4 into a Colab notebook (≈ 100 s of screen time)
+
+Prompt (same chat):
 
 ```
-Summarise this week's work on <OWNER>/<REPO> and post the update to the "<CHAT>" chat on Telegram Web (ask me before sending). Then create Linear issues for the next milestone and open a GitHub issue and one pull request for the repo.
+Now solve Assignment 4 of that course as a notebook and open it in Google Colab.
 ```
 
-Capture: the chat list, the **Allow / Deny** card with the exact message text, your click on *Allow*, the message
-appearing in the thread, then the Linear issues and the GitHub PR. This is the trust beat of the video — hold on the
-card for a full second before clicking.
+What happens: plan → `vault_list` finds `Programming Principles II/Lab 04/programming-principles-2-main.zip` →
+`vault_read` shows the bundle as `[file Assignment 4/generators.md] …`, `math.md`, `date.md` → one `solve_lab_task`
+per numbered task (Gemini code execution: the code runs, stdout is captured; 14 tasks, ~7 s each) → `build_notebook`
+(the brain re-executes every cell with nbclient before it ships — a failing cell comes back as an error, not a repo) →
+`build_report` → `download(url=ipynb_url)` and `download(url=page_url)` into the vault → `open_tab
+colab.research.google.com/drive/<Drive file id>` → the report page. Zero portal browsing; ≈ 3 browser actions;
+≈ 3–5 min wall time (cut to 100 s: real time on the first `solve_lab_task`, 4× over the rest).
 
-### Scenes 4–6 — Courseware, Scaffold, Pitch deck (montage)
+Beats: the solver rows' `stdout` (real numbers, e.g. `squares up to 10: 0 1 4 9 …`); `build_notebook` returning
+`executed: true`; Colab opening with the notebook already there; the report page.
 
-```
-Build a cheatsheet and a quiz from the <COURSE> syllabus in my vault, open the result in a new tab and save it to my vault.
-Create the vault folder tree for <COURSE> from its syllabus in my vault: one folder per week and per lab.
-Build a pitch deck about my diploma project repo <OWNER>/<REPO>, save it to my vault and open the preview.
-```
-
-Capture: the quiz page (open one `<details>` answer), the Drive tree with `Week 01 … Week 15` + `Lab 01 …`, and the
-deck preview plus the `.pptx` in Drive. Three shots, ~7 seconds each.
+### If a scene misbehaves — see §3; the fallback take is the harness run on `harness/fake-wsp`
+(`make e2e SCENE=vault-sync` / `HARNESS_PROMPT="… open it in Google Colab" make e2e SCENE=lab`), both green.
 
 ---
 
 ## 3. When a step misbehaves
 
-| Symptom | Do this |
-|---|---|
-| Panel says *no brain* | Settings → *Check*. Cold Cloud Run: wait 10 s and press again. Wrong token → `gcloud secrets versions access latest --secret dayflow-token`. |
-| Run ends with "40 browser actions, cap is 40" | Re-prompt with more given: the instructor name, the exact folder, "download only the syllabus". Don't raise the cap on camera. |
-| The portal re-renders and a click misses | Say nothing, let it retry — the agent re-reads the page. If two retries fail, cancel and re-prompt with the direct URL (`https://wsp.kbtu.kz/StudentFiles`). |
-| The portal is down / shows a login page | Switch to the harness portal: `make e2e SCENE=vault-sync` (headed, seeds everything itself) — record its window. Driving the fake portal by hand instead (`make fake-wsp` + `node scripts/demo-browser.mjs … http://127.0.0.1:8099/ --layout`) needs `127.0.0.1` added to the navigation allow-list in the panel's Config first. Say on camera that this is the synthetic portal the test suite uses. |
-| A gated call is refused ("differ from what the user approved") | Allow the *next* card; the agent re-asks with the exact text. Do not deny — a denial ends the run. |
-| GitHub/Linear tool errors | The tokens on the brain expired. Fall back to a local brain with `DAYFLOW_FAKE_CONNECTORS=1` and say the connectors are stubbed, or cut the scene. |
-| Drive upload fails mid-run | The OAuth token expired; the extension refreshes once and retries. If it still fails, switch Settings → Vault → *Brain only* and show `GET /vault` instead. |
-| Windows drift during a run | You forgot `--pin`. Re-run the layout command; the profile is persistent, nothing is lost. |
-| Nothing works 20 minutes before the deadline | Cut the dry-run B-roll: the harness recordings plus `harness/out/<scene>.json` on screen. Never fake a result you did not get. |
+- **429 RESOURCE_EXHAUSTED** — the brain retries with backoff and falls back to `gemini-3.5-flash`; the panel shows a
+  one-line summary and a **Retry** button that continues the same chat. Keep the take: "and when Vertex ran out of
+  capacity it fell back and carried on" is a better line than a clean run.
+- **The agent selects a row and stops** — it will see `screenshot: unchanged` and click Enter itself; do not intervene.
+- **Budget** — 60 browser actions per run; scene 1 as scoped uses ~15. If it starts opening `2.Lectures`, let it finish
+  the syllabus + assignments; the changelog is still the shot.
+- **Colab opens without the notebook** — the Drive sign-in lapsed (no `drive_file_id`); re-sign in Settings and type
+  `open the notebook in Colab again`.
+- **Portal signed out** — sign in by hand before the take; the agent never types passwords (site notes say so).
 
 ---
 
@@ -190,71 +185,56 @@ deck preview plus the `.pptx` in Drive. Three shots, ~7 seconds each.
 
 | Time | Shot | Source | Note |
 |---|---|---|---|
-| 0:00–0:10 | Cold open: portal file tree, Telegram, GitHub, Linear tabs flicking past; title card **Dayflow — a browser agent on Gemini** | screen recording | no narration on the first 2 s |
-| 0:10–0:25 | The problem: one student's week — files scattered across the portal, a lab due, a team chat to update | same | narration starts at 0:03 |
-| 0:25–0:40 | The panel: `/` opens the skills palette, six skills listed | scene 1 take, first seconds | slow the palette to 0.75× |
-| 0:40–0:50 | Settings + Config YAML (skills, sites, permissions, schedules) | pre-flight capture | "the config is yours" beat |
-| 0:50–1:40 | **Scene 1 — vault sync**: reasoning sentence → portal clicks → downloads → `vault_list` → changelog; cut to Drive `Dayflow/<course>/…` | live take | speed 1.5–2× over the walking, real-time on the first two actions |
-| 1:40–2:25 | **Scene 2 — lab**: `solve_lab_task` rows → notebook + report → repo pushed → report page → GitHub notebook with outputs | live take | hold 1 s on a code cell's output |
-| 2:25–2:55 | **Scene 3 — team ops**: chat found → **Allow** card with the exact text → sent message → Linear issues → GitHub PR | live take | real time on the Allow card |
-| 2:55–3:10 | Montage: quiz page, Drive week/lab tree, pitch deck preview | live takes | ~5 s each, no narration cuts |
-| 3:10–3:25 | Architecture diagram (README mermaid, exported PNG) with the loop animated: panel → Cloud Run → tool call → extension → `/tool_result` | still + labels | |
-| 3:25–3:40 | Cloud console: Cloud Run logs filling live, revision env vars, Firestore `users/local/vault`, the vault bucket, `curl /health` showing `"backend":"vertex"` | second window | this is the "runs on Google Cloud" proof |
-| 3:40–3:52 | Honest status: six scenes green in the harness (`make e2e`), scene 1 verified on the real portal | terminal + `harness/out/*.json` | |
-| 3:52–4:00 | Close: logo, repo URL, "install it, point it at your own brain" | title card | end before 4:00, hard |
+| 0:00–0:08 | Cold open, no narration: the portal's file tree, a lecture PDF, the Colab logo — 2 s each, then the title card **Dayflow — a browser agent on Gemini** | b-roll | |
+| 0:08–0:25 | The problem: files appear on a portal with no notifications; an assignment is a zip of Markdown; every week the same clicks | portal + zip on screen | narration starts at 0:08 |
+| 0:25–0:45 | The panel appears **in its own window next to the portal**; `/` opens the skills palette; 3 s on Config YAML (skills, site notes, permissions) | pre-flight capture | "config you own" beat |
+| 0:45–2:15 | **Scene 1** live: plan → portal walk → downloads → memory → changelog. Real time on the plan and the first two actions, 2× over the walk, real time on `remember` and the changelog. Cut to Drive `Dayflow/Programming Principles II/…` for 3 s | live take | keep the `screenshot: unchanged` row in |
+| 2:15–3:20 | **Scene 2** live, same chat: plan → `vault_read` bundle → `solve_lab_task` rows (hold 2 s on one stdout) → `build_notebook executed: true` → Colab opens with the notebook → report page | live take | 4× over the middle solver rows |
+| 3:20–3:38 | Architecture: README diagram; overlay the loop panel → Cloud Run (ADK) → long-running tool → extension → `/tool_result` (+screenshot) | still + labels | |
+| 3:38–3:50 | Cloud console: Cloud Run logs with `usage session=… ≈$0.10` and `tool_result … screenshot_b64=` lines, the revision env, Firestore `users/local/vault`, the bucket, `curl /health` → `"backend":"vertex"` | second window | "runs on Google Cloud, and I can see what it costs" |
+| 3:50–4:00 | Close: "two prompts, one chat, twenty minutes back"; repo URL | title card | end before 4:00 |
 
-Recording settings: 1080p, 30 fps, capture exactly the rectangle the layout command printed, upscale 1440×900 → 1920×1080
-on export. Voice at −12 dB, music (if any) at −28 dB. Burn in subtitles — every prompt typed on screen should also be
-legible as a caption.
+Recording: 1080p 30 fps, capture the rectangle the layout command printed; voice −12 dB, music −28 dB; burn in
+subtitles for both prompts.
 
 ---
 
-## 5. Narration (≈550 words, read at ~150 wpm)
+## 5. Narration (≈ 520 words, ~150 wpm)
 
-**[0:03 — problem]**
-Every week at my university the same twenty minutes disappear. New lecture files appear on the student portal with no
-notification, so I go looking for them. A lab is due, so I copy the tasks into a notebook. The team chat needs the
-weekly update, Linear needs the issues, GitHub needs the pull request. None of it is hard. All of it is browser work,
-and all of it is on me.
+**[0:08 — problem]**
+Every week the same twenty minutes disappear. New files appear on my university portal with no notification, so I go
+looking. An assignment arrives as a zip of Markdown, so I copy tasks into a notebook by hand. None of it is hard — all
+of it is browser work, and all of it is on me.
 
 **[0:25 — what it is]**
-This is Dayflow. It is Claude Code for the browser, running on Gemini: a Chrome side panel with a Google ADK brain on
-Cloud Run. You type what you want, it plans out loud, and then it uses the same browser you are signed into — your
-portal session, your Telegram, your GitHub. Not scraping, not an API bolted on the side. Eyes and hands in the tab.
+This is Dayflow: Claude Code for the browser, on Gemini. A Chrome side panel; a Google ADK brain on Cloud Run. You say
+what you want, it plans out loud, then it works in *its own* window with your sessions — the portal you're signed into,
+your Drive — while you keep using yours. Everything specific to me is config I own: skills, site notes on how a page
+behaves, permissions on what it must ask before doing. Nothing in the code knows what my university is.
 
-**[0:40 — the config]**
-Everything specific to me is configuration I own: skills, one per chore; site profiles telling it how a page behaves;
-permissions — where it may navigate and what it must ask before doing. Nothing in the code knows what my university is.
+**[0:45 — scene 1]**
+First: sync my Programming Principles course. Watch the panel. It writes a plan, then one sentence before every action:
+what it sees, what it does next. The portal has no links — only clickable rows and an Enter button — and the site note
+is what taught it that. Here it clicked a row, and the screenshot came back *unchanged*; it noticed, and clicked Enter.
+Syllabus, then the assignments bundle, straight into my Google Drive vault; the brain parses each file with Gemini,
+indexes it, and — this is new — *remembers* the instructor and where the files live. It finishes with a changelog.
+Fifteen actions, about a minute and a half, ten cents.
 
-**[0:50 — scene 1]**
-First skill: sync my course files. Watch the panel. Before every single action there is one sentence: what it sees, what
-it will do. It opens the portal, walks School, instructor, course folder — this portal has no links, only clickable
-rows, and the site profile is what taught it that. It downloads every file straight into my Google Drive vault, and the
-brain parses each PDF, pulls the deadlines, and indexes it. It finishes with a changelog: what is new, what changed.
-Twenty minutes of clicking, in about ninety seconds, with a hard cap of forty actions so it can never wander.
+**[2:15 — scene 2]**
+Same chat, second prompt: solve Assignment 4 and open it in Colab. No browsing this time — it already knows. It reads
+the bundle out of the vault, finds the three Markdown files of Assignment 4, and for each of the fourteen tasks writes
+code and *runs* it in Gemini's code-execution sandbox. Real output, not a plausible-looking answer. Then it assembles a
+notebook — and the brain re-executes every cell before shipping it; a failing cell comes back as an error, never as a
+file. The notebook lands in Drive, Colab opens it, and a report page is saved next to it.
 
-**[1:40 — scene 2]**
-Second skill: solve the lab. It reads the lab PDF out of the vault and, for each task, writes code and actually runs it
-in Gemini's code execution sandbox. Real output, not a plausible-looking answer. It assembles a notebook with those
-outputs, writes a report, creates a private GitHub repo, and pushes the notebook, the report, a README and a TODO of
-what is still missing. Here is the notebook on GitHub — cells with results in them.
+**[3:20 — architecture]**
+How it works: the panel talks to Cloud Run, where Google ADK's orchestrator streams events. Browser tools are
+long-running tools — the brain asks, the extension acts in the tab and posts the result back with a screenshot, low
+resolution unless the site needs vision. Every turn is pruned so the model only carries what it still needs. Sessions,
+config and the vault index live in Firestore; files in Cloud Storage; Gemini 3.7 Flash on Vertex AI in my own project.
+Here it is in the logs — including the cost of every run, and the moment Vertex ran out of capacity and the brain fell
+back to 3.5 Flash and carried on.
 
-**[2:25 — scene 3]**
-Third skill: the team. It summarises the week from the repo, opens the messenger, finds our diploma chat — and stops.
-Anything that leaves my machine needs my word first, and the approval is bound to this exact text: if the model rewrote
-a single sentence afterwards, the call is refused. I click Allow. Message sent. Then two Linear issues and a pull
-request, each with its own approval.
-
-**[2:55 — montage]**
-Same loop, three more skills: a cheatsheet and a quiz from the syllabus, the whole semester's folder tree in Drive, and
-a pitch deck as a real PowerPoint file.
-
-**[3:10 — architecture]**
-How it works: the panel posts to Cloud Run, where Google ADK's orchestrator streams events. Browser tools are
-long-running tools — the brain asks, the extension does it in the tab, and posts the result with a screenshot back.
-Sessions, the config and the vault index live in Firestore, files in Cloud Storage, and Gemini 3.7 Flash runs on Vertex
-AI in my own project. Here it is happening, in the Cloud Run logs, in Firestore, in the bucket.
-
-**[3:40 — close]**
-Every scene you just saw is checked by an end-to-end test suite against a synthetic portal, so you can verify the same
-claims on your machine in ten minutes. Clone it, point it at your own brain, and take your twenty minutes back.
+**[3:50 — close]**
+Two prompts, one chat, twenty minutes back — and an end-to-end test suite against a synthetic portal so you can check
+every claim on your machine in ten minutes. Clone it, point it at your own brain.
