@@ -5,42 +5,25 @@
   "specSha256": "61f96d9d937d",
   "runnerSha256": "27dccec99c48",
   "prompt": "Sync the CSCI3240 Introduction to Computer Vision course files from WSP (http://127.0.0.1:8099) into my vault and tell me what changed.",
-  "status": "error",
-  "summary": "Gemini is out of capacity right now (429) — the brain retried and fell back; press Retry to continue this chat.",
+  "status": "done",
+  "summary": "Synced 3 files for **CSCI3240 Introduction to Computer Vision** from WSP into the vault:\n\n### Added Files\n1. **`syllabus.pdf`** (2.1 KB)\n   - **Vault Path:** `CSCI3240 Introduction to Computer Vision/",
   "title": "Sync the CSCI3240 Introduction to Computer Vision course files from WSP (http://127.0.0.1:8099) into my vault and tell me what changed.",
-  "startedAt": "2026-08-27T09:47:32.951Z",
-  "endedAt": "2026-08-27T09:48:42.634Z",
-  "durationMs": 69683,
+  "startedAt": "2026-08-27T09:53:40.970Z",
+  "endedAt": "2026-08-27T09:55:12.442Z",
+  "durationMs": 91472,
   "steps": [
     {
       "kind": "text",
-      "text": "Plan:\n1. Open Student's Schedule on WSP to identify the instructor for CSCI3240 Introduction to Computer Vision.\n2. Navigate to Student Files and browse into the appropriate School and Instructor folder.\n3. Open the CSCI3240 course folder and its subfolders (Syllabus, Lectures, Labs).\n4. Download each file to its respective vault path (`CSCI3240 Introduction to Computer Vision/<Materials|Week NN|Lab NN>/<filename>`).\n5. Verify the synced files with `vault_list` and report what changed and any parsed deadlines.\n\nOpening the student schedule page to check the instructor for CSCI3240."
+      "text": "Plan:\n1. Open WSP Student Files at http://127.0.0.1:8099/StudentFiles and inspect available schools/instructors (or check Student's schedule if instructor is unknown).\n2. Navigate through School -> Instructor -> CSCI3240 Introduction to Computer Vision course folder.\n3. Explore course subfolders (Syllabus, Lectures, Labs, etc.) and download all files to the vault.\n4. Check `vault_list` to verify synced files and extract deadlines/summaries.\n5. Provide a summary changelog of synced files and deadlines.\n\nOpening the WSP Student Files page to browse course folders."
     },
     {
       "kind": "tool",
       "name": "open_tab",
-      "args": "url=http://127.0.0.1:8099/StudentSchedule",
-      "summary": "WSP",
-      "target": "browser",
-      "status": "ok",
-      "ms": 20066
-    },
-    {
-      "kind": "text",
-      "text": ""
-    },
-    {
-      "kind": "text",
-      "text": "Navigating to Student Files to browse course materials."
-    },
-    {
-      "kind": "tool",
-      "name": "navigate",
       "args": "url=http://127.0.0.1:8099/StudentFiles",
       "summary": "WSP",
       "target": "browser",
       "status": "ok",
-      "ms": 58
+      "ms": 20086
     },
     {
       "kind": "text",
@@ -48,7 +31,7 @@
     },
     {
       "kind": "text",
-      "text": "Reading the student files page to select School of Information Technology and Engineering."
+      "text": "I see the School list on the Student files page; now I will read the page elements to select School of Information Technology and Engineering."
     },
     {
       "kind": "tool",
@@ -65,7 +48,7 @@
     },
     {
       "kind": "text",
-      "text": "Selecting School of Information Technology and Engineering."
+      "text": "I see School of Information Technology and Engineering; I will click its row to select it."
     },
     {
       "kind": "tool",
@@ -74,7 +57,7 @@
       "summary": "WSP",
       "target": "browser",
       "status": "ok",
-      "ms": 432
+      "ms": 433
     },
     {
       "kind": "text",
@@ -82,7 +65,7 @@
     },
     {
       "kind": "text",
-      "text": "Opening School of Information Technology and Engineering folder."
+      "text": "I see the row is selected; I will click the Enter button to open the folder."
     },
     {
       "kind": "tool",
@@ -99,7 +82,7 @@
     },
     {
       "kind": "text",
-      "text": "Reading the instructor list for School of Information Technology and Engineering."
+      "text": "I see the list of instructors; now I will read the page elements to identify their refs."
     },
     {
       "kind": "tool",
@@ -116,7 +99,7 @@
     },
     {
       "kind": "text",
-      "text": "Selecting instructor Abenova Saule."
+      "text": "I see the instructors list; I will select Abenova Saule to check for CSCI3240."
     },
     {
       "kind": "tool",
@@ -125,7 +108,7 @@
       "summary": "WSP",
       "target": "browser",
       "status": "ok",
-      "ms": 430
+      "ms": 432
     },
     {
       "kind": "text",
@@ -133,7 +116,7 @@
     },
     {
       "kind": "text",
-      "text": "Opening Abenova Saule's folder."
+      "text": "I see Abenova Saule is selected; I will click Enter to open her folder."
     },
     {
       "kind": "tool",
@@ -142,7 +125,7 @@
       "summary": "WSP",
       "target": "browser",
       "status": "ok",
-      "ms": 436
+      "ms": 432
     },
     {
       "kind": "text",
@@ -150,16 +133,16 @@
     },
     {
       "kind": "text",
-      "text": "Saving note that Abenova Saule teaches CSCI3240 Introduction to Computer Vision."
+      "text": "I will remember that Abenova Saule teaches CSCI3240 Introduction to Computer Vision."
     },
     {
       "kind": "tool",
       "name": "remember",
-      "args": "note=CSCI3240 Introduction to Computer Vision instructor is Ab…",
+      "args": "note=CSCI3240 Introduction to Computer Vision instructor: Aben…",
       "summary": "{\"status\":\"success\",\"memory_lines\":2}",
       "target": "server",
       "status": "ok",
-      "ms": 37
+      "ms": 58
     },
     {
       "kind": "text",
@@ -167,7 +150,7 @@
     },
     {
       "kind": "text",
-      "text": "Reading the page to select the CSCI3240 course folder."
+      "text": "I see the course folder CSCI3240 Introduction to Computer Vision; I will read the page elements to select it."
     },
     {
       "kind": "tool",
@@ -184,7 +167,7 @@
     },
     {
       "kind": "text",
-      "text": "Selecting the CSCI3240 course folder."
+      "text": "I see the CSCI3240 course folder; I will click it to select."
     },
     {
       "kind": "tool",
@@ -193,7 +176,7 @@
       "summary": "WSP",
       "target": "browser",
       "status": "ok",
-      "ms": 430
+      "ms": 429
     },
     {
       "kind": "text",
@@ -201,42 +184,248 @@
     },
     {
       "kind": "text",
-      "text": "OpeningError: \nOn how to mitigate this issue, please refer to:\n\nhttps://google.github.io/adk-docs/agents/models/google-gemini/#error-code-429-resource_exhausted\n\n\n429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'Resource exhausted. Please try again later. Please refer to https://cloud.google.com/vertex-ai/generative-ai/docs/error-code-429 for more details.', 'status': 'RESOURCE_EXHAUSTED'}}"
+      "text": "I see the CSCI3240 row is selected; I will click Enter to open it."
+    },
+    {
+      "kind": "tool",
+      "name": "click",
+      "args": "ref=e6",
+      "summary": "WSP",
+      "target": "browser",
+      "status": "ok",
+      "ms": 465
     },
     {
       "kind": "text",
-      "text": "Error: _ResourceExhaustedError: \nOn how to mitigate this issue, please refer to:\n\nhttps://google.github.io/adk-docs/agents/models/google-gemini/#error-code-429-resource_exhausted\n\n\n429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'Resource exhausted. Please try again later. Please refer to https://cloud.google.com/vertex-ai/generative-ai/docs/error-code-429 for more details.', 'status': 'RESOURCE_EXHAUSTED'}}"
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "text": "I see the 3 course files listed; I will read the page elements to get their download refs."
+    },
+    {
+      "kind": "tool",
+      "name": "read_page",
+      "args": "",
+      "summary": "50 elements",
+      "target": "browser",
+      "status": "ok",
+      "ms": 2
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "text": "I see syllabus.pdf; I will download it to CSCI3240 Introduction to Computer Vision/Materials/syllabus.pdf."
+    },
+    {
+      "kind": "tool",
+      "name": "download",
+      "args": "ref=e90 path=CSCI3240 Introduction to Computer Vision/Materials/syllab…",
+      "summary": "syllabus.pdf · 2 KB → Drive → indexed",
+      "target": "browser",
+      "status": "ok",
+      "ms": 170
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "artifact",
+      "type": "file",
+      "label": "CSCI3240 Introduction to Computer Vision/Materials/syllabus.pdf",
+      "href": "http://127.0.0.1:8101/view/f_446179666c6f772f435343493332343020496e74726f64756374696f6e20746f20436f6d707574657220566973696f6e2f4d6174657269616c732f73796c6c616275732e706466"
+    },
+    {
+      "kind": "text",
+      "text": "I see Lecture_01_Introduction.pdf; I will download it to CSCI3240 Introduction to Computer Vision/Week 01/Lecture_01_Introduction.pdf."
+    },
+    {
+      "kind": "tool",
+      "name": "download",
+      "args": "path=CSCI3240 Introduction to Computer Vision/Week 01/Lecture_… ref=e102",
+      "summary": "Lecture_01_Introduction.pdf · 1 KB → Drive → indexed",
+      "target": "browser",
+      "status": "ok",
+      "ms": 21
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "artifact",
+      "type": "file",
+      "label": "CSCI3240 Introduction to Computer Vision/Week 01/Lecture_01_Introduction.pdf",
+      "href": "http://127.0.0.1:8101/view/f_446179666c6f772f435343493332343020496e74726f64756374696f6e20746f20436f6d707574657220566973696f6e2f5765656b2030312f4c6563747572655f30315f496e74726f64756374696f6e2e706466"
+    },
+    {
+      "kind": "text",
+      "text": "I see Lab_01_Image_Basics.pdf; I will download it to CSCI3240 Introduction to Computer Vision/Lab 01/Lab_01_Image_Basics.pdf."
+    },
+    {
+      "kind": "tool",
+      "name": "download",
+      "args": "path=CSCI3240 Introduction to Computer Vision/Lab 01/Lab_01_Im… ref=e114",
+      "summary": "Lab_01_Image_Basics.pdf · 3 KB → Drive → indexed",
+      "target": "browser",
+      "status": "ok",
+      "ms": 23
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "artifact",
+      "type": "file",
+      "label": "CSCI3240 Introduction to Computer Vision/Lab 01/Lab_01_Image_Basics.pdf",
+      "href": "http://127.0.0.1:8101/view/f_446179666c6f772f435343493332343020496e74726f64756374696f6e20746f20436f6d707574657220566973696f6e2f4c61622030312f4c61625f30315f496d6167655f4261736963732e706466"
+    },
+    {
+      "kind": "text",
+      "text": "I will call vault_list to check all indexed files and their deadlines."
+    },
+    {
+      "kind": "tool",
+      "name": "vault_list",
+      "args": "",
+      "summary": "{\"status\":\"success\",\"count\":3,\"files\":[{\"id\":\"c3c8f56c053a92f5\",\"path\":\"CSCI3240 Introduction to Computer Vision/Lab …",
+      "target": "server",
+      "status": "ok",
+      "ms": 65
+    },
+    {
+      "kind": "text",
+      "text": ""
+    },
+    {
+      "kind": "text",
+      "text": "Synced 3 files for **CSCI3240 Introduction to Computer Vision** from WSP into the vault:\n\n### Added Files\n1. **`syllabus.pdf`** (2.1 KB)\n   - **Vault Path:** `CSCI3240 Introduction to Computer Vision/Materials/syllabus.pdf`\n   - **Summary:** 15-week schedule, course outline (image processing, features, CNNs, object detection), and grading policy (Labs 30%, Midterm 30%, Final Project 40%). Instructor: Abenova Saule.\n2. **`Lecture_01_Introduction.pdf`** (1.0 KB)\n   - **Vault Path:** `CSCI3240 Introduction to Computer Vision/Week 01/Lecture_01_Introduction.pdf`\n   - **Summary:** Overview of digital image representation (arrays, height, width, channels, uint8) and Python tooling (NumPy, OpenCV, Matplotlib).\n3. **`Lab_01_Image_Basics.pdf`** (2.9 KB)\n   - **Vault Path:** `CSCI3240 Introduction to Computer Vision/Lab 01/Lab_01_Image_Basics.pdf`\n   - **Summary:** NumPy array operations on a synthetic 64×64 RGB gradient image, channel statistics, grayscale conversion, slicing/cropping/flipping, 256-bin histogram, and ASCII art visualization.\n\n### Discovered Deadlines\n- **Lab 01:** Friday 23:59 (Week 2) via WSP portal."
     }
   ],
-  "actions": 10,
+  "actions": 14,
   "refusedActions": 0,
   "toolCalls": {
     "open_tab": 1,
-    "navigate": 1,
-    "read_page": 3,
-    "click": 5,
-    "remember": 1
+    "read_page": 4,
+    "click": 6,
+    "remember": 1,
+    "download": 3,
+    "vault_list": 1
   },
-  "artifacts": [],
+  "artifacts": [
+    {
+      "kind": "artifact",
+      "type": "file",
+      "label": "CSCI3240 Introduction to Computer Vision/Materials/syllabus.pdf",
+      "href": "http://127.0.0.1:8101/view/f_446179666c6f772f435343493332343020496e74726f64756374696f6e20746f20436f6d707574657220566973696f6e2f4d6174657269616c732f73796c6c616275732e706466"
+    },
+    {
+      "kind": "artifact",
+      "type": "file",
+      "label": "CSCI3240 Introduction to Computer Vision/Week 01/Lecture_01_Introduction.pdf",
+      "href": "http://127.0.0.1:8101/view/f_446179666c6f772f435343493332343020496e74726f64756374696f6e20746f20436f6d707574657220566973696f6e2f5765656b2030312f4c6563747572655f30315f496e74726f64756374696f6e2e706466"
+    },
+    {
+      "kind": "artifact",
+      "type": "file",
+      "label": "CSCI3240 Introduction to Computer Vision/Lab 01/Lab_01_Image_Basics.pdf",
+      "href": "http://127.0.0.1:8101/view/f_446179666c6f772f435343493332343020496e74726f64756374696f6e20746f20436f6d707574657220566973696f6e2f4c61622030312f4c61625f30315f496d6167655f4261736963732e706466"
+    }
+  ],
   "confirms": [],
   "drive": {
     "root": "harness/out/drive/vault-sync",
-    "entries": []
+    "entries": [
+      "Dayflow/",
+      "Dayflow/CSCI3240 Introduction to Computer Vision/",
+      "Dayflow/CSCI3240 Introduction to Computer Vision/Lab 01/",
+      "Dayflow/CSCI3240 Introduction to Computer Vision/Lab 01/Lab_01_Image_Basics.pdf",
+      "Dayflow/CSCI3240 Introduction to Computer Vision/Materials/",
+      "Dayflow/CSCI3240 Introduction to Computer Vision/Materials/syllabus.pdf",
+      "Dayflow/CSCI3240 Introduction to Computer Vision/Week 01/",
+      "Dayflow/CSCI3240 Introduction to Computer Vision/Week 01/Lecture_01_Introduction.pdf"
+    ]
   },
-  "vault": [],
+  "vault": [
+    {
+      "id": "c3c8f56c053a92f5",
+      "path": "CSCI3240 Introduction to Computer Vision/Lab 01/Lab_01_Image_Basics.pdf",
+      "sha256": "9190fae9f6e405e337eedf6c3160499f90d8fc9b6b2cb5ed9c457b117761d62e",
+      "size": 2868,
+      "content_type": "application/pdf",
+      "drive_file_id": "f_446179666c6f772f435343493332343020496e74726f64756374696f6e20746f20436f6d707574657220566973696f6e2f4c61622030312f4c61625f30315f496d6167655f4261736963732e706466",
+      "title": "Lab 01 - Image basics (numpy)",
+      "summary": "This document outlines the first lab assignment for an Introduction to Computer Vision course, focusing on treating images as NumPy arrays. Students are required to construct a synthetic 64x64 RGB gradient image from scratch without external image files. The tasks include calculating channel statistics, converting the image to grayscale, performing array slicing for cropping and flipping, computing a 256-bin intensity histogram, and applying thresholding to generate an ASCII art visualization. The final deliverable is a Jupyter notebook submitted via WSP by Friday 23:59 of week 2.",
+      "deadlines": [
+        "Friday 23:59 (week 2)"
+      ],
+      "key_terms": [
+        "NumPy: A fundamental package for scientific computing with Python used for array manipulation.",
+        "RGB gradient: An image representation combining red, green, and blue color channels smoothly varying in intensity.",
+        "Grayscale: An image format where each pixel represents a single light intensity value.",
+        "Array slicing: A Python technique to extract subsets of multi-dimensional arrays without using loops.",
+        "Histogram: A graphical representation of the distribution of numerical data, such as pixel intensities.",
+        "Thresholding: A technique used to create binary images by setting pixels above a certain value to foreground."
+      ],
+      "parse_error": "",
+      "parse_pending": false,
+      "updated_at": "2026-08-27T09:55:03+00:00"
+    },
+    {
+      "id": "1457d7dca74eb9c9",
+      "path": "CSCI3240 Introduction to Computer Vision/Materials/syllabus.pdf",
+      "sha256": "a1a36caf956a5f24fd7de56b723d025ffc64788aee10b67bbc855120f2a35154",
+      "size": 2148,
+      "content_type": "application/pdf",
+      "drive_file_id": "f_446179666c6f772f435343493332343020496e74726f64756374696f6e20746f20436f6d707574657220566973696f6e2f4d6174657269616c732f73796c6c616275732e706466",
+      "title": "CSCI3240 Introduction to Computer Vision Syllabus",
+      "summary": "This document outlines the 15-week schedule, grading policy, and lab assignments for CSCI3240 Introduction to Computer Vision, taught by Abenova Saule. Students will learn about image processing, feature detection, CNNs, and object detection. The course grade is based on labs (30%), a midterm (30%), and a final project (40%).",
+      "deadlines": [],
+      "key_terms": [
+        "Convolution: A mathematical operation used in image filtering.",
+        "Edge detection: Identifying points in an image where image brightness changes sharply.",
+        "SIFT: Scale-Invariant Feature Transform used for detecting and describing local features in images.",
+        "Homography: A transformation relating the points of one plane to another.",
+        "RANSAC: Random Sample Consensus algorithm for robust parameter estimation.",
+        "CNN: Convolutional Neural Network used for image classification and computer vision tasks."
+      ],
+      "parse_error": "",
+      "parse_pending": false,
+      "updated_at": "2026-08-27T09:54:57+00:00"
+    },
+    {
+      "id": "3e6d26dc6eb67f0d",
+      "path": "CSCI3240 Introduction to Computer Vision/Week 01/Lecture_01_Introduction.pdf",
+      "sha256": "cd7621f015d6d82018ec52f4380befe7e779420ceadb3948e9a90c312265e32a",
+      "size": 1034,
+      "content_type": "application/pdf",
+      "drive_file_id": "f_446179666c6f772f435343493332343020496e74726f64756374696f6e20746f20436f6d707574657220566973696f6e2f5765656b2030312f4c6563747572655f30315f496e74726f64756374696f6e2e706466",
+      "title": "CSCI3240 Introduction to Computer Vision - Lecture 01",
+      "summary": "This introductory lecture outlines the course structure and grading criteria for Introduction to Computer Vision. Students learn how digital images are represented as multidimensional arrays defined by height, width, and channels with uint8 data types. Essential Python libraries including NumPy, OpenCV, and Matplotlib are introduced as the primary tooling for the course.",
+      "deadlines": [],
+      "key_terms": [
+        "Images as arrays: Digital images represented as numerical grids with height, width, and channels.",
+        "dtype uint8: 8-bit unsigned integer data type commonly used for pixel values ranging from 0 to 255.",
+        "numpy: A foundational Python library for numerical computing and array manipulations.",
+        "OpenCV: A widely used computer vision and image processing library in Python.",
+        "matplotlib: A plotting library used for visualizing images and data in Python."
+      ],
+      "parse_error": "",
+      "parse_pending": false,
+      "updated_at": "2026-08-27T09:55:00+00:00"
+    }
+  ],
   "downloads": [],
   "connectorCalls": [],
   "chatMessages": [],
   "chatDom": [],
   "brainConfigSynced": false,
   "screenshotsDir": "harness/out/vault-sync/shots",
-  "pass": false,
-  "failures": [
-    "status is \"error\", expected \"done\" (Gemini is out of capacity right now (429) — the brain retried and fell back; press Retry to continue this chat.)",
-    "expected 3 PDFs under Dayflow/CSCI3240*/ in fake-Drive, found 0: [empty]",
-    "syllabus.pdf missing from fake-Drive (Dayflow/CSCI3240*/…)",
-    "Lecture_01_Introduction.pdf missing from fake-Drive (Dayflow/CSCI3240*/…)",
-    "Lab_01_Image_Basics.pdf missing from fake-Drive (Dayflow/CSCI3240*/…)",
-    "vault index has 0 CSCI3240 entries, expected 3 (total 0)"
-  ]
+  "pass": true,
+  "failures": []
 }
